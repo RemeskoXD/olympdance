@@ -22,14 +22,22 @@ const Navbar: React.FC = () => {
   return (
     <nav className="fixed w-full bg-white/95 backdrop-blur-sm shadow-md z-50 transition-all duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-20 items-center">
+        <div className="flex justify-between h-24 md:h-28 items-center">
           {/* Logo Area */}
-          <div className="flex-shrink-0 flex items-center cursor-pointer" onClick={() => navigate('/')}>
+          <div className="flex-shrink-0 flex items-center cursor-pointer gap-3 md:gap-4 group" onClick={() => navigate('/')}>
             <img 
               src="https://web2.itnahodinu.cz/olympdance/logo.png" 
               alt="Olymp Dance Logo" 
-              className="h-12 w-auto md:h-16 transition-transform hover:scale-105"
+              className="h-20 w-auto md:h-24 transition-transform hover:scale-105"
             />
+            <div className="hidden lg:flex flex-col justify-center items-start">
+               <span className="font-display font-extrabold text-xl md:text-2xl leading-none tracking-wide text-brand-blue uppercase">
+                 Tanči s námi
+               </span>
+               <span className="font-display font-extrabold text-xl md:text-2xl leading-none tracking-wide text-brand-red uppercase -mt-1">
+                 na tvé škole
+               </span>
+            </div>
           </div>
 
           {/* Desktop Menu */}
@@ -39,7 +47,7 @@ const Navbar: React.FC = () => {
                 key={link.path}
                 to={link.path}
                 className={({ isActive }) => 
-                  `text-sm uppercase tracking-wider font-semibold py-1 border-b-2 transition-colors duration-200 ${
+                  `text-sm uppercase tracking-wider font-semibold py-1 border-b-2 transition-colors duration-200 flex items-center ${
                     isActive 
                     ? 'text-brand-blue border-brand-red' 
                     : 'text-gray-700 border-transparent hover:text-brand-blue hover:border-brand-red'
@@ -49,12 +57,14 @@ const Navbar: React.FC = () => {
                 {link.label}
               </NavLink>
             ))}
-            <Link 
-              to="/kontakt"
-              className="bg-brand-red text-white px-5 py-2 rounded-full font-bold hover:bg-red-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-            >
-              Přihlásit se
-            </Link>
+            <div className="flex items-center">
+                <Link 
+                to="/kontakt"
+                className="bg-brand-red text-white px-5 py-2 rounded-full font-bold hover:bg-red-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                >
+                Přihlásit se
+                </Link>
+            </div>
           </div>
 
           {/* Mobile Menu Button */}
@@ -72,6 +82,10 @@ const Navbar: React.FC = () => {
       {/* Mobile Menu */}
       {isOpen && (
         <div className="md:hidden bg-white border-t border-gray-100 absolute w-full shadow-xl">
+           <div className="p-4 border-b border-gray-100 text-center bg-gray-50 flex flex-col items-center">
+                <span className="font-display font-bold text-lg text-brand-blue uppercase">Tanči s námi</span>
+                <span className="font-display font-bold text-lg text-brand-red uppercase">na tvé škole</span>
+           </div>
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
             {navLinks.map((link) => (
               <NavLink

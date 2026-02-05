@@ -14,7 +14,7 @@ const Hero: React.FC = () => {
         
         <div className="inline-flex items-center px-3 py-1 rounded-full bg-brand-red/10 text-brand-red text-sm font-semibold mb-6 animate-fadeIn">
           <Star size={16} className="mr-2 animate-spin-slow" />
-          <span>Nábor nových členů zahájen</span>
+          <span>Nábor nových členů zahájen 2026/2027</span>
         </div>
         
         <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-gray-900 leading-tight mb-6 font-display">
@@ -36,12 +36,12 @@ const Hero: React.FC = () => {
           </Link>
         </div>
 
-        {/* Wide Banner Image */}
+        {/* Wide Banner Image - Taller and better positioning */}
         <div className="relative w-full max-w-6xl mx-auto rounded-2xl overflow-hidden shadow-2xl border-4 border-white transform hover:scale-[1.01] transition-transform duration-500 group">
            <img 
-             src="https://static.wixstatic.com/media/93005c_362da366b610451abefc712af9703b80~mv2.jpg/v1/fill/w_1901,h_231,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/93005c_362da366b610451abefc712af9703b80~mv2.jpg" 
+             src="https://static.wixstatic.com/media/93005c_362da366b610451abefc712af9703b80~mv2.jpg/v1/fill/w_1901,h_450,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/93005c_362da366b610451abefc712af9703b80~mv2.jpg" 
              alt="Taneční tým Olymp Dance" 
-             className="w-full h-auto object-cover"
+             className="w-full h-auto min-h-[300px] md:min-h-[500px] object-cover object-top"
            />
            <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity duration-500"></div>
            

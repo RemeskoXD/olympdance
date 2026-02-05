@@ -2,8 +2,11 @@ import React from 'react';
 import { Mail, Phone, MapPin, Lock, Send } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { CONTACT_INFO } from '../constants';
+import { useData } from '../context/DataContext';
 
 const Footer: React.FC = () => {
+  const { isMerchEnabled } = useData();
+
   return (
     <footer className="bg-gray-900 text-gray-400 py-12 border-t border-gray-800 relative overflow-hidden">
       {/* Decorative background blur */}
@@ -14,7 +17,21 @@ const Footer: React.FC = () => {
           
           {/* Brand */}
           <div className="md:col-span-1">
-            <span className="text-white text-2xl font-bold font-display block mb-4">Olymp Dance</span>
+             <Link to="/" className="flex items-center gap-3 mb-6 group">
+                <img 
+                  src="https://web2.itnahodinu.cz/olympdance/logo.png" 
+                  alt="Olymp Dance Logo" 
+                  className="h-16 w-auto transition-transform group-hover:scale-105"
+                />
+                <div className="flex flex-col justify-center items-start">
+                   <span className="font-display font-extrabold text-lg leading-none tracking-wide text-white uppercase group-hover:text-brand-lightBlue transition-colors">
+                     Tanči s námi
+                   </span>
+                   <span className="font-display font-extrabold text-lg leading-none tracking-wide text-brand-red uppercase -mt-1 group-hover:text-red-400 transition-colors">
+                     na tvé škole
+                   </span>
+                </div>
+            </Link>
             <p className="text-sm leading-relaxed mb-6 text-gray-500">
               Moderní taneční klub pro děti a mládež v Olomouci a okolí. 
               Radost z pohybu, skvělá parta a profesionální vedení.
@@ -30,6 +47,9 @@ const Footer: React.FC = () => {
               <li><Link to="/galerie" className="hover:text-brand-red transition-colors block py-1">Galerie</Link></li>
               <li><Link to="/o-nas" className="hover:text-brand-red transition-colors block py-1">O nás</Link></li>
               <li><Link to="/kontakt" className="hover:text-brand-red transition-colors block py-1">Kontakt</Link></li>
+              {isMerchEnabled && (
+                <li><Link to="/merch" className="text-brand-lightBlue hover:text-white transition-colors block py-1 font-bold">E-shop / Merch</Link></li>
+              )}
             </ul>
           </div>
 

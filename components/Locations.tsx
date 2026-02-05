@@ -114,6 +114,21 @@ const Locations: React.FC = () => {
 };
 
 const SchoolCard: React.FC<{ school: School, onSelect: () => void }> = ({ school, onSelect }) => {
+  // Helper for correct Czech grammar
+  const formatDay = (day: string) => {
+    const d = day.trim().toLowerCase();
+    
+    // Check against full day names to apply correct case
+    if (d === 'pondělí') return <span>Každé <strong>pondělí</strong></span>;
+    if (d === 'úterý') return <span>Každé <strong>úterý</strong></span>;
+    if (d === 'středa') return <span>Každou <strong>středu</strong></span>;
+    if (d === 'čtvrtek') return <span>Každý <strong>čtvrtek</strong></span>;
+    if (d === 'pátek') return <span>Každý <strong>pátek</strong></span>;
+    
+    // Fallback for non-standard inputs
+    return <span>{day}</span>;
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-shadow duration-300 overflow-hidden border border-gray-100 flex flex-col group h-full">
       <div className="p-6 flex-grow">
@@ -133,7 +148,7 @@ const SchoolCard: React.FC<{ school: School, onSelect: () => void }> = ({ school
         <div className="space-y-3 mt-4">
           <div className="flex items-center text-gray-600 text-sm">
             <Calendar className="w-4 h-4 mr-3 text-brand-red" />
-            <span>Každé <strong>{school.day}</strong></span>
+            {formatDay(school.day)}
           </div>
           <div className="flex items-center text-gray-600 text-sm">
             <Clock className="w-4 h-4 mr-3 text-brand-red" />

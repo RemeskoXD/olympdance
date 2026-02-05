@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from '../context/DataContext';
-import { Trash2, Plus, School as SchoolIcon, Tent, LogOut, Lock, Image as ImageIcon } from 'lucide-react';
+import { Trash2, Plus, School as SchoolIcon, Tent, LogOut, Lock, Image as ImageIcon, Edit2, Save, X, ShoppingBag, ToggleLeft, ToggleRight } from 'lucide-react';
+import { School, Camp, Product } from '../types';
 
 const Admin: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
-  const [activeTab, setActiveTab] = useState<'schools' | 'camps' | 'gallery'>('schools');
+  const [activeTab, setActiveTab] = useState<'schools' | 'camps' | 'gallery' | 'merch'>('schools');
 
   // Check for persisted login on mount
   useEffect(() => {
@@ -114,11 +115,23 @@ const Admin: React.FC = () => {
             <ImageIcon size={18} className="mr-2" />
             Galerie
           </button>
+          <button
+            onClick={() => setActiveTab('merch')}
+            className={`flex items-center px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+              activeTab === 'merch' 
+              ? 'bg-brand-blue text-white shadow-md' 
+              : 'text-gray-500 hover:bg-gray-100'
+            }`}
+          >
+            <ShoppingBag size={18} className="mr-2" />
+            E-shop / Merch
+          </button>
         </div>
 
         {activeTab === 'schools' && <SchoolManager />}
         {activeTab === 'camps' && <CampManager />}
         {activeTab === 'gallery' && <GalleryManager />}
+        {activeTab === 'merch' && <MerchManager />}
       </div>
     </div>
   );
@@ -127,13 +140,37 @@ const Admin: React.FC = () => {
 // --- Sub-components for better organization ---
 
 const SchoolManager: React.FC = () => {
-  const { schools, addSchool, deleteSchool } = useData();
+  const { schools, addSchool, updateSchool, deleteSchool } = useData();
+  const [isEditing, setIsEditing] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: '', city: '', day: '', time: '', price: '', isKindergarten: false });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.city) return;
-    addSchool(formData);
+    
+    if (isEditing) {
+      updateSchool(isEditing, formData);
+      setIsEditing(null);
+    } else {
+      addSchool(formData);
+    }
+    setFormData({ name: '', city: '', day: '', time: '', price: '', isKindergarten: false });
+  };
+
+  const handleEdit = (school: School) => {
+    setIsEditing(school.id);
+    setFormData({
+      name: school.name,
+      city: school.city,
+      day: school.day,
+      time: school.time,
+      price: school.price,
+      isKindergarten: school.isKindergarten || false
+    });
+  };
+
+  const cancelEdit = () => {
+    setIsEditing(null);
     setFormData({ name: '', city: '', day: '', time: '', price: '', isKindergarten: false });
   };
 
@@ -142,8 +179,16 @@ const SchoolManager: React.FC = () => {
       {/* Form */}
       <div className="lg:col-span-1">
         <div className="bg-white p-6 rounded-2xl shadow-md sticky top-24">
-          <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-             <Plus size={20} className="mr-2 text-brand-red" /> Přidat školu
+          <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center justify-between">
+             <span className="flex items-center">
+               {isEditing ? <Edit2 size={20} className="mr-2 text-brand-blue" /> : <Plus size={20} className="mr-2 text-brand-red" />}
+               {isEditing ? 'Upravit školu' : 'Přidat školu'}
+             </span>
+             {isEditing && (
+               <button onClick={cancelEdit} className="text-gray-400 hover:text-gray-600">
+                 <X size={20} />
+               </button>
+             )}
           </h3>
           <form onSubmit={handleSubmit} className="space-y-3">
             <input 
@@ -169,14 +214,14 @@ const SchoolManager: React.FC = () => {
                 />
                 <input 
                   className="w-full px-3 py-2 border rounded-lg text-sm" 
-                  placeholder="Čas (14:00 - 15:00)" 
+                  placeholder="Čas (14:00 - 14:45)" 
                   value={formData.time} 
                   onChange={e => setFormData({...formData, time: e.target.value})} 
                 />
             </div>
             <input 
               className="w-full px-3 py-2 border rounded-lg text-sm" 
-              placeholder="Cena (1800 Kč / pololetí)" 
+              placeholder="Cena (1700 Kč / pololetí)" 
               value={formData.price} 
               onChange={e => setFormData({...formData, price: e.target.value})} 
             />
@@ -189,8 +234,8 @@ const SchoolManager: React.FC = () => {
               />
               <span>Je to mateřská škola?</span>
             </label>
-            <button className="w-full bg-brand-blue text-white font-bold py-2 rounded-lg hover:bg-blue-700 transition-colors">
-              Uložit
+            <button className={`w-full text-white font-bold py-2 rounded-lg transition-colors ${isEditing ? 'bg-brand-blue hover:bg-blue-700' : 'bg-brand-red hover:bg-red-700'}`}>
+              {isEditing ? 'Uložit změny' : 'Přidat školu'}
             </button>
           </form>
         </div>
@@ -199,20 +244,31 @@ const SchoolManager: React.FC = () => {
       {/* List */}
       <div className="lg:col-span-2 space-y-4">
         {schools.map(school => (
-          <div key={school.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center group hover:shadow-md transition-shadow">
+          <div key={school.id} className={`bg-white p-4 rounded-xl shadow-sm border flex justify-between items-center group transition-all ${isEditing === school.id ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 hover:shadow-md'}`}>
             <div>
               <div className="flex items-center gap-2">
                   <h4 className="font-bold text-gray-900">{school.name}</h4>
                   {school.isKindergarten && <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded font-bold">MŠ</span>}
               </div>
               <p className="text-sm text-gray-500">{school.city} • {school.day} {school.time}</p>
+              <p className="text-sm font-semibold text-brand-blue mt-1">{school.price}</p>
             </div>
-            <button 
-              onClick={() => { if(confirm('Opravdu smazat?')) deleteSchool(school.id) }}
-              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-            >
-              <Trash2 size={20} />
-            </button>
+            <div className="flex space-x-2">
+              <button 
+                onClick={() => handleEdit(school)}
+                className="p-2 text-gray-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors"
+                title="Upravit"
+              >
+                <Edit2 size={20} />
+              </button>
+              <button 
+                onClick={() => { if(confirm('Opravdu smazat?')) deleteSchool(school.id) }}
+                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                title="Smazat"
+              >
+                <Trash2 size={20} />
+              </button>
+            </div>
           </div>
         ))}
         {schools.length === 0 && <p className="text-gray-500 text-center py-8">Žádné školy v seznamu.</p>}
@@ -222,13 +278,36 @@ const SchoolManager: React.FC = () => {
 };
 
 const CampManager: React.FC = () => {
-    const { camps, addCamp, deleteCamp } = useData();
+    const { camps, addCamp, updateCamp, deleteCamp } = useData();
+    const [isEditing, setIsEditing] = useState<string | null>(null);
     const [formData, setFormData] = useState({ title: '', date: '', price: '', description: '', image: 'https://images.unsplash.com/photo-1547153760-18fc86324498?auto=format&fit=crop&q=80&w=800' });
   
     const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       if (!formData.title) return;
-      addCamp(formData);
+      
+      if (isEditing) {
+        updateCamp(isEditing, formData);
+        setIsEditing(null);
+      } else {
+        addCamp(formData);
+      }
+      setFormData({ title: '', date: '', price: '', description: '', image: 'https://images.unsplash.com/photo-1547153760-18fc86324498?auto=format&fit=crop&q=80&w=800' });
+    };
+
+    const handleEdit = (camp: Camp) => {
+      setIsEditing(camp.id);
+      setFormData({
+        title: camp.title,
+        date: camp.date,
+        price: camp.price,
+        description: camp.description,
+        image: camp.image
+      });
+    };
+
+    const cancelEdit = () => {
+      setIsEditing(null);
       setFormData({ title: '', date: '', price: '', description: '', image: 'https://images.unsplash.com/photo-1547153760-18fc86324498?auto=format&fit=crop&q=80&w=800' });
     };
   
@@ -237,8 +316,16 @@ const CampManager: React.FC = () => {
         {/* Form */}
         <div className="lg:col-span-1">
           <div className="bg-white p-6 rounded-2xl shadow-md sticky top-24">
-            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-               <Plus size={20} className="mr-2 text-brand-red" /> Přidat tábor
+            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center justify-between">
+               <span className="flex items-center">
+                 {isEditing ? <Edit2 size={20} className="mr-2 text-brand-blue" /> : <Plus size={20} className="mr-2 text-brand-red" />}
+                 {isEditing ? 'Upravit tábor' : 'Přidat tábor'}
+               </span>
+               {isEditing && (
+                 <button onClick={cancelEdit} className="text-gray-400 hover:text-gray-600">
+                   <X size={20} />
+                 </button>
+               )}
             </h3>
             <form onSubmit={handleSubmit} className="space-y-3">
               <input 
@@ -275,8 +362,8 @@ const CampManager: React.FC = () => {
                 value={formData.image} 
                 onChange={e => setFormData({...formData, image: e.target.value})} 
               />
-              <button className="w-full bg-brand-blue text-white font-bold py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                Uložit
+              <button className={`w-full text-white font-bold py-2 rounded-lg transition-colors ${isEditing ? 'bg-brand-blue hover:bg-blue-700' : 'bg-brand-red hover:bg-red-700'}`}>
+                {isEditing ? 'Uložit změny' : 'Uložit tábor'}
               </button>
             </form>
           </div>
@@ -285,19 +372,27 @@ const CampManager: React.FC = () => {
         {/* List */}
         <div className="lg:col-span-2 space-y-4">
           {camps.map(camp => (
-            <div key={camp.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex gap-4 group hover:shadow-md transition-shadow">
+            <div key={camp.id} className={`bg-white p-4 rounded-xl shadow-sm border flex gap-4 group transition-all ${isEditing === camp.id ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 hover:shadow-md'}`}>
                <img src={camp.image} alt="" className="w-24 h-24 object-cover rounded-lg bg-gray-100" />
                <div className="flex-grow">
                   <div className="flex justify-between items-start">
                     <h4 className="font-bold text-gray-900">{camp.title}</h4>
-                    <button 
-                        onClick={() => { if(confirm('Opravdu smazat?')) deleteCamp(camp.id) }}
-                        className="text-gray-400 hover:text-red-600 transition-colors"
-                    >
-                        <Trash2 size={20} />
-                    </button>
+                    <div className="flex space-x-2">
+                      <button 
+                        onClick={() => handleEdit(camp)}
+                        className="text-gray-400 hover:text-brand-blue transition-colors"
+                      >
+                        <Edit2 size={20} />
+                      </button>
+                      <button 
+                          onClick={() => { if(confirm('Opravdu smazat?')) deleteCamp(camp.id) }}
+                          className="text-gray-400 hover:text-red-600 transition-colors"
+                      >
+                          <Trash2 size={20} />
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-sm text-brand-red font-semibold mb-1">{camp.date}</p>
+                  <p className="text-sm text-brand-red font-semibold mb-1">{camp.date} • {camp.price}</p>
                   <p className="text-sm text-gray-500 line-clamp-2">{camp.description}</p>
                </div>
             </div>
@@ -371,6 +466,107 @@ const GalleryManager: React.FC = () => {
       </div>
     </div>
   );
+};
+
+const MerchManager: React.FC = () => {
+    const { products, addProduct, deleteProduct, isMerchEnabled, toggleMerch } = useData();
+    const [formData, setFormData] = useState({ name: '', price: '', description: '', image: '' });
+  
+    const handleSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!formData.name) return;
+      addProduct(formData);
+      setFormData({ name: '', price: '', description: '', image: '' });
+    };
+  
+    return (
+      <div className="space-y-8">
+        {/* Visibility Toggle */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
+           <div>
+               <h3 className="text-lg font-bold text-gray-900">Viditelnost E-shopu</h3>
+               <p className="text-gray-500 text-sm">Pokud vypnete, odkaz zmizí z patičky a stránka nebude přístupná.</p>
+           </div>
+           <button 
+             onClick={() => toggleMerch(!isMerchEnabled)}
+             className={`flex items-center px-4 py-2 rounded-full font-bold transition-all ${isMerchEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}
+           >
+               {isMerchEnabled ? <ToggleRight size={40} className="mr-2" /> : <ToggleLeft size={40} className="mr-2" />}
+               {isMerchEnabled ? 'Aktivní' : 'Vypnuto'}
+           </button>
+        </div>
+
+        <div className="grid lg:grid-cols-3 gap-8">
+          {/* Form */}
+          <div className="lg:col-span-1">
+            <div className="bg-white p-6 rounded-2xl shadow-md sticky top-24">
+              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                 <Plus size={20} className="mr-2 text-brand-red" /> Přidat produkt
+              </h3>
+              <form onSubmit={handleSubmit} className="space-y-3">
+                <input 
+                  className="w-full px-3 py-2 border rounded-lg text-sm" 
+                  placeholder="Název produktu" 
+                  value={formData.name} 
+                  onChange={e => setFormData({...formData, name: e.target.value})} 
+                  required 
+                />
+                <input 
+                  className="w-full px-3 py-2 border rounded-lg text-sm" 
+                  placeholder="Cena" 
+                  value={formData.price} 
+                  onChange={e => setFormData({...formData, price: e.target.value})} 
+                  required 
+                />
+                <textarea 
+                  className="w-full px-3 py-2 border rounded-lg text-sm" 
+                  placeholder="Popis produktu..." 
+                  rows={3}
+                  value={formData.description} 
+                  onChange={e => setFormData({...formData, description: e.target.value})} 
+                />
+                <input 
+                  className="w-full px-3 py-2 border rounded-lg text-sm" 
+                  placeholder="URL obrázku" 
+                  value={formData.image} 
+                  onChange={e => setFormData({...formData, image: e.target.value})} 
+                  required 
+                />
+                {formData.image && (
+                     <div className="mt-2 rounded-lg overflow-hidden border border-gray-200">
+                        <img src={formData.image} alt="Náhled" className="w-full h-32 object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                     </div>
+                )}
+                <button className="w-full bg-brand-blue text-white font-bold py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                  Přidat produkt
+                </button>
+              </form>
+            </div>
+          </div>
+  
+          {/* List */}
+          <div className="lg:col-span-2 space-y-4">
+             {products.map(prod => (
+                <div key={prod.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex gap-4 items-center">
+                    <img src={prod.image} alt="" className="w-20 h-20 object-cover rounded-lg bg-gray-100" />
+                    <div className="flex-grow">
+                        <h4 className="font-bold text-gray-900">{prod.name}</h4>
+                        <p className="text-brand-red font-bold text-sm">{prod.price}</p>
+                        <p className="text-gray-500 text-sm line-clamp-1">{prod.description}</p>
+                    </div>
+                    <button 
+                        onClick={() => { if(confirm('Opravdu smazat?')) deleteProduct(prod.id) }}
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                        <Trash2 size={20} />
+                    </button>
+                </div>
+             ))}
+             {products.length === 0 && <p className="text-gray-500 text-center py-8">Žádné produkty v E-shopu.</p>}
+          </div>
+        </div>
+      </div>
+    );
 };
 
 export default Admin;

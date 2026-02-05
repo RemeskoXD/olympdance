@@ -10,6 +10,7 @@ import Gallery from './components/Gallery';
 import Admin from './components/Admin';
 import NotFound from './components/NotFound';
 import Footer from './components/Footer';
+import Merch from './components/Merch';
 import { DataProvider } from './context/DataContext';
 
 // Component to handle scroll restoration and dynamic page titles
@@ -44,6 +45,9 @@ const PageHandler = () => {
       case '/admin':
         document.title = `Administrace | ${baseTitle}`;
         break;
+      case '/merch':
+        document.title = `E-shop | ${baseTitle}`;
+        break;
       default:
         document.title = baseTitle;
     }
@@ -56,7 +60,7 @@ const PageHandler = () => {
 const Layout = ({ children }: { children?: React.ReactNode }) => (
   <div className="min-h-screen bg-white font-sans text-gray-900 selection:bg-brand-red selection:text-white flex flex-col">
     <Navbar />
-    <main className="flex-grow pt-20">
+    <main className="flex-grow pt-24 md:pt-32">
       {children}
     </main>
     <Footer />
@@ -77,6 +81,7 @@ function App() {
             <Route path="/o-nas" element={<About />} />
             <Route path="/kontakt" element={<Contact />} />
             <Route path="/admin" element={<Admin />} />
+            <Route path="/merch" element={<Merch />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Layout>

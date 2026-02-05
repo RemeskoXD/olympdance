@@ -1,17 +1,24 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { SCHOOLS as INITIAL_SCHOOLS, CAMPS as INITIAL_CAMPS, GALLERY_IMAGES as INITIAL_GALLERY_IMAGES } from '../constants';
-import { School, Camp, GalleryImage } from '../types';
+import { SCHOOLS as INITIAL_SCHOOLS, CAMPS as INITIAL_CAMPS, GALLERY_IMAGES as INITIAL_GALLERY_IMAGES, PRODUCTS as INITIAL_PRODUCTS } from '../constants';
+import { School, Camp, GalleryImage, Product } from '../types';
 
 interface DataContextType {
   schools: School[];
   camps: Camp[];
   galleryImages: GalleryImage[];
+  products: Product[];
+  isMerchEnabled: boolean;
   addSchool: (school: Omit<School, 'id'>) => void;
+  updateSchool: (id: string, updatedSchool: Partial<School>) => void;
   deleteSchool: (id: string) => void;
   addCamp: (camp: Omit<Camp, 'id'>) => void;
+  updateCamp: (id: string, updatedCamp: Partial<Camp>) => void;
   deleteCamp: (id: string) => void;
   addGalleryImage: (imageUrl: string) => void;
   deleteGalleryImage: (id: string) => void;
+  addProduct: (product: Omit<Product, 'id'>) => void;
+  deleteProduct: (id: string) => void;
+  toggleMerch: (enabled: boolean) => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -33,6 +40,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return saved ? JSON.parse(saved) : INITIAL_GALLERY_IMAGES;
   });
 
+  const [products, setProducts] = useState<Product[]>(() => {
+    const saved = localStorage.getItem('olymp_products');
+    return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
+  });
+
+  const [isMerchEnabled, setIsMerchEnabled] = useState<boolean>(() => {
+    const saved = localStorage.getItem('olymp_merch_enabled');
+    return saved ? JSON.parse(saved) : true;
+  });
+
   // Persist changes
   useEffect(() => {
     localStorage.setItem('olymp_schools', JSON.stringify(schools));
@@ -46,9 +63,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('olymp_gallery', JSON.stringify(galleryImages));
   }, [galleryImages]);
 
+  useEffect(() => {
+    localStorage.setItem('olymp_products', JSON.stringify(products));
+  }, [products]);
+
+  useEffect(() => {
+    localStorage.setItem('olymp_merch_enabled', JSON.stringify(isMerchEnabled));
+  }, [isMerchEnabled]);
+
   const addSchool = (school: Omit<School, 'id'>) => {
     const newSchool = { ...school, id: Date.now().toString() };
     setSchools([...schools, newSchool]);
+  };
+
+  const updateSchool = (id: string, updatedSchool: Partial<School>) => {
+    setSchools(schools.map(s => s.id === id ? { ...s, ...updatedSchool } : s));
   };
 
   const deleteSchool = (id: string) => {
@@ -58,6 +87,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addCamp = (camp: Omit<Camp, 'id'>) => {
     const newCamp = { ...camp, id: Date.now().toString() };
     setCamps([...camps, newCamp]);
+  };
+
+  const updateCamp = (id: string, updatedCamp: Partial<Camp>) => {
+    setCamps(camps.map(c => c.id === id ? { ...c, ...updatedCamp } : c));
   };
 
   const deleteCamp = (id: string) => {
@@ -76,12 +109,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setGalleryImages(galleryImages.filter(img => img.id !== id));
   };
 
+  const addProduct = (product: Omit<Product, 'id'>) => {
+      const newProduct = { ...product, id: Date.now().toString() };
+      setProducts([...products, newProduct]);
+  };
+
+  const deleteProduct = (id: string) => {
+      setProducts(products.filter(p => p.id !== id));
+  };
+
+  const toggleMerch = (enabled: boolean) => {
+      setIsMerchEnabled(enabled);
+  };
+
   return (
     <DataContext.Provider value={{ 
-      schools, camps, galleryImages, 
-      addSchool, deleteSchool, 
-      addCamp, deleteCamp,
-      addGalleryImage, deleteGalleryImage 
+      schools, camps, galleryImages, products, isMerchEnabled,
+      addSchool, updateSchool, deleteSchool, 
+      addCamp, updateCamp, deleteCamp,
+      addGalleryImage, deleteGalleryImage,
+      addProduct, deleteProduct, toggleMerch
     }}>
       {children}
     </DataContext.Provider>

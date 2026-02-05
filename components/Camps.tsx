@@ -15,16 +15,16 @@ const Camps: React.FC = () => {
     <section className="py-12 bg-white min-h-screen">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
-        {/* Banner Section */}
+        {/* Banner Section - Increased height and object position */}
         <div className="relative rounded-2xl overflow-hidden shadow-xl mb-16">
           <img 
             src="https://static.wixstatic.com/media/93005c_573dc43953b84fde95242482a4c20b9c~mv2.jpg/v1/fill/w_1901,h_362,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/93005c_573dc43953b84fde95242482a4c20b9c~mv2.jpg" 
             alt="Letní tábory" 
-            className="w-full h-48 md:h-72 object-cover"
+            className="w-full h-[300px] md:h-[450px] object-cover object-top"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-black/70 to-transparent flex items-center">
             <div className="px-8 md:px-12">
-              <span className="text-brand-red font-bold tracking-wider uppercase text-sm bg-white/10 px-3 py-1 rounded-full backdrop-blur-md">Léto 2024</span>
+              <span className="text-brand-red font-bold tracking-wider uppercase text-sm bg-white/10 px-3 py-1 rounded-full backdrop-blur-md">Léto 2026</span>
               <h2 className="text-3xl md:text-5xl font-display font-bold text-white mt-4 mb-2">
                 Letní Taneční Campy
               </h2>
