@@ -143,5 +143,5 @@ export const CONTACT_INFO = {
   address: "ZŠ Holečkova 10, 779 00, Olomouc",
   ico: "68347286",
   email: "info@olympdance.cz",
-  phone: "+420 774 090 200"
+  phone: "+420 722 017 700"
 };

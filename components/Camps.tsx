@@ -18,9 +18,9 @@ const Camps: React.FC = () => {
         {/* Banner Section - Increased height and object position */}
         <div className="relative rounded-2xl overflow-hidden shadow-xl mb-16">
           <img 
-            src="https://static.wixstatic.com/media/93005c_573dc43953b84fde95242482a4c20b9c~mv2.jpg/v1/fill/w_1901,h_362,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/93005c_573dc43953b84fde95242482a4c20b9c~mv2.jpg" 
+            src="https://web2.itnahodinu.cz/olympdance/prostejov/img_14_optimized.02.25_00050.jpg" 
             alt="Letní tábory" 
-            className="w-full h-[300px] md:h-[450px] object-cover object-top"
+            className="w-full h-[300px] md:h-[450px] object-cover object-center"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-black/70 to-transparent flex items-center">
             <div className="px-8 md:px-12">

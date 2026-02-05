@@ -2,7 +2,7 @@ import React from 'react';
 import Hero from './Hero';
 import RevealOnScroll from './RevealOnScroll';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Music, Sun, Users, Star, Quote, Clock, Heart, Wallet, Trophy } from 'lucide-react';
+import { ArrowRight, Music, Sun, Users, Star, Quote, Clock, Heart, Wallet, Trophy, HelpCircle } from 'lucide-react';
 
 const TESTIMONIALS = [
   { 
@@ -46,6 +46,43 @@ const BENEFITS = [
     title: "Vystoupení a show",
     description: "Každý rok pořádáme velké závěrečné show v profesionálním divadle, kde každé dítě zažije svůj hvězdný moment.",
     color: "bg-purple-50 text-purple-600"
+  }
+];
+
+const FAQS = [
+  {
+    question: "Co si vzít s sebou na kroužek?",
+    answer: (
+      <ul className="list-disc list-inside space-y-1 text-gray-600">
+        <li>Sportovní oblečení</li>
+        <li>Pevnou obuv (tenisky)</li>
+        <li>Pití</li>
+      </ul>
+    )
+  },
+  {
+    question: "Lze získat potvrzení pro příspěvek od pojišťovny?",
+    answer: (
+      <span>
+        Ano, lze. Napište prosím o něj na e-mail: <a href="mailto:info@olympdance.cz" className="text-brand-blue font-bold hover:underline">info@olympdance.cz</a>
+      </span>
+    )
+  },
+  {
+    question: "Od kolika let je kroužek?",
+    answer: "Děti mohou navštěvovat kroužek od 4 let."
+  },
+  {
+    question: "Můžu si první lekci vyzkoušet nezávazně?",
+    answer: "Ano, první lekci pro nové členy máme zdarma."
+  },
+  {
+    question: "Probíhá kroužek přímo na ZŠ nebo MŠ?",
+    answer: "Ano, kroužek probíhá na Základní nebo Mateřské škole. Pokud je kroužek v družinových hodinách, tak si lektor vyzvedává děti z družiny."
+  },
+  {
+    question: "Do kdy se musí kroužek zaplatit?",
+    answer: "Kroužek se platí vždy do 15. dne v začátku nového pololetí. Tzn. v 1. pol. do 15.října a 2. pol. do 15.února."
   }
 ];
 
@@ -96,7 +133,7 @@ const Home: React.FC = () => {
             <RevealOnScroll delay={300}>
               <div className="group relative rounded-2xl overflow-hidden shadow-xl aspect-[4/3] md:aspect-[16/9] cursor-pointer">
                 <img 
-                  src="https://static.wixstatic.com/media/93005c_573dc43953b84fde95242482a4c20b9c~mv2.jpg/v1/fill/w_1000,h_600,al_c,q_85/summer-camp.jpg" 
+                  src="https://web2.itnahodinu.cz/olympdance/prostejov/img_14_optimized.02.25_00050.jpg" 
                   alt="Letní tábory" 
                   className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
@@ -226,6 +263,34 @@ const Home: React.FC = () => {
                           <div className="font-bold text-gray-900">{item.name}</div>
                           <div className="text-xs text-gray-500 uppercase tracking-wide">{item.role}</div>
                         </div>
+                     </div>
+                  </div>
+                </RevealOnScroll>
+             ))}
+           </div>
+        </div>
+      </section>
+
+      {/* FAQ Section */}
+      <section className="py-20 bg-gray-50 border-t border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+           <RevealOnScroll>
+             <div className="text-center mb-16">
+               <span className="text-brand-red font-bold tracking-wider uppercase text-sm flex items-center justify-center gap-2">
+                 <HelpCircle size={18} />
+                 Ptáte se nás
+               </span>
+               <h2 className="text-3xl md:text-4xl font-display font-bold text-gray-900 mt-2">Nejčastější dotazy</h2>
+             </div>
+           </RevealOnScroll>
+
+           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+             {FAQS.map((faq, idx) => (
+                <RevealOnScroll key={idx} delay={idx * 100}>
+                  <div className="bg-gray-200/60 p-8 rounded-2xl h-full border border-gray-200 hover:bg-gray-200 transition-colors">
+                     <h3 className="text-xl font-bold text-gray-900 mb-4">{faq.question}</h3>
+                     <div className="text-gray-700 leading-relaxed text-sm md:text-base">
+                       {faq.answer}
                      </div>
                   </div>
                 </RevealOnScroll>
