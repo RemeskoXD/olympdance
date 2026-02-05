@@ -6,9 +6,9 @@ import { School, Camp, GalleryImage, Product } from './types';
 
 export const SCHOOLS: School[] = [
   { id: '1', name: 'ZŠ Řezníčkova', city: 'Olomouc', day: 'Pondělí', time: '14:00 - 14:45', price: '1700 Kč / pololetí' },
-  { id: '2', name: 'ZŠ a MŠ Bohuňovice', city: 'Bohuňovice', day: 'Úterý', time: '13:30 - 14:15', price: '1550 Kč / pololetí', isKindergarten: true }, // MŠ rule
+  { id: '2', name: 'ZŠ a MŠ Bohuňovice', city: 'Bohuňovice', day: 'Úterý', time: '13:30 - 14:15', price: '1700 Kč / pololetí', isKindergarten: true }, // Standard ZŠ price
   { id: '3', name: 'ZŠ Rooseveltova', city: 'Olomouc', day: 'Středa', time: '14:00 - 14:45', price: '1700 Kč / pololetí' },
-  { id: '4', name: 'MŠ Vrbátky', city: 'Vrbátky', day: 'Čtvrtek', time: '15:00 - 15:45', price: '1550 Kč / pololetí', isKindergarten: true },
+  { id: '4', name: 'MŠ Vrbátky', city: 'Vrbátky', day: 'Čtvrtek', time: '15:00 - 15:45', price: '1550 Kč / pololetí', isKindergarten: true }, // MŠ Standard
   { id: '5', name: 'ZŠ Sv. Kopeček', city: 'Olomouc', day: 'Pátek', time: '13:00 - 13:45', price: '1700 Kč / pololetí' },
   { id: '6', name: 'ZŠ Hněvotín', city: 'Hněvotín', day: 'Pondělí', time: '13:30 - 14:15', price: '1700 Kč / pololetí' },
   { id: '7', name: 'MŠ Grygov', city: 'Grygov', day: 'Úterý', time: '15:00 - 15:45', price: '1400 Kč / pololetí', isKindergarten: true }, // Exception: 1400
@@ -29,12 +29,12 @@ export const SCHOOLS: School[] = [
   { id: '22', name: 'ZŠ Majakovského', city: 'Prostějov', day: 'Úterý', time: '14:00 - 14:45', price: '1700 Kč / pololetí' },
   { id: '23', name: 'ZŠ Troubky', city: 'Troubky', day: 'Středa', time: '13:45 - 14:30', price: '1500 Kč / pololetí' }, // Exception: 1500
   { id: '24', name: 'ZŠ Plumlov', city: 'Plumlov', day: 'Čtvrtek', time: '13:30 - 14:15', price: '1700 Kč / pololetí' },
-  { id: '25', name: 'ZŠ a MŠ Přáslavice', city: 'Přáslavice', day: 'Pátek', time: '13:00 - 13:45', price: '1550 Kč / pololetí', isKindergarten: true }, // MŠ rule
+  { id: '25', name: 'ZŠ a MŠ Přáslavice', city: 'Přáslavice', day: 'Pátek', time: '13:00 - 13:45', price: '1700 Kč / pololetí', isKindergarten: true }, // Standard ZŠ Price
   { id: '26', name: 'ZŠ a MŠ Olšany', city: 'Olšany u Pv', day: 'Pondělí', time: '13:30 - 14:15', price: '1500 Kč / pololetí', isKindergarten: true }, // Exception: 1500 (covers both ZŠ and MŠ)
   { id: '27', name: 'ZŠ Tererovo nám.', city: 'Olomouc', day: 'Úterý', time: '14:00 - 14:45', price: '1700 Kč / pololetí' },
   { id: '28', name: 'ZŠ Holečkova', city: 'Olomouc', day: 'Středa', time: '14:00 - 14:45', price: '1700 Kč / pololetí' },
   { id: '29', name: 'ZŠ Spojenců', city: 'Olomouc', day: 'Čtvrtek', time: '15:00 - 15:45', price: '1700 Kč / pololetí' },
-  { id: '30', name: 'MŠ Aurora', city: 'Olomouc', day: 'Pátek', time: '10:00 - 10:45', price: '1550 Kč / pololetí', isKindergarten: true },
+  { id: '30', name: 'MŠ Aurora', city: 'Olomouc', day: 'Pátek', time: '10:00 - 10:45', price: '1550 Kč / pololetí', isKindergarten: true }, // MŠ Standard
 ];
 
 export const CAMPS: Camp[] = [
