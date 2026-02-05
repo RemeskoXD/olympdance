@@ -2,6 +2,9 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { SCHOOLS as INITIAL_SCHOOLS, CAMPS as INITIAL_CAMPS, GALLERY_IMAGES as INITIAL_GALLERY_IMAGES, PRODUCTS as INITIAL_PRODUCTS } from '../constants';
 import { School, Camp, GalleryImage, Product } from '../types';
 
+// Increment this version whenever you update constants.ts to force clients to reload data
+const DATA_VERSION = '2.0-price-update';
+
 interface DataContextType {
   schools: School[];
   camps: Camp[];
@@ -24,25 +27,43 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Initialize state from LocalStorage or fall back to constants
+  // Helper to check if we should use cached data
+  const shouldLoadFromCache = () => {
+    const savedVersion = localStorage.getItem('olymp_data_version');
+    return savedVersion === DATA_VERSION;
+  };
+
+  // Initialize state from LocalStorage ONLY if version matches, otherwise use constants
   const [schools, setSchools] = useState<School[]>(() => {
-    const saved = localStorage.getItem('olymp_schools');
-    return saved ? JSON.parse(saved) : INITIAL_SCHOOLS;
+    if (shouldLoadFromCache()) {
+      const saved = localStorage.getItem('olymp_schools');
+      return saved ? JSON.parse(saved) : INITIAL_SCHOOLS;
+    }
+    return INITIAL_SCHOOLS;
   });
 
   const [camps, setCamps] = useState<Camp[]>(() => {
-    const saved = localStorage.getItem('olymp_camps');
-    return saved ? JSON.parse(saved) : INITIAL_CAMPS;
+    if (shouldLoadFromCache()) {
+      const saved = localStorage.getItem('olymp_camps');
+      return saved ? JSON.parse(saved) : INITIAL_CAMPS;
+    }
+    return INITIAL_CAMPS;
   });
 
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>(() => {
-    const saved = localStorage.getItem('olymp_gallery');
-    return saved ? JSON.parse(saved) : INITIAL_GALLERY_IMAGES;
+    if (shouldLoadFromCache()) {
+      const saved = localStorage.getItem('olymp_gallery');
+      return saved ? JSON.parse(saved) : INITIAL_GALLERY_IMAGES;
+    }
+    return INITIAL_GALLERY_IMAGES;
   });
 
   const [products, setProducts] = useState<Product[]>(() => {
-    const saved = localStorage.getItem('olymp_products');
-    return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
+    if (shouldLoadFromCache()) {
+      const saved = localStorage.getItem('olymp_products');
+      return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
+    }
+    return INITIAL_PRODUCTS;
   });
 
   const [isMerchEnabled, setIsMerchEnabled] = useState<boolean>(() => {
@@ -50,7 +71,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return saved ? JSON.parse(saved) : true;
   });
 
-  // Persist changes
+  // Persist changes and update version
+  useEffect(() => {
+    localStorage.setItem('olymp_data_version', DATA_VERSION);
+  }, []);
+
   useEffect(() => {
     localStorage.setItem('olymp_schools', JSON.stringify(schools));
   }, [schools]);

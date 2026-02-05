@@ -2,7 +2,7 @@ import React from 'react';
 import Hero from './Hero';
 import RevealOnScroll from './RevealOnScroll';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Music, Sun, Users, Star, Quote } from 'lucide-react';
+import { ArrowRight, Music, Sun, Users, Star, Quote, Clock, Heart, Wallet, Trophy } from 'lucide-react';
 
 const TESTIMONIALS = [
   { 
@@ -20,6 +20,33 @@ const TESTIMONIALS = [
     role: 'Maminka', 
     text: 'Oceňuji skvělou komunikaci a organizaci. Závěrečné vystoupení bylo dojemné a profesionálně připravené. Děkujeme!' 
   },
+];
+
+const BENEFITS = [
+  {
+    icon: Clock,
+    title: "Šetříme váš čas",
+    description: "Lekce probíhají přímo ve školách a družinách. Nemusíte dělat taxikáře – lektor si děti vyzvedne a po tréninku je zase vrátí.",
+    color: "bg-blue-50 text-brand-blue"
+  },
+  {
+    icon: Wallet,
+    title: "Rozumná cena",
+    description: "Kvalitní taneční výuka nemusí být drahá. Nabízíme profesionální vedení za ceny dostupné pro každou rodinu.",
+    color: "bg-green-50 text-green-600"
+  },
+  {
+    icon: Heart,
+    title: "Přátelská atmosféra",
+    description: "Néstresujeme děti soutěživostí za každou cenu. Hlavní je radost z pohybu, budování přátelství a týmového ducha.",
+    color: "bg-red-50 text-brand-red"
+  },
+  {
+    icon: Trophy,
+    title: "Vystoupení a show",
+    description: "Každý rok pořádáme velké závěrečné show v profesionálním divadle, kde každé dítě zažije svůj hvězdný moment.",
+    color: "bg-purple-50 text-purple-600"
+  }
 ];
 
 const Home: React.FC = () => {
@@ -92,6 +119,38 @@ const Home: React.FC = () => {
         </div>
       </section>
 
+      {/* NEW Benefits Section */}
+      <section className="py-20 bg-gray-50 relative overflow-hidden">
+         {/* Decorative elements */}
+         <div className="absolute top-0 right-0 w-64 h-64 bg-brand-blue/5 rounded-full -mr-32 -mt-32 blur-3xl"></div>
+         <div className="absolute bottom-0 left-0 w-64 h-64 bg-brand-red/5 rounded-full -ml-32 -mb-32 blur-3xl"></div>
+
+         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+            <RevealOnScroll>
+              <div className="text-center mb-16">
+                 <span className="text-brand-red font-bold tracking-wider uppercase text-sm">Proč Olymp Dance?</span>
+                 <h2 className="text-3xl md:text-4xl font-display font-bold text-gray-900 mt-2">Děláme to jinak. Děláme to srdcem.</h2>
+              </div>
+            </RevealOnScroll>
+
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+               {BENEFITS.map((benefit, idx) => (
+                  <RevealOnScroll key={idx} delay={idx * 150}>
+                     <div className="bg-white p-8 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 group h-full hover:-translate-y-2">
+                        <div className={`w-14 h-14 ${benefit.color} rounded-2xl flex items-center justify-center mb-6 transition-transform group-hover:scale-110 group-hover:rotate-3`}>
+                           <benefit.icon size={28} />
+                        </div>
+                        <h3 className="text-xl font-bold text-gray-900 mb-3">{benefit.title}</h3>
+                        <p className="text-gray-600 leading-relaxed text-sm">
+                           {benefit.description}
+                        </p>
+                     </div>
+                  </RevealOnScroll>
+               ))}
+            </div>
+         </div>
+      </section>
+
       {/* Stats/Trust Section */}
       <section className="py-20 bg-brand-blue text-white relative overflow-hidden">
         {/* Background decorative elements */}
@@ -143,8 +202,8 @@ const Home: React.FC = () => {
         </div>
       </section>
 
-      {/* Testimonials Section (New) */}
-      <section className="py-20 bg-gray-50">
+      {/* Testimonials Section */}
+      <section className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
            <RevealOnScroll>
              <div className="text-center mb-16">
@@ -156,7 +215,7 @@ const Home: React.FC = () => {
            <div className="grid md:grid-cols-3 gap-8">
              {TESTIMONIALS.map((item, idx) => (
                 <RevealOnScroll key={idx} delay={idx * 150}>
-                  <div className="bg-white p-8 rounded-2xl shadow-md border border-gray-100 h-full flex flex-col relative">
+                  <div className="bg-gray-50 p-8 rounded-2xl shadow-sm border border-gray-100 h-full flex flex-col relative hover:shadow-md transition-shadow">
                      <Quote className="absolute top-6 right-6 text-brand-gray w-10 h-10 opacity-50" />
                      <p className="text-gray-600 mb-6 italic relative z-10">"{item.text}"</p>
                      <div className="mt-auto flex items-center">
