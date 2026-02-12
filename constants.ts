@@ -29,7 +29,7 @@ export const SCHOOLS: School[] = [
   { id: '22', name: 'ZŠ Majakovského', city: 'Prostějov', day: 'Úterý', time: '14:00 - 14:45', price: '1700 Kč / pololetí' },
   { id: '23', name: 'ZŠ Troubky', city: 'Troubky', day: 'Středa', time: '13:45 - 14:30', price: '1500 Kč / pololetí' }, // Exception: 1500
   { id: '24', name: 'ZŠ Plumlov', city: 'Plumlov', day: 'Čtvrtek', time: '13:30 - 14:15', price: '1700 Kč / pololetí' },
-  { id: '25', name: 'MŠ Přáslavice', city: 'Přáslavice', day: 'Čtvrtek', time: '15:00 - 15:45', price: '1700 Kč / pololetí', isKindergarten: true }, 
+  { id: '25', name: 'MŠ Přáslavice', city: 'Přáslavice', day: 'Úterý', time: '16:45 - 17:30 (začínáme 30.9.)', price: '1700 Kč / pololetí', isKindergarten: true }, 
   // Split Olšany
   { id: '26', name: 'ZŠ Olšany', city: 'Olšany u Pv', day: 'Pondělí', time: '13:30 - 14:15', price: '1500 Kč / pololetí' }, 
   { id: '26b', name: 'MŠ Olšany', city: 'Olšany u Pv', day: 'Pondělí', time: '14:30 - 15:15', price: '1500 Kč / pololetí', isKindergarten: true }, 
