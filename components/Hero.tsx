@@ -44,7 +44,7 @@ const Hero: React.FC = () => {
         {/* Wide Banner Image - Taller and better positioning */}
         <div className="relative w-full max-w-6xl mx-auto rounded-2xl overflow-hidden shadow-2xl border-4 border-white transform hover:scale-[1.01] transition-transform duration-500 group">
            <img 
-             src="https://web2.itnahodinu.cz/olympdance/star.jpg" 
+             src="https://web2.itnahodinu.cz/olympdance/star1.jpg" 
              alt="Taneční tým Olymp Dance" 
              className="w-full h-auto min-h-[300px] md:min-h-[500px] object-cover object-top"
            />
