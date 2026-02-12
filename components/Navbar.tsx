@@ -24,18 +24,19 @@ const Navbar: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-24 md:h-28 items-center">
           {/* Logo Area */}
-          <div className="flex-shrink-0 flex items-center cursor-pointer gap-3 md:gap-4 group" onClick={() => navigate('/')}>
+          <div className="flex-shrink-0 flex items-center cursor-pointer gap-4 group" onClick={() => navigate('/')}>
             <img 
               src="https://web2.itnahodinu.cz/olympdance/logo.png" 
               alt="Olymp Dance Logo" 
               className="h-20 w-auto md:h-24 transition-transform hover:scale-105"
             />
-            <div className="hidden lg:flex flex-col justify-center items-start">
-               <span className="font-display font-extrabold text-xl md:text-2xl leading-none tracking-wide text-brand-blue uppercase">
-                 Tanči s námi
+            {/* Redesigned Text Area */}
+            <div className="hidden lg:flex flex-col justify-center items-start border-l-2 border-gray-200 pl-4 h-12">
+               <span className="font-display font-bold text-lg leading-tight tracking-wide text-gray-800">
+                 TANČI S NÁMI
                </span>
-               <span className="font-display font-extrabold text-xl md:text-2xl leading-none tracking-wide text-brand-red uppercase -mt-1">
-                 na tvé škole
+               <span className="font-display font-bold text-lg leading-tight tracking-wide text-brand-red">
+                 NA TVÉ ŠKOLE
                </span>
             </div>
           </div>

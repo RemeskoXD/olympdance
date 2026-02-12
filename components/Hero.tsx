@@ -14,7 +14,7 @@ const Hero: React.FC = () => {
         
         <div className="inline-flex items-center px-3 py-1 rounded-full bg-brand-red/10 text-brand-red text-sm font-semibold mb-6 animate-fadeIn">
           <Star size={16} className="mr-2 animate-spin-slow" />
-          <span>Nábor nových členů zahájen 2026/2027</span>
+          <span>Nábor nových členů 2. pol. školního roku 2025/2026</span>
         </div>
         
         <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-gray-900 leading-tight mb-6 font-display">
@@ -39,7 +39,7 @@ const Hero: React.FC = () => {
         {/* Wide Banner Image - Taller and better positioning */}
         <div className="relative w-full max-w-6xl mx-auto rounded-2xl overflow-hidden shadow-2xl border-4 border-white transform hover:scale-[1.01] transition-transform duration-500 group">
            <img 
-             src="https://static.wixstatic.com/media/93005c_362da366b610451abefc712af9703b80~mv2.jpg/v1/fill/w_1901,h_450,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/93005c_362da366b610451abefc712af9703b80~mv2.jpg" 
+             src="https://web2.itnahodinu.cz/olympdance/DSCF0906-Enhanced-NR.jpg" 
              alt="Taneční tým Olymp Dance" 
              className="w-full h-auto min-h-[300px] md:min-h-[500px] object-cover object-top"
            />
@@ -48,7 +48,7 @@ const Hero: React.FC = () => {
            {/* Floating Badge on Image */}
            <div className="absolute bottom-4 left-4 md:bottom-8 md:left-8 bg-white/90 backdrop-blur-md px-4 py-2 rounded-lg shadow-lg flex items-center">
               <div className="w-3 h-3 bg-green-500 rounded-full mr-2 animate-pulse"></div>
-              <span className="text-sm font-bold text-gray-800">Právě trénujeme v Olomouci</span>
+              <span className="text-sm font-bold text-gray-800">Právě trénujeme v Olomouci, Prostějově a okolí</span>
            </div>
         </div>
 

@@ -6,17 +6,17 @@ import { ArrowRight, Music, Sun, Users, Star, Quote, Clock, Heart, Wallet, Troph
 
 const TESTIMONIALS = [
   { 
-    name: 'Petra Nováková', 
+    name: 'Petra', 
     role: 'Maminka', 
     text: 'Dcera chodí na kroužek už třetím rokem a je naprosto nadšená. Líbí se mi přátelský přístup lektorů a to, že se děti nejen hýbou, ale učí se i týmovosti.' 
   },
   { 
-    name: 'Martin Svoboda', 
+    name: 'Martin', 
     role: 'Tatínek', 
     text: 'Letní tábor byl prý nejlepší zážitek prázdnin. Syn se vrátil plný energie a nových tanečních kroků. Příští rok jedeme určitě zase.' 
   },
   { 
-    name: 'Jana Dvořáková', 
+    name: 'Jana', 
     role: 'Maminka', 
     text: 'Oceňuji skvělou komunikaci a organizaci. Závěrečné vystoupení bylo dojemné a profesionálně připravené. Děkujeme!' 
   },
@@ -133,7 +133,7 @@ const Home: React.FC = () => {
             <RevealOnScroll delay={300}>
               <div className="group relative rounded-2xl overflow-hidden shadow-xl aspect-[4/3] md:aspect-[16/9] cursor-pointer">
                 <img 
-                  src="https://web2.itnahodinu.cz/olympdance/prostejov/img_14_optimized.02.25_00050.jpg" 
+                  src="https://static.wixstatic.com/media/93005c_573dc43953b84fde95242482a4c20b9c~mv2.jpg/v1/fill/w_1000,h_600,al_c,q_85/summer-camp.jpg" 
                   alt="Letní tábory" 
                   className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
