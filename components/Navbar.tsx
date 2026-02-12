@@ -12,7 +12,6 @@ const Navbar: React.FC = () => {
     { path: '/tabory', label: 'Letní Campy' },
     { path: '/galerie', label: 'Galerie' },
     { path: '/o-nas', label: 'O nás' },
-    { path: 'https://clen.olympdance.cz', label: 'Přihlásit se', external: true },
     { path: '/kontakt', label: 'Kontakt' },
   ];
 
@@ -37,28 +36,26 @@ const Navbar: React.FC = () => {
           </div>
 
           {/* Desktop Menu */}
-          <div className="hidden md:flex space-x-6 lg:space-x-8">
+          <div className="hidden md:flex space-x-6 lg:space-x-8 items-center">
             {navLinks.map((link) => (
-              link.external ? (
-                <a 
-                    key={link.path}
-                    href={link.path}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={navItemClass}
-                >
-                    {link.label}
-                </a>
-              ) : (
-                <NavLink
-                    key={link.path}
-                    to={link.path}
-                    className={({ isActive }) => isActive ? activeNavItemClass : navItemClass}
-                >
-                    {link.label}
-                </NavLink>
-              )
+              <NavLink
+                key={link.path}
+                to={link.path}
+                className={({ isActive }) => isActive ? activeNavItemClass : navItemClass}
+              >
+                {link.label}
+              </NavLink>
             ))}
+            
+            {/* CTA Button */}
+            <a 
+              href="https://clen.olympdance.cz"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-brand-red text-white px-5 py-2 rounded-full font-bold hover:bg-red-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 ml-2"
+            >
+              Přihlásit se
+            </a>
           </div>
 
           {/* Mobile Menu Button */}
@@ -82,34 +79,31 @@ const Navbar: React.FC = () => {
            </div>
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
             {navLinks.map((link) => (
-              link.external ? (
-                <a
-                    key={link.path}
-                    href={link.path}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={handleMobileClick}
-                    className="block w-full text-left px-3 py-3 rounded-md text-base font-medium transition-colors text-gray-700 hover:text-brand-red hover:bg-gray-50"
-                >
-                    {link.label}
-                </a>
-              ) : (
-                <NavLink
-                    key={link.path}
-                    to={link.path}
-                    onClick={handleMobileClick}
-                    className={({ isActive }) => 
-                    `block w-full text-left px-3 py-3 rounded-md text-base font-medium transition-colors ${
-                        isActive
-                        ? 'bg-brand-blue/5 text-brand-blue'
-                        : 'text-gray-700 hover:text-brand-red hover:bg-gray-50'
-                    }`
-                    }
-                >
-                    {link.label}
-                </NavLink>
-              )
+              <NavLink
+                key={link.path}
+                to={link.path}
+                onClick={handleMobileClick}
+                className={({ isActive }) => 
+                  `block w-full text-left px-3 py-3 rounded-md text-base font-medium transition-colors ${
+                    isActive
+                    ? 'bg-brand-blue/5 text-brand-blue'
+                    : 'text-gray-700 hover:text-brand-red hover:bg-gray-50'
+                  }`
+                }
+              >
+                {link.label}
+              </NavLink>
             ))}
+            {/* Mobile External Link */}
+            <a
+                href="https://clen.olympdance.cz"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={handleMobileClick}
+                className="block w-full text-left px-3 py-3 rounded-md text-base font-bold transition-colors text-brand-red hover:bg-red-50"
+            >
+                Přihlásit se
+            </a>
           </div>
         </div>
       )}

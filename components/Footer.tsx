@@ -1,11 +1,16 @@
 import React from 'react';
-import { Mail, Phone, MapPin, Lock, Send } from 'lucide-react';
+import { Mail, Phone, MapPin, Lock, Send, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { CONTACT_INFO } from '../constants';
 import { useData } from '../context/DataContext';
 
 const Footer: React.FC = () => {
   const { isMerchEnabled } = useData();
+  const currentVersion = document.querySelector('meta[name="app-version"]')?.getAttribute('content') || 'v1.0';
+
+  const handleForceReload = () => {
+    window.location.reload();
+  };
 
   return (
     <footer className="bg-gray-900 text-gray-400 py-12 border-t border-gray-800 relative overflow-hidden">
@@ -97,6 +102,9 @@ const Footer: React.FC = () => {
              <Link to="/admin" className="text-gray-700 hover:text-gray-500 transition-colors flex items-center" title="Administrace">
                 <Lock size={12} className="mr-1" /> Admin
              </Link>
+             <button onClick={handleForceReload} className="text-gray-700 hover:text-brand-blue transition-colors flex items-center ml-2" title="Vynutit aktualizaci">
+                <RefreshCw size={10} className="mr-1" /> {currentVersion}
+             </button>
           </div>
         </div>
       </div>
