@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Menu, X } from 'lucide-react';
-import { NavLink, Link, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 
 const Navbar: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -12,12 +12,16 @@ const Navbar: React.FC = () => {
     { path: '/tabory', label: 'Letní Campy' },
     { path: '/galerie', label: 'Galerie' },
     { path: '/o-nas', label: 'O nás' },
+    { path: 'https://clen.olympdance.cz', label: 'Přihlásit se', external: true },
     { path: '/kontakt', label: 'Kontakt' },
   ];
 
   const handleMobileClick = () => {
     setIsOpen(false);
   };
+
+  const navItemClass = "text-sm uppercase tracking-wider font-semibold py-1 border-b-2 transition-colors duration-200 flex items-center text-gray-700 border-transparent hover:text-brand-blue hover:border-brand-red";
+  const activeNavItemClass = "text-sm uppercase tracking-wider font-semibold py-1 border-b-2 transition-colors duration-200 flex items-center text-brand-blue border-brand-red";
 
   return (
     <nav className="fixed w-full bg-white/95 backdrop-blur-sm shadow-md z-50 transition-all duration-300">
@@ -30,42 +34,31 @@ const Navbar: React.FC = () => {
               alt="Olymp Dance Logo" 
               className="h-20 w-auto md:h-24 transition-transform hover:scale-105"
             />
-            {/* Redesigned Text Area */}
-            <div className="hidden lg:flex flex-col justify-center items-start border-l-2 border-gray-200 pl-4 h-12">
-               <span className="font-display font-bold text-lg leading-tight tracking-wide text-gray-800">
-                 TANČI S NÁMI
-               </span>
-               <span className="font-display font-bold text-lg leading-tight tracking-wide text-brand-red">
-                 NA TVÉ ŠKOLE
-               </span>
-            </div>
           </div>
 
           {/* Desktop Menu */}
           <div className="hidden md:flex space-x-6 lg:space-x-8">
-            {navLinks.slice(0, 5).map((link) => (
-              <NavLink
-                key={link.path}
-                to={link.path}
-                className={({ isActive }) => 
-                  `text-sm uppercase tracking-wider font-semibold py-1 border-b-2 transition-colors duration-200 flex items-center ${
-                    isActive 
-                    ? 'text-brand-blue border-brand-red' 
-                    : 'text-gray-700 border-transparent hover:text-brand-blue hover:border-brand-red'
-                  }`
-                }
-              >
-                {link.label}
-              </NavLink>
-            ))}
-            <div className="flex items-center">
-                <Link 
-                to="/kontakt"
-                className="bg-brand-red text-white px-5 py-2 rounded-full font-bold hover:bg-red-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+            {navLinks.map((link) => (
+              link.external ? (
+                <a 
+                    key={link.path}
+                    href={link.path}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={navItemClass}
                 >
-                Přihlásit se
-                </Link>
-            </div>
+                    {link.label}
+                </a>
+              ) : (
+                <NavLink
+                    key={link.path}
+                    to={link.path}
+                    className={({ isActive }) => isActive ? activeNavItemClass : navItemClass}
+                >
+                    {link.label}
+                </NavLink>
+              )
+            ))}
           </div>
 
           {/* Mobile Menu Button */}
@@ -89,20 +82,33 @@ const Navbar: React.FC = () => {
            </div>
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
             {navLinks.map((link) => (
-              <NavLink
-                key={link.path}
-                to={link.path}
-                onClick={handleMobileClick}
-                className={({ isActive }) => 
-                  `block w-full text-left px-3 py-3 rounded-md text-base font-medium transition-colors ${
-                    isActive
-                    ? 'bg-brand-blue/5 text-brand-blue'
-                    : 'text-gray-700 hover:text-brand-red hover:bg-gray-50'
-                  }`
-                }
-              >
-                {link.label}
-              </NavLink>
+              link.external ? (
+                <a
+                    key={link.path}
+                    href={link.path}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={handleMobileClick}
+                    className="block w-full text-left px-3 py-3 rounded-md text-base font-medium transition-colors text-gray-700 hover:text-brand-red hover:bg-gray-50"
+                >
+                    {link.label}
+                </a>
+              ) : (
+                <NavLink
+                    key={link.path}
+                    to={link.path}
+                    onClick={handleMobileClick}
+                    className={({ isActive }) => 
+                    `block w-full text-left px-3 py-3 rounded-md text-base font-medium transition-colors ${
+                        isActive
+                        ? 'bg-brand-blue/5 text-brand-blue'
+                        : 'text-gray-700 hover:text-brand-red hover:bg-gray-50'
+                    }`
+                    }
+                >
+                    {link.label}
+                </NavLink>
+              )
             ))}
           </div>
         </div>

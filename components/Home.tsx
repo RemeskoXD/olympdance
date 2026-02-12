@@ -116,7 +116,7 @@ const Home: React.FC = () => {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex flex-col justify-end p-8 text-left">
                   <div className="flex items-center text-brand-lightBlue mb-3">
                     <Music className="w-5 h-5 mr-2" />
-                    <span className="uppercase tracking-wider text-xs font-bold bg-white/10 px-2 py-1 rounded backdrop-blur-md">Školní rok 2026/2027</span>
+                    <span className="uppercase tracking-wider text-xs font-bold bg-white/10 px-2 py-1 rounded backdrop-blur-md">Školní rok 2025/2026</span>
                   </div>
                   <h3 className="text-2xl md:text-3xl font-bold text-white mb-3">Taneční kroužky na školách</h3>
                   <p className="text-gray-200 mb-6 max-w-md hidden sm:block">

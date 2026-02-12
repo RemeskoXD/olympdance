@@ -16,6 +16,11 @@ const Hero: React.FC = () => {
           <Star size={16} className="mr-2 animate-spin-slow" />
           <span>Nábor nových členů 2. pol. školního roku 2025/2026</span>
         </div>
+
+        {/* Added Slogan here */}
+        <h2 className="text-xl md:text-3xl font-bold font-display uppercase tracking-widest mb-4 animate-fadeIn">
+          <span className="text-brand-blue">Tanči s námi</span> <span className="text-brand-red">na tvé škole</span>
+        </h2>
         
         <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-gray-900 leading-tight mb-6 font-display">
           Objevte radost <br />
@@ -39,7 +44,7 @@ const Hero: React.FC = () => {
         {/* Wide Banner Image - Taller and better positioning */}
         <div className="relative w-full max-w-6xl mx-auto rounded-2xl overflow-hidden shadow-2xl border-4 border-white transform hover:scale-[1.01] transition-transform duration-500 group">
            <img 
-             src="https://web2.itnahodinu.cz/olympdance/DSCF0906-Enhanced-NR.jpg" 
+             src="https://web2.itnahodinu.cz/olympdance/star.jpg" 
              alt="Taneční tým Olymp Dance" 
              className="w-full h-auto min-h-[300px] md:min-h-[500px] object-cover object-top"
            />
