@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from '../context/DataContext';
-import { Trash2, Plus, School as SchoolIcon, Tent, LogOut, Lock, Image as ImageIcon, Edit2, Save, X, ShoppingBag, ToggleLeft, ToggleRight } from 'lucide-react';
-import { School, Camp, Product } from '../types';
+import { Trash2, Plus, School as SchoolIcon, Tent, LogOut, Lock, Image as ImageIcon, Edit2, Save, X, ShoppingBag, ToggleLeft, ToggleRight, FileText, CheckCircle as CheckCircleIcon, Clock, AlertCircle, Mail } from 'lucide-react';
+import { School, Camp, Product, Registration } from '../types';
 
 const Admin: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
-  const [activeTab, setActiveTab] = useState<'schools' | 'camps' | 'gallery' | 'merch'>('schools');
+  const [activeTab, setActiveTab] = useState<'schools' | 'camps' | 'gallery' | 'merch' | 'registrations'>('schools');
 
   // Check for persisted login on mount
   useEffect(() => {
@@ -126,12 +126,24 @@ const Admin: React.FC = () => {
             <ShoppingBag size={18} className="mr-2" />
             E-shop / Merch
           </button>
+          <button
+            onClick={() => setActiveTab('registrations')}
+            className={`flex items-center px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+              activeTab === 'registrations' 
+              ? 'bg-brand-blue text-white shadow-md' 
+              : 'text-gray-500 hover:bg-gray-100'
+            }`}
+          >
+            <FileText size={18} className="mr-2" />
+            Přihlášky
+          </button>
         </div>
 
         {activeTab === 'schools' && <SchoolManager />}
         {activeTab === 'camps' && <CampManager />}
         {activeTab === 'gallery' && <GalleryManager />}
         {activeTab === 'merch' && <MerchManager />}
+        {activeTab === 'registrations' && <RegistrationManager />}
       </div>
     </div>
   );
@@ -278,9 +290,20 @@ const SchoolManager: React.FC = () => {
 };
 
 const CampManager: React.FC = () => {
-    const { camps, addCamp, updateCamp, deleteCamp } = useData();
+    const { camps, addCamp, updateCamp, deleteCamp, campGeneralInfo, updateCampGeneralInfo } = useData();
     const [isEditing, setIsEditing] = useState<string | null>(null);
-    const [formData, setFormData] = useState({ title: '', date: '', price: '', description: '', image: 'https://images.unsplash.com/photo-1547153760-18fc86324498?auto=format&fit=crop&q=80&w=800' });
+    const [formData, setFormData] = useState({ title: '', date: '', price: '', description: '', image: 'https://images.unsplash.com/photo-1547153760-18fc86324498?auto=format&fit=crop&q=80&w=800', externalUrl: '', details: '' });
+    const [generalInfo, setGeneralInfo] = useState(campGeneralInfo);
+
+    // Update local state when context changes (initial load)
+    useEffect(() => {
+        setGeneralInfo(campGeneralInfo);
+    }, [campGeneralInfo]);
+
+    const handleGeneralInfoSave = () => {
+        updateCampGeneralInfo(generalInfo);
+        alert('Obecné informace uloženy');
+    };
   
     const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
@@ -292,7 +315,7 @@ const CampManager: React.FC = () => {
       } else {
         addCamp(formData);
       }
-      setFormData({ title: '', date: '', price: '', description: '', image: 'https://images.unsplash.com/photo-1547153760-18fc86324498?auto=format&fit=crop&q=80&w=800' });
+      setFormData({ title: '', date: '', price: '', description: '', image: 'https://images.unsplash.com/photo-1547153760-18fc86324498?auto=format&fit=crop&q=80&w=800', externalUrl: '', details: '' });
     };
 
     const handleEdit = (camp: Camp) => {
@@ -302,102 +325,143 @@ const CampManager: React.FC = () => {
         date: camp.date,
         price: camp.price,
         description: camp.description,
-        image: camp.image
+        image: camp.image,
+        externalUrl: camp.externalUrl || '',
+        details: camp.details || ''
       });
     };
 
     const cancelEdit = () => {
       setIsEditing(null);
-      setFormData({ title: '', date: '', price: '', description: '', image: 'https://images.unsplash.com/photo-1547153760-18fc86324498?auto=format&fit=crop&q=80&w=800' });
+      setFormData({ title: '', date: '', price: '', description: '', image: 'https://images.unsplash.com/photo-1547153760-18fc86324498?auto=format&fit=crop&q=80&w=800', externalUrl: '', details: '' });
     };
   
     return (
-      <div className="grid lg:grid-cols-3 gap-8">
-        {/* Form */}
-        <div className="lg:col-span-1">
-          <div className="bg-white p-6 rounded-2xl shadow-md sticky top-24">
-            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center justify-between">
-               <span className="flex items-center">
-                 {isEditing ? <Edit2 size={20} className="mr-2 text-brand-blue" /> : <Plus size={20} className="mr-2 text-brand-red" />}
-                 {isEditing ? 'Upravit tábor' : 'Přidat tábor'}
-               </span>
-               {isEditing && (
-                 <button onClick={cancelEdit} className="text-gray-400 hover:text-gray-600">
-                   <X size={20} />
-                 </button>
-               )}
-            </h3>
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <input 
-                className="w-full px-3 py-2 border rounded-lg text-sm" 
-                placeholder="Název tábora" 
-                value={formData.title} 
-                onChange={e => setFormData({...formData, title: e.target.value})} 
-                required 
-              />
-              <div className="grid grid-cols-2 gap-2">
-                 <input 
-                    className="w-full px-3 py-2 border rounded-lg text-sm" 
-                    placeholder="Datum (1.7. - 5.7.)" 
-                    value={formData.date} 
-                    onChange={e => setFormData({...formData, date: e.target.value})} 
-                 />
-                 <input 
-                    className="w-full px-3 py-2 border rounded-lg text-sm" 
-                    placeholder="Cena" 
-                    value={formData.price} 
-                    onChange={e => setFormData({...formData, price: e.target.value})} 
-                 />
-              </div>
-              <textarea 
-                className="w-full px-3 py-2 border rounded-lg text-sm" 
-                placeholder="Popis tábora..." 
-                rows={3}
-                value={formData.description} 
-                onChange={e => setFormData({...formData, description: e.target.value})} 
-              />
-              <input 
-                className="w-full px-3 py-2 border rounded-lg text-sm" 
-                placeholder="URL obrázku" 
-                value={formData.image} 
-                onChange={e => setFormData({...formData, image: e.target.value})} 
-              />
-              <button className={`w-full text-white font-bold py-2 rounded-lg transition-colors ${isEditing ? 'bg-brand-blue hover:bg-blue-700' : 'bg-brand-red hover:bg-red-700'}`}>
-                {isEditing ? 'Uložit změny' : 'Uložit tábor'}
-              </button>
-            </form>
-          </div>
+      <div className="space-y-8">
+        {/* General Info Editor */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Obecné informace na stránce Tábory</h3>
+            <textarea 
+                className="w-full px-3 py-2 border rounded-lg text-sm mb-3" 
+                rows={4}
+                value={generalInfo}
+                onChange={(e) => setGeneralInfo(e.target.value)}
+                placeholder="Zde napište obecné informace, které se zobrazí na stránce táborů..."
+            />
+            <button 
+                onClick={handleGeneralInfoSave}
+                className="bg-gray-800 text-white font-bold py-2 px-6 rounded-lg hover:bg-gray-900 transition-colors text-sm"
+            >
+                Uložit text
+            </button>
         </div>
-  
-        {/* List */}
-        <div className="lg:col-span-2 space-y-4">
-          {camps.map(camp => (
-            <div key={camp.id} className={`bg-white p-4 rounded-xl shadow-sm border flex gap-4 group transition-all ${isEditing === camp.id ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 hover:shadow-md'}`}>
-               <img src={camp.image} alt="" className="w-24 h-24 object-cover rounded-lg bg-gray-100" />
-               <div className="flex-grow">
-                  <div className="flex justify-between items-start">
-                    <h4 className="font-bold text-gray-900">{camp.title}</h4>
-                    <div className="flex space-x-2">
-                      <button 
-                        onClick={() => handleEdit(camp)}
-                        className="text-gray-400 hover:text-brand-blue transition-colors"
-                      >
-                        <Edit2 size={20} />
-                      </button>
-                      <button 
-                          onClick={() => { if(confirm('Opravdu smazat?')) deleteCamp(camp.id) }}
-                          className="text-gray-400 hover:text-red-600 transition-colors"
-                      >
-                          <Trash2 size={20} />
-                      </button>
-                    </div>
-                  </div>
-                  <p className="text-sm text-brand-red font-semibold mb-1">{camp.date} • {camp.price}</p>
-                  <p className="text-sm text-gray-500 line-clamp-2">{camp.description}</p>
-               </div>
+
+        <div className="grid lg:grid-cols-3 gap-8">
+            {/* Form */}
+            <div className="lg:col-span-1">
+            <div className="bg-white p-6 rounded-2xl shadow-md sticky top-24">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center justify-between">
+                <span className="flex items-center">
+                    {isEditing ? <Edit2 size={20} className="mr-2 text-brand-blue" /> : <Plus size={20} className="mr-2 text-brand-red" />}
+                    {isEditing ? 'Upravit tábor' : 'Přidat tábor'}
+                </span>
+                {isEditing && (
+                    <button onClick={cancelEdit} className="text-gray-400 hover:text-gray-600">
+                    <X size={20} />
+                    </button>
+                )}
+                </h3>
+                <form onSubmit={handleSubmit} className="space-y-3">
+                <input 
+                    className="w-full px-3 py-2 border rounded-lg text-sm" 
+                    placeholder="Název tábora" 
+                    value={formData.title} 
+                    onChange={e => setFormData({...formData, title: e.target.value})} 
+                    required 
+                />
+                <div className="grid grid-cols-2 gap-2">
+                    <input 
+                        className="w-full px-3 py-2 border rounded-lg text-sm" 
+                        placeholder="Datum (1.7. - 5.7.)" 
+                        value={formData.date} 
+                        onChange={e => setFormData({...formData, date: e.target.value})} 
+                    />
+                    <input 
+                        className="w-full px-3 py-2 border rounded-lg text-sm" 
+                        placeholder="Cena" 
+                        value={formData.price} 
+                        onChange={e => setFormData({...formData, price: e.target.value})} 
+                    />
+                </div>
+                <textarea 
+                    className="w-full px-3 py-2 border rounded-lg text-sm" 
+                    placeholder="Krátký popis (na kartu)..." 
+                    rows={2}
+                    value={formData.description} 
+                    onChange={e => setFormData({...formData, description: e.target.value})} 
+                />
+                <input 
+                    className="w-full px-3 py-2 border rounded-lg text-sm" 
+                    placeholder="URL obrázku" 
+                    value={formData.image} 
+                    onChange={e => setFormData({...formData, image: e.target.value})} 
+                />
+                
+                <div className="border-t pt-3 mt-3">
+                    <p className="text-xs font-bold text-gray-500 mb-2 uppercase">Detaily</p>
+                    <input 
+                        className="w-full px-3 py-2 border rounded-lg text-sm mb-2" 
+                        placeholder="Externí URL pro registraci (https://...)" 
+                        value={formData.externalUrl} 
+                        onChange={e => setFormData({...formData, externalUrl: e.target.value})} 
+                    />
+                    <textarea 
+                        className="w-full px-3 py-2 border rounded-lg text-sm" 
+                        placeholder="Detailní informace (Markdown)..." 
+                        rows={5}
+                        value={formData.details} 
+                        onChange={e => setFormData({...formData, details: e.target.value})} 
+                    />
+                </div>
+
+                <button className={`w-full text-white font-bold py-2 rounded-lg transition-colors ${isEditing ? 'bg-brand-blue hover:bg-blue-700' : 'bg-brand-red hover:bg-red-700'}`}>
+                    {isEditing ? 'Uložit změny' : 'Uložit tábor'}
+                </button>
+                </form>
             </div>
-          ))}
-          {camps.length === 0 && <p className="text-gray-500 text-center py-8">Žádné tábory v seznamu.</p>}
+            </div>
+    
+            {/* List */}
+            <div className="lg:col-span-2 space-y-4">
+            {camps.map(camp => (
+                <div key={camp.id} className={`bg-white p-4 rounded-xl shadow-sm border flex gap-4 group transition-all ${isEditing === camp.id ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 hover:shadow-md'}`}>
+                <img src={camp.image} alt="" className="w-24 h-24 object-cover rounded-lg bg-gray-100" />
+                <div className="flex-grow">
+                    <div className="flex justify-between items-start">
+                        <h4 className="font-bold text-gray-900">{camp.title}</h4>
+                        <div className="flex space-x-2">
+                        <button 
+                            onClick={() => handleEdit(camp)}
+                            className="text-gray-400 hover:text-brand-blue transition-colors"
+                        >
+                            <Edit2 size={20} />
+                        </button>
+                        <button 
+                            onClick={() => { if(confirm('Opravdu smazat?')) deleteCamp(camp.id) }}
+                            className="text-gray-400 hover:text-red-600 transition-colors"
+                        >
+                            <Trash2 size={20} />
+                        </button>
+                        </div>
+                    </div>
+                    <p className="text-sm text-brand-red font-semibold mb-1">{camp.date} • {camp.price}</p>
+                    <p className="text-sm text-gray-500 line-clamp-2">{camp.description}</p>
+                    {camp.externalUrl && <p className="text-xs text-blue-500 mt-1 truncate">🔗 {camp.externalUrl}</p>}
+                </div>
+                </div>
+            ))}
+            {camps.length === 0 && <p className="text-gray-500 text-center py-8">Žádné tábory v seznamu.</p>}
+            </div>
         </div>
       </div>
     );
@@ -567,6 +631,159 @@ const MerchManager: React.FC = () => {
         </div>
       </div>
     );
+};
+
+const RegistrationManager: React.FC = () => {
+  const { registrations, camps, updateRegistration } = useData();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [adminNote, setAdminNote] = useState('');
+
+  const handleUpdateStatus = (id: string, status: Registration['status']) => {
+    updateRegistration(id, { status });
+  };
+
+  const handleSaveNote = (id: string) => {
+    updateRegistration(id, { adminNote });
+    setEditingId(null);
+    setAdminNote('');
+  };
+
+  const getStatusBadge = (status: Registration['status']) => {
+    switch (status) {
+      case 'approved':
+        return <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold flex items-center"><CheckCircleIcon size={12} className="mr-1" /> Schváleno</span>;
+      case 'pending_payment':
+        return <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold flex items-center"><Clock size={12} className="mr-1" /> Čeká na platbu</span>;
+      case 'pending_approval':
+        return <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold flex items-center"><Clock size={12} className="mr-1" /> Čeká na schválení</span>;
+      case 'action_required':
+        return <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold flex items-center"><AlertCircle size={12} className="mr-1" /> Vyžadována akce</span>;
+      default:
+        return <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-bold">{status}</span>;
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-900">Správa přihlášek</h2>
+        <div className="text-sm text-gray-500">Celkem: {registrations.length}</div>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Dítě / Tábor</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Rodič / Kontakt</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Akce</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {registrations.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-6 py-12 text-center text-gray-500 italic">Zatím žádné přihlášky.</td>
+                </tr>
+              ) : (
+                registrations.map((reg) => {
+                  const camp = camps.find(c => c.id === reg.campId);
+                  return (
+                    <tr key={reg.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="font-bold text-gray-900">{reg.childName}</div>
+                        <div className="text-xs text-gray-500">{reg.childBirthDate}</div>
+                        <div className="text-xs font-medium text-brand-blue mt-1">{camp?.title}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-medium text-gray-900">{reg.parentName}</div>
+                        <div className="text-xs text-gray-500">{reg.parentEmail}</div>
+                        <div className="text-xs text-gray-500">{reg.parentPhone}</div>
+                        <a 
+                          href={`mailto:${reg.parentEmail}?subject=Olymp Dance - ${camp?.title}&body=Dobrý den,`}
+                          className="inline-flex items-center mt-1 text-xs text-brand-blue hover:underline"
+                        >
+                          <Mail size={12} className="mr-1" /> Napsat email
+                        </a>
+                      </td>
+                      <td className="px-6 py-4">
+                        {getStatusBadge(reg.status)}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-2">
+                          <div className="flex gap-2">
+                            <button 
+                              onClick={() => handleUpdateStatus(reg.id, 'approved')}
+                              className="p-1.5 bg-green-100 text-green-600 rounded hover:bg-green-200 transition-colors"
+                              title="Schválit"
+                            >
+                              <CheckCircleIcon size={16} />
+                            </button>
+                            <button 
+                              onClick={() => handleUpdateStatus(reg.id, 'action_required')}
+                              className="p-1.5 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"
+                              title="Vyžadovat akci"
+                            >
+                              <AlertCircle size={16} />
+                            </button>
+                            <button 
+                              onClick={() => {
+                                setEditingId(reg.id);
+                                setAdminNote(reg.adminNote || '');
+                              }}
+                              className="p-1.5 bg-blue-100 text-brand-blue rounded hover:bg-blue-200 transition-colors"
+                              title="Zpráva pro rodiče (zobrazí se v portálu)"
+                            >
+                              <Edit2 size={16} />
+                            </button>
+                          </div>
+                          
+                          {editingId === reg.id && (
+                            <div className="mt-2 space-y-2 bg-gray-50 p-2 rounded border border-gray-200">
+                              <label className="text-[10px] font-bold text-gray-500 block mb-1">Zpráva pro rodiče (zobrazí se v portálu):</label>
+                              <textarea 
+                                value={adminNote}
+                                onChange={(e) => setAdminNote(e.target.value)}
+                                className="w-full text-xs p-2 border border-gray-200 rounded outline-none focus:ring-1 focus:ring-brand-blue"
+                                placeholder="Např: Prosím o doplnění dokumentu..."
+                                rows={3}
+                              />
+                              <div className="flex gap-2">
+                                <button 
+                                  onClick={() => handleSaveNote(reg.id)}
+                                  className="text-[10px] bg-brand-blue text-white px-2 py-1 rounded font-bold"
+                                >
+                                  Odeslat zprávu
+                                </button>
+                                <button 
+                                  onClick={() => setEditingId(null)}
+                                  className="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded font-bold"
+                                >
+                                  Zrušit
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {reg.adminNote && editingId !== reg.id && (
+                            <div className="text-[10px] bg-yellow-50 text-yellow-800 p-2 rounded border border-yellow-100 mt-1">
+                              <span className="font-bold block mb-0.5">Zpráva pro rodiče:</span>
+                              {reg.adminNote}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default Admin;

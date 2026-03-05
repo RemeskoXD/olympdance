@@ -46,7 +46,25 @@ export const CAMPS: Camp[] = [
     date: '13.7. - 17.7. 2026',
     price: '3 890 Kč',
     description: 'Příměstský tábor v Prostějově plný tance pro všechny věkové kategorie.',
-    image: 'https://static.wixstatic.com/media/93005c_7b35dfc300bf43649d7ae8b5fbb3fbb1~mv2.png/v1/fill/w_308,h_231,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/IMG_6247%202_HEIC.png'
+    image: 'https://static.wixstatic.com/media/93005c_7b35dfc300bf43649d7ae8b5fbb3fbb1~mv2.png/v1/fill/w_308,h_231,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/IMG_6247%202_HEIC.png',
+    variableSymbol: '2026002',
+    details: `## CENA
+Cena za letní camp je 3890 Kč. (2390 Kč po příspěvku ZP.)
+Cena zahrnuje 5x oběd, 10 x svačina, pitný režim, celodenní dozor, táborové tričko, vstup do Aquaparku, program campu.
+
+## Co na tebe čeká?
+- táborové tričko
+- táborové hry a soutěže
+- taneční lekce (hiphop, street dance, TikTok dance)
+- Aquapark a diskotéka
+- sportovní odpoledne - míčové sporty a hry
+- spousta nových kamarádů
+- ceny a odměny
+
+## Denní program
+8:00 - 8:30 Příchod
+8:30 - 16:00 Program (tanec, hry, jídlo)
+16:00 Konec`
   },
   {
     id: 'c1',
@@ -54,7 +72,21 @@ export const CAMPS: Camp[] = [
     date: '19.7. - 24.7. 2026',
     price: '5 990 Kč',
     description: 'Bílá, 1. turnus. Týden plný tance, her a zábavy v krásném prostředí Beskyd.',
-    image: 'https://static.wixstatic.com/media/93005c_5baa5ec580a946b0bbdc5c0b06ae0c8b~mv2.jpeg/v1/fill/w_308,h_231,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/IMG_8522.jpeg'
+    image: 'https://static.wixstatic.com/media/93005c_5baa5ec580a946b0bbdc5c0b06ae0c8b~mv2.jpeg/v1/fill/w_308,h_231,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/IMG_8522.jpeg',
+    variableSymbol: '2026001',
+    details: `## CENA
+Cena za jeden turnus DANCE CAMPU je 5990 Kč. (4490 Kč po příspěvku ZP.)
+Cena zahrnuje ubytování, plnou penzi včetně svačinek, pitný režim, taneční lekce, doplňkové služby.
+
+## Co na tebe čeká?
+- taneční lekce 2x denně
+- táborové hry a soutěže
+- bazén a diskotéka
+- vycházky do přírody a bobřík odvahy
+- vodní a pěnové odpoledne
+- spousta nových kamarádů
+
+Ubytování je ve dvou až pěti lůžkových pokojích na Horské chatě Bílá.`
   },
   {
     id: 'c3',
@@ -62,7 +94,24 @@ export const CAMPS: Camp[] = [
     date: '20.7. - 24.7. 2026',
     price: '3 990 Kč',
     description: 'Intenzivní taneční průprava, moderní styly a zábava přímo v Olomouci.',
-    image: 'https://static.wixstatic.com/media/93005c_e279092e065b4500ba586ef831cd966e~mv2.png/v1/fill/w_308,h_231,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/93005c_e279092e065b4500ba586ef831cd966e~mv2.png'
+    image: 'https://static.wixstatic.com/media/93005c_e279092e065b4500ba586ef831cd966e~mv2.png/v1/fill/w_308,h_231,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/93005c_e279092e065b4500ba586ef831cd966e~mv2.png',
+    variableSymbol: '2026003',
+    details: `## CENA
+Cena za letní camp je 3990 Kč. (2490 Kč po příspěvku ZP.)
+Cena zahrnuje 5x oběd, 10 x svačina, pitný režim, celodenní dozor, táborové tričko, vstup do Aquaparku, program campu.
+
+## Co na tebe čeká?
+- táborové tričko
+- táborové hry a soutěže
+- taneční lekce (hiphop, street dance, TikTok dance)
+- Aquapark a diskotéka
+- sportovní odpoledne
+- přespávačka v tělocvičně + stezka odvahy
+
+## Denní program
+8:00 - 8:30 Příchod
+8:30 - 15:45 Program
+15:45 Konec`
   },
   {
     id: 'c4',
@@ -70,7 +119,21 @@ export const CAMPS: Camp[] = [
     date: '23.8. - 28.8. 2026',
     price: '5 990 Kč',
     description: 'Bílá, 2. turnus. Zakončení prázdnin tancem a pohybem v přírodě.',
-    image: 'https://static.wixstatic.com/media/93005c_c0f4a6edf5834e4eb2abdd3210aade89~mv2.png/v1/fill/w_308,h_231,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/IMG_0059_HEIC.png'
+    image: 'https://static.wixstatic.com/media/93005c_c0f4a6edf5834e4eb2abdd3210aade89~mv2.png/v1/fill/w_308,h_231,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/IMG_0059_HEIC.png',
+    variableSymbol: '2026004',
+    details: `## CENA
+Cena za jeden turnus DANCE CAMPU je 5990 Kč. (4490 Kč po příspěvku ZP.)
+Cena zahrnuje ubytování, plnou penzi včetně svačinek, pitný režim, taneční lekce, doplňkové služby.
+
+## Co na tebe čeká?
+- taneční lekce 2x denně
+- táborové hry a soutěže
+- bazén a diskotéka
+- vycházky do přírody a bobřík odvahy
+- vodní a pěnové odpoledne
+- spousta nových kamarádů
+
+Ubytování je ve dvou až pěti lůžkových pokojích na Horské chatě Bílá.`
   }
 ];
 
@@ -146,4 +209,10 @@ export const CONTACT_INFO = {
   ico: "68347286",
   email: "info@olympdance.cz",
   phone: "+420 722 017 700"
+};
+
+export const BANK_INFO = {
+  account: "2100845678/2010",
+  bankName: "Fio banka",
+  iban: "CZ0855000000001806875329"
 };

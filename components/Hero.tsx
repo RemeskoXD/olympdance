@@ -17,13 +17,8 @@ const Hero: React.FC = () => {
           <span>Nábor nových členů 2. pol. školního roku 2025/2026</span>
         </div>
 
-        {/* Added Slogan here */}
-        <h2 className="text-xl md:text-3xl font-bold font-display uppercase tracking-widest mb-4 animate-fadeIn">
-          <span className="text-brand-blue">Tanči s námi</span> <span className="text-brand-red">na tvé škole</span>
-        </h2>
-        
         <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-gray-900 leading-tight mb-6 font-display">
-          Objevte radost <br />
+          Objevte pravou radost <br />
           <span className="text-brand-blue">z pohybu a tance</span>
         </h1>
         

@@ -232,9 +232,9 @@ const Locations: React.FC = () => {
               <div className="flex items-center mt-2 text-blue-100">
                 <MapPin size={18} className="mr-2" />
                 {selectedSchool.city}
-                {selectedSchool.isKindergarten && (
-                  <span className="ml-3 bg-white/20 px-2 py-0.5 rounded text-sm font-bold">Mateřská škola</span>
-                )}
+                <span className="ml-3 bg-white/20 px-2 py-0.5 rounded text-sm font-bold">
+                  {selectedSchool.isKindergarten ? 'Mateřská škola' : 'Základní škola'}
+                </span>
               </div>
             </div>
 
@@ -340,13 +340,17 @@ const SchoolCard: React.FC<{ school: School, onSelect: () => void }> = ({ school
     <div className="bg-white rounded-2xl shadow-md border border-gray-100 hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col group h-full">
       <div className="p-6 flex-grow">
         <div className="flex justify-between items-start mb-4">
-          <div className="inline-flex items-center px-3 py-1 rounded-full bg-brand-blue/10 text-brand-blue text-xs font-bold">
+          <div className="inline-flex items-center px-3 py-1 rounded-full bg-brand-blue/10 text-brand-blue text-xs font-bold mr-2">
             <MapPin size={12} className="mr-1" />
             {school.city}
           </div>
-          {school.isKindergarten && (
+          {school.isKindergarten ? (
             <div className="inline-flex items-center px-3 py-1 rounded-full bg-orange-100 text-orange-700 text-xs font-bold">
               MŠ
+            </div>
+          ) : (
+            <div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">
+              ZŠ
             </div>
           )}
         </div>

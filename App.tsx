@@ -11,6 +11,8 @@ import Admin from './components/Admin';
 import NotFound from './components/NotFound';
 import Footer from './components/Footer';
 import Merch from './components/Merch';
+import RegistrationForm from './components/RegistrationForm';
+import ClientPortal from './components/ClientPortal';
 import VersionCheck from './components/VersionCheck';
 import { DataProvider } from './context/DataContext';
 
@@ -79,6 +81,8 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/krouzky" element={<Locations />} />
             <Route path="/tabory" element={<Camps />} />
+            <Route path="/registrace/:campId" element={<RegistrationForm />} />
+            <Route path="/portal" element={<ClientPortal />} />
             <Route path="/galerie" element={<Gallery />} />
             <Route path="/o-nas" element={<About />} />
             <Route path="/kontakt" element={<Contact />} />

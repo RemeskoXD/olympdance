@@ -20,6 +20,9 @@ export interface Camp {
   price: string;
   description: string;
   image: string;
+  externalUrl?: string;
+  details?: string;
+  variableSymbol?: string;
 }
 
 export interface GalleryImage {
@@ -34,4 +37,21 @@ export interface Product {
   price: string;
   description: string;
   image: string;
+}
+
+export type RegistrationStatus = 'pending_payment' | 'pending_approval' | 'approved' | 'action_required' | 'rejected';
+
+export interface Registration {
+  id: string;
+  campId: string;
+  parentName: string;
+  parentEmail: string;
+  parentPhone: string;
+  childName: string;
+  childBirthDate: string;
+  status: RegistrationStatus;
+  adminNote?: string;
+  documents: string[]; // Mocked document URLs or names
+  createdAt: string;
+  password?: string; // Mocked password for client portal
 }
