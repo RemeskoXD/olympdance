@@ -37,6 +37,17 @@ const upload = multer({ storage });
 // Initialize Database
 initDb();
 
+// Seed endpoint
+app.get('/api/seed', async (req, res) => {
+  try {
+    await initDb();
+    res.json({ success: true, message: 'Database seeding triggered' });
+  } catch (error) {
+    console.error('Seeding failed:', error);
+    res.status(500).json({ error: 'Seeding failed' });
+  }
+});
+
 // API Routes
 
 // Upload endpoint
