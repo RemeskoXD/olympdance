@@ -114,6 +114,7 @@ export const initDb = async () => {
     
     // Schools
     const [schoolsRows] = await connection.query('SELECT COUNT(*) as count FROM schools');
+    console.log('Schools count:', (schoolsRows as any)[0].count);
     if ((schoolsRows as any)[0].count === 0) {
       console.log('Seeding schools...');
       for (const school of SCHOOLS) {
