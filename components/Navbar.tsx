@@ -1,10 +1,23 @@
-import React, { useState } from 'react';
-import { Menu, X } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Menu, X, ChevronDown } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 
 const Navbar: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const navLinks = [
     { path: '/', label: 'Domů' },
@@ -47,15 +60,35 @@ const Navbar: React.FC = () => {
               </NavLink>
             ))}
             
-            {/* CTA Button */}
-            <a 
-              href="https://clen.olympdance.cz"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-brand-red text-white px-5 py-2 rounded-full font-bold hover:bg-red-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 ml-2"
-            >
-              Přihlásit se
-            </a>
+            {/* CTA Button Dropdown */}
+            <div className="relative ml-2" ref={dropdownRef}>
+              <button 
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className="bg-brand-red text-white px-5 py-2 rounded-full font-bold hover:bg-red-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center"
+              >
+                Přihlásit se
+                <ChevronDown size={16} className={`ml-1 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {isDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50 animate-fadeIn">
+                  <NavLink 
+                    to="/portal-krouzky" 
+                    className="block px-4 py-4 text-center hover:bg-brand-blue/5 hover:text-brand-blue border-b border-gray-50 transition-colors"
+                    onClick={() => setIsDropdownOpen(false)}
+                  >
+                    <span className="font-bold text-lg uppercase tracking-wider block">Taneční kroužky</span>
+                  </NavLink>
+                  <NavLink 
+                    to="/portal" 
+                    className="block px-4 py-4 text-center hover:bg-brand-red/5 hover:text-brand-red transition-colors"
+                    onClick={() => setIsDropdownOpen(false)}
+                  >
+                    <span className="font-bold text-lg uppercase tracking-wider block">Letní tábory</span>
+                  </NavLink>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Mobile Menu Button */}
@@ -94,16 +127,24 @@ const Navbar: React.FC = () => {
                 {link.label}
               </NavLink>
             ))}
-            {/* Mobile External Link */}
-            <a
-                href="https://clen.olympdance.cz"
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={handleMobileClick}
-                className="block w-full text-left px-3 py-3 rounded-md text-base font-bold transition-colors text-brand-red hover:bg-red-50"
-            >
-                Přihlásit se
-            </a>
+            {/* Mobile External Links */}
+            <div className="pt-2 pb-1 border-t border-gray-100 mt-2">
+              <p className="px-3 py-2 text-xs font-bold text-gray-500 uppercase tracking-wider">Přihlásit se</p>
+              <NavLink
+                  to="/portal-krouzky"
+                  onClick={handleMobileClick}
+                  className="block w-full text-center px-3 py-4 rounded-md text-lg font-bold uppercase tracking-wider transition-colors text-brand-blue hover:bg-blue-50"
+              >
+                  Taneční kroužky
+              </NavLink>
+              <NavLink
+                  to="/portal"
+                  onClick={handleMobileClick}
+                  className="block w-full text-center px-3 py-4 rounded-md text-lg font-bold uppercase tracking-wider transition-colors text-brand-red hover:bg-red-50"
+              >
+                  Letní tábory
+              </NavLink>
+            </div>
           </div>
         </div>
       )}

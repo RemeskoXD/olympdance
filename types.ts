@@ -39,7 +39,51 @@ export interface Product {
   image: string;
 }
 
-export type RegistrationStatus = 'pending_payment' | 'pending_approval' | 'approved' | 'action_required' | 'rejected';
+export interface SchoolRegistration {
+  id: string;
+  schoolId: string;
+  parentName: string;
+  parentEmail: string;
+  parentPhone: string;
+  parentAddress: string;
+  childName: string;
+  childBirthDate: string;
+  childPhone?: string;
+  afterSchoolClub?: boolean;
+  status: RegistrationStatus;
+  adminNote?: string;
+  createdAt: string;
+  password?: string;
+  paidUntil?: string;
+  history?: { date: string; message: string }[];
+}
+
+export type RegistrationStatus = 'pending_payment' | 'pending_approval' | 'approved' | 'action_required' | 'rejected' | 'cancelled';
+
+export interface User {
+  id: string;
+  username: string;
+  password?: string;
+  role: 'admin' | 'trainer';
+  schoolId?: string; // For trainers
+  name: string;
+}
+
+export interface Excuse {
+  id: string;
+  registrationId: string;
+  schoolId: string;
+  date: string; // YYYY-MM-DD
+  reason: string;
+  createdAt: string;
+}
+
+export interface Attendance {
+  id: string;
+  schoolId: string;
+  date: string; // YYYY-MM-DD
+  records: Record<string, boolean>; // registrationId -> isPresent
+}
 
 export interface Registration {
   id: string;

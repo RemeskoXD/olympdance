@@ -1,5 +1,5 @@
 import mysql from 'mysql2/promise';
-import { SCHOOLS, CAMPS, GALLERY_IMAGES, PRODUCTS } from './constants';
+import { SCHOOLS, CAMPS, GALLERY_IMAGES, PRODUCTS } from './constants.ts';
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
@@ -99,6 +99,80 @@ export const initDb = async () => {
         documents JSON,
         password VARCHAR(255),
         adminNote TEXT
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS school_registrations (
+        id VARCHAR(255) PRIMARY KEY,
+        schoolId VARCHAR(255) NOT NULL,
+        childName VARCHAR(255) NOT NULL,
+        childBirthDate VARCHAR(255) NOT NULL,
+        parentName VARCHAR(255) NOT NULL,
+        parentEmail VARCHAR(255) NOT NULL,
+        parentPhone VARCHAR(255) NOT NULL,
+        parentAddress VARCHAR(255) NOT NULL,
+        childPhone VARCHAR(255),
+        status VARCHAR(255) NOT NULL,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        password VARCHAR(255),
+        adminNote TEXT,
+        paidUntil DATETIME
+      )
+    `);
+
+    try {
+      await connection.query('ALTER TABLE school_registrations ADD COLUMN parentAddress VARCHAR(255) NOT NULL DEFAULT ""');
+    } catch (e) {
+      // Column might already exist
+    }
+    
+    try {
+      await connection.query('ALTER TABLE school_registrations ADD COLUMN childPhone VARCHAR(255)');
+    } catch (e) {
+      // Column might already exist
+    }
+
+    try {
+      await connection.query('ALTER TABLE school_registrations ADD COLUMN afterSchoolClub BOOLEAN DEFAULT FALSE');
+    } catch (e) {
+      // Column might already exist
+    }
+
+    try {
+      await connection.query('ALTER TABLE school_registrations ADD COLUMN history JSON');
+    } catch (e) {
+      // Column might already exist
+    }
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id VARCHAR(255) PRIMARY KEY,
+        username VARCHAR(255) NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        role VARCHAR(50) NOT NULL,
+        schoolId VARCHAR(255),
+        name VARCHAR(255) NOT NULL
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS excuses (
+        id VARCHAR(255) PRIMARY KEY,
+        registrationId VARCHAR(255) NOT NULL,
+        schoolId VARCHAR(255) NOT NULL,
+        date VARCHAR(255) NOT NULL,
+        reason TEXT,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS attendance (
+        id VARCHAR(255) PRIMARY KEY,
+        schoolId VARCHAR(255) NOT NULL,
+        date VARCHAR(255) NOT NULL,
+        records JSON
       )
     `);
 

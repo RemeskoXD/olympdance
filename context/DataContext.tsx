@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { SCHOOLS as INITIAL_SCHOOLS, CAMPS as INITIAL_CAMPS, GALLERY_IMAGES as INITIAL_GALLERY_IMAGES, PRODUCTS as INITIAL_PRODUCTS } from '../constants';
-import { School, Camp, GalleryImage, Product, Registration } from '../types';
+import { School, Camp, GalleryImage, Product, Registration, SchoolRegistration, User, Excuse, Attendance } from '../types';
 
 interface DataContextType {
   schools: School[];
@@ -8,6 +8,10 @@ interface DataContextType {
   galleryImages: GalleryImage[];
   products: Product[];
   registrations: Registration[];
+  schoolRegistrations: SchoolRegistration[];
+  users: User[];
+  excuses: Excuse[];
+  attendance: Attendance[];
   isMerchEnabled: boolean;
   campGeneralInfo: string;
   addSchool: (school: Omit<School, 'id'>) => void;
@@ -22,6 +26,13 @@ interface DataContextType {
   deleteProduct: (id: string) => void;
   addRegistration: (registration: Omit<Registration, 'id' | 'createdAt' | 'status'>) => Promise<Registration>;
   updateRegistration: (id: string, updatedRegistration: Partial<Registration>) => void;
+  addSchoolRegistration: (registration: Omit<SchoolRegistration, 'id' | 'createdAt' | 'status'>) => Promise<SchoolRegistration>;
+  updateSchoolRegistration: (id: string, updatedRegistration: Partial<SchoolRegistration>) => void;
+  addUser: (user: Omit<User, 'id'>) => Promise<void>;
+  updateUser: (id: string, updatedUser: Partial<User>) => Promise<void>;
+  deleteUser: (id: string) => Promise<void>;
+  addExcuse: (excuse: Omit<Excuse, 'id' | 'createdAt'>) => Promise<void>;
+  updateAttendance: (schoolId: string, date: string, records: Record<string, boolean>) => Promise<void>;
   toggleMerch: (enabled: boolean) => void;
   updateCampGeneralInfo: (info: string) => void;
   uploadFile: (file: File) => Promise<string>;
@@ -35,6 +46,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [schoolRegistrations, setSchoolRegistrations] = useState<SchoolRegistration[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [excuses, setExcuses] = useState<Excuse[]>([]);
+  const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [isMerchEnabled, setIsMerchEnabled] = useState<boolean>(true);
   const [campGeneralInfo, setCampGeneralInfo] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
@@ -51,6 +66,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setGalleryImages(data.galleryImages || INITIAL_GALLERY_IMAGES);
           setProducts(data.products || INITIAL_PRODUCTS);
           setRegistrations(data.registrations || []);
+          setSchoolRegistrations(data.schoolRegistrations || []);
+          setUsers(data.users || []);
+          setExcuses(data.excuses || []);
+          setAttendance(data.attendance || []);
           setIsMerchEnabled(data.isMerchEnabled ?? true);
           setCampGeneralInfo(data.campGeneralInfo || '');
         }
@@ -156,6 +175,71 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await apiCall(`/api/registrations/${id}`, 'PUT', updatedRegistration);
   };
 
+  const addSchoolRegistration = async (registration: Omit<SchoolRegistration, 'id' | 'createdAt' | 'status'>): Promise<SchoolRegistration> => {
+    const newRegistration: SchoolRegistration = {
+      ...registration,
+      id: `sr${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      status: 'pending_payment',
+      createdAt: new Date().toISOString(),
+      password: registration.password || Math.random().toString(36).slice(-8)
+    };
+    
+    setSchoolRegistrations([...schoolRegistrations, newRegistration]);
+    await apiCall('/api/school-registrations', 'POST', newRegistration);
+    
+    return newRegistration;
+  };
+
+  const updateSchoolRegistration = async (id: string, updatedRegistration: Partial<SchoolRegistration>) => {
+    setSchoolRegistrations(schoolRegistrations.map(r => r.id === id ? { ...r, ...updatedRegistration } : r));
+    await apiCall(`/api/school-registrations/${id}`, 'PUT', updatedRegistration);
+  };
+
+  const addUser = async (user: Omit<User, 'id'>) => {
+    const newUser: User = { ...user, id: `usr${Date.now()}` };
+    setUsers([...users, newUser]);
+    await apiCall('/api/users', 'POST', newUser);
+  };
+
+  const updateUser = async (id: string, updatedUser: Partial<User>) => {
+    setUsers(users.map(u => u.id === id ? { ...u, ...updatedUser } : u));
+    await apiCall(`/api/users/${id}`, 'PUT', updatedUser);
+  };
+
+  const deleteUser = async (id: string) => {
+    setUsers(users.filter(u => u.id !== id));
+    await apiCall(`/api/users/${id}`, 'DELETE');
+  };
+
+  const addExcuse = async (excuse: Omit<Excuse, 'id' | 'createdAt'>) => {
+    const newExcuse: Excuse = {
+      ...excuse,
+      id: `exc${Date.now()}`,
+      createdAt: new Date().toISOString()
+    };
+    setExcuses([...excuses, newExcuse]);
+    await apiCall('/api/excuses', 'POST', newExcuse);
+  };
+
+  const updateAttendance = async (schoolId: string, date: string, records: Record<string, boolean>) => {
+    const existingIndex = attendance.findIndex(a => a.schoolId === schoolId && a.date === date);
+    if (existingIndex >= 0) {
+      const existing = attendance[existingIndex];
+      const updated = { ...existing, records };
+      setAttendance(attendance.map((a, i) => i === existingIndex ? updated : a));
+      await apiCall(`/api/attendance/${existing.id}`, 'PUT', { records });
+    } else {
+      const newAttendance: Attendance = {
+        id: `att${Date.now()}`,
+        schoolId,
+        date,
+        records
+      };
+      setAttendance([...attendance, newAttendance]);
+      await apiCall('/api/attendance', 'POST', newAttendance);
+    }
+  };
+
   const toggleMerch = async (enabled: boolean) => {
       setIsMerchEnabled(enabled);
       await apiCall('/api/settings', 'POST', { isMerchEnabled: enabled });
@@ -189,12 +273,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <DataContext.Provider value={{ 
-      schools, camps, galleryImages, products, registrations, isMerchEnabled, campGeneralInfo,
+      schools, camps, galleryImages, products, registrations, schoolRegistrations, users, excuses, attendance, isMerchEnabled, campGeneralInfo,
       addSchool, updateSchool, deleteSchool, 
       addCamp, updateCamp, deleteCamp,
       addGalleryImage, deleteGalleryImage,
       addProduct, deleteProduct, 
       addRegistration, updateRegistration,
+      addSchoolRegistration, updateSchoolRegistration,
+      addUser, updateUser, deleteUser,
+      addExcuse, updateAttendance,
       toggleMerch, updateCampGeneralInfo,
       uploadFile
     }}>

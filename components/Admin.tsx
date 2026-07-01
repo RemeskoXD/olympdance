@@ -1,35 +1,66 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from '../context/DataContext';
-import { Trash2, Plus, School as SchoolIcon, Tent, LogOut, Lock, Image as ImageIcon, Edit2, Save, X, ShoppingBag, ToggleLeft, ToggleRight, FileText, CheckCircle as CheckCircleIcon, Clock, AlertCircle, Mail } from 'lucide-react';
-import { School, Camp, Product, Registration } from '../types';
+import { Trash2, Plus, School as SchoolIcon, Tent, LogOut, Lock, Image as ImageIcon, Edit2, Save, X, ShoppingBag, ToggleLeft, ToggleRight, FileText, CheckCircle as CheckCircleIcon, Clock, AlertCircle, Mail, Users, Check, X as XIcon, Calendar } from 'lucide-react';
+import { School, Camp, Product, Registration, User, SchoolRegistration } from '../types';
 
 const Admin: React.FC = () => {
+  const { users, addUser, updateUser, deleteUser, schools, schoolRegistrations, attendance, excuses, updateAttendance } = useData();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [activeTab, setActiveTab] = useState<'schools' | 'camps' | 'gallery' | 'merch' | 'registrations'>('schools');
+  const [activeTab, setActiveTab] = useState<'schools' | 'camps' | 'gallery' | 'merch' | 'registrations' | 'school_registrations' | 'users' | 'attendance'>('schools');
 
   // Check for persisted login on mount
   useEffect(() => {
+    const storedUserId = localStorage.getItem('olymp_admin_user_id');
     const storedAuth = localStorage.getItem('olymp_admin_auth');
-    if (storedAuth === 'true') {
-      setIsAuthenticated(true);
+    if (storedAuth === 'true' && storedUserId) {
+      if (storedUserId === 'superadmin') {
+         setIsAuthenticated(true);
+         setCurrentUser({ id: 'superadmin', username: 'admin', role: 'admin', name: 'Hlavní administrátor' });
+      } else {
+         const user = users.find(u => u.id === storedUserId);
+         if (user) {
+             setIsAuthenticated(true);
+             setCurrentUser(user);
+             if (user.role === 'trainer') {
+                 setActiveTab('attendance');
+             }
+         }
+      }
     }
-  }, []);
+  }, [users]);
 
   // Login handler
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === 'admin123') { // Simple simulation auth
+    if (username === 'admin' && password === 'admin123') { 
       setIsAuthenticated(true);
+      setCurrentUser({ id: 'superadmin', username: 'admin', role: 'admin', name: 'Hlavní administrátor' });
       localStorage.setItem('olymp_admin_auth', 'true');
+      localStorage.setItem('olymp_admin_user_id', 'superadmin');
     } else {
-      alert('Špatné heslo');
+      const user = users.find(u => u.username === username && u.password === password);
+      if (user) {
+          setIsAuthenticated(true);
+          setCurrentUser(user);
+          localStorage.setItem('olymp_admin_auth', 'true');
+          localStorage.setItem('olymp_admin_user_id', user.id);
+          if (user.role === 'trainer') {
+              setActiveTab('attendance');
+          }
+      } else {
+          alert('Špatné jméno nebo heslo');
+      }
     }
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
+    setCurrentUser(null);
     localStorage.removeItem('olymp_admin_auth');
+    localStorage.removeItem('olymp_admin_user_id');
   };
 
   if (!isAuthenticated) {
@@ -45,6 +76,17 @@ const Admin: React.FC = () => {
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Uživatelské jméno</label>
+                <input 
+                  type="text" 
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-transparent outline-none"
+                  placeholder="Zadejte uživatelské jméno"
+                  required
+                />
+            </div>
+            <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Heslo</label>
                 <input 
                   type="password" 
@@ -52,6 +94,7 @@ const Admin: React.FC = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-transparent outline-none"
                   placeholder="Zadejte heslo"
+                  required
                 />
             </div>
             <button type="submit" className="w-full bg-brand-blue text-white font-bold py-3 rounded-xl hover:bg-blue-800 transition-colors">
@@ -59,7 +102,7 @@ const Admin: React.FC = () => {
             </button>
           </form>
           <div className="mt-6 text-center text-xs text-gray-400">
-            Tip: Heslo je "admin123"
+            Tip: Přístup pro hlavního správce (admin / admin123)
           </div>
         </div>
       </div>
@@ -82,68 +125,111 @@ const Admin: React.FC = () => {
 
         {/* Tabs */}
         <div className="flex flex-wrap gap-2 mb-8 bg-white p-2 rounded-xl shadow-sm inline-flex">
-          <button
-            onClick={() => setActiveTab('schools')}
-            className={`flex items-center px-6 py-2 rounded-lg text-sm font-bold transition-all ${
-              activeTab === 'schools' 
-              ? 'bg-brand-blue text-white shadow-md' 
-              : 'text-gray-500 hover:bg-gray-100'
-            }`}
-          >
-            <SchoolIcon size={18} className="mr-2" />
-            Školy a Kroužky
-          </button>
-          <button
-            onClick={() => setActiveTab('camps')}
-            className={`flex items-center px-6 py-2 rounded-lg text-sm font-bold transition-all ${
-              activeTab === 'camps' 
-              ? 'bg-brand-blue text-white shadow-md' 
-              : 'text-gray-500 hover:bg-gray-100'
-            }`}
-          >
-            <Tent size={18} className="mr-2" />
-            Letní Tábory
-          </button>
-           <button
-            onClick={() => setActiveTab('gallery')}
-            className={`flex items-center px-6 py-2 rounded-lg text-sm font-bold transition-all ${
-              activeTab === 'gallery' 
-              ? 'bg-brand-blue text-white shadow-md' 
-              : 'text-gray-500 hover:bg-gray-100'
-            }`}
-          >
-            <ImageIcon size={18} className="mr-2" />
-            Galerie
-          </button>
-          <button
-            onClick={() => setActiveTab('merch')}
-            className={`flex items-center px-6 py-2 rounded-lg text-sm font-bold transition-all ${
-              activeTab === 'merch' 
-              ? 'bg-brand-blue text-white shadow-md' 
-              : 'text-gray-500 hover:bg-gray-100'
-            }`}
-          >
-            <ShoppingBag size={18} className="mr-2" />
-            E-shop / Merch
-          </button>
-          <button
-            onClick={() => setActiveTab('registrations')}
-            className={`flex items-center px-6 py-2 rounded-lg text-sm font-bold transition-all ${
-              activeTab === 'registrations' 
-              ? 'bg-brand-blue text-white shadow-md' 
-              : 'text-gray-500 hover:bg-gray-100'
-            }`}
-          >
-            <FileText size={18} className="mr-2" />
-            Přihlášky
-          </button>
+          {(currentUser?.role === 'admin' || currentUser?.role === undefined) && (
+            <>
+              <button
+                onClick={() => setActiveTab('schools')}
+                className={`flex items-center px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+                  activeTab === 'schools' 
+                  ? 'bg-brand-blue text-white shadow-md' 
+                  : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <SchoolIcon size={18} className="mr-2" />
+                Školy a Kroužky
+              </button>
+              <button
+                onClick={() => setActiveTab('camps')}
+                className={`flex items-center px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+                  activeTab === 'camps' 
+                  ? 'bg-brand-blue text-white shadow-md' 
+                  : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <Tent size={18} className="mr-2" />
+                Letní Tábory
+              </button>
+               <button
+                onClick={() => setActiveTab('gallery')}
+                className={`flex items-center px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+                  activeTab === 'gallery' 
+                  ? 'bg-brand-blue text-white shadow-md' 
+                  : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <ImageIcon size={18} className="mr-2" />
+                Galerie
+              </button>
+              <button
+                onClick={() => setActiveTab('merch')}
+                className={`flex items-center px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+                  activeTab === 'merch' 
+                  ? 'bg-brand-blue text-white shadow-md' 
+                  : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <ShoppingBag size={18} className="mr-2" />
+                E-shop / Merch
+              </button>
+              <button
+                onClick={() => setActiveTab('school_registrations')}
+                className={`flex items-center px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+                  activeTab === 'school_registrations' 
+                  ? 'bg-brand-blue text-white shadow-md' 
+                  : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <FileText size={18} className="mr-2" />
+                Přihlášky Kroužky
+              </button>
+              <button
+                onClick={() => setActiveTab('registrations')}
+                className={`flex items-center px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+                  activeTab === 'registrations' 
+                  ? 'bg-brand-blue text-white shadow-md' 
+                  : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <FileText size={18} className="mr-2" />
+                Přihlášky Tábory
+              </button>
+              <button
+                onClick={() => setActiveTab('users')}
+                className={`flex items-center px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+                  activeTab === 'users' 
+                  ? 'bg-brand-blue text-white shadow-md' 
+                  : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <Users size={18} className="mr-2" />
+                Uživatelé
+              </button>
+            </>
+          )}
+
+          {currentUser?.role === 'trainer' && (
+             <button
+                onClick={() => setActiveTab('attendance')}
+                className={`flex items-center px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+                  activeTab === 'attendance' 
+                  ? 'bg-brand-blue text-white shadow-md' 
+                  : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <CheckCircleIcon size={18} className="mr-2" />
+                Docházka
+              </button>
+          )}
         </div>
 
         {activeTab === 'schools' && <SchoolManager />}
         {activeTab === 'camps' && <CampManager />}
         {activeTab === 'gallery' && <GalleryManager />}
         {activeTab === 'merch' && <MerchManager />}
+        {activeTab === 'school_registrations' && <SchoolRegistrationManager />}
         {activeTab === 'registrations' && <RegistrationManager />}
+        {activeTab === 'users' && <UserManager />}
+        {activeTab === 'attendance' && <AttendanceManager currentUser={currentUser} />}
       </div>
     </div>
   );
@@ -709,6 +795,373 @@ const RegistrationManager: React.FC = () => {
                       </td>
                       <td className="px-6 py-4">
                         {getStatusBadge(reg.status)}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-2">
+                          <div className="flex gap-2">
+                            <button 
+                              onClick={() => handleUpdateStatus(reg.id, 'approved')}
+                              className="p-1.5 bg-green-100 text-green-600 rounded hover:bg-green-200 transition-colors"
+                              title="Schválit"
+                            >
+                              <CheckCircleIcon size={16} />
+                            </button>
+                            <button 
+                              onClick={() => handleUpdateStatus(reg.id, 'action_required')}
+                              className="p-1.5 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"
+                              title="Vyžadovat akci"
+                            >
+                              <AlertCircle size={16} />
+                            </button>
+                            <button 
+                              onClick={() => {
+                                setEditingId(reg.id);
+                                setAdminNote(reg.adminNote || '');
+                              }}
+                              className="p-1.5 bg-blue-100 text-brand-blue rounded hover:bg-blue-200 transition-colors"
+                              title="Zpráva pro rodiče (zobrazí se v portálu)"
+                            >
+                              <Edit2 size={16} />
+                            </button>
+                          </div>
+                          
+                          {editingId === reg.id && (
+                            <div className="mt-2 space-y-2 bg-gray-50 p-2 rounded border border-gray-200">
+                              <label className="text-[10px] font-bold text-gray-500 block mb-1">Zpráva pro rodiče (zobrazí se v portálu):</label>
+                              <textarea 
+                                value={adminNote}
+                                onChange={(e) => setAdminNote(e.target.value)}
+                                className="w-full text-xs p-2 border border-gray-200 rounded outline-none focus:ring-1 focus:ring-brand-blue"
+                                placeholder="Např: Prosím o doplnění dokumentu..."
+                                rows={3}
+                              />
+                              <div className="flex gap-2">
+                                <button 
+                                  onClick={() => handleSaveNote(reg.id)}
+                                  className="text-[10px] bg-brand-blue text-white px-2 py-1 rounded font-bold"
+                                >
+                                  Odeslat zprávu
+                                </button>
+                                <button 
+                                  onClick={() => setEditingId(null)}
+                                  className="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded font-bold"
+                                >
+                                  Zrušit
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {reg.adminNote && editingId !== reg.id && (
+                            <div className="text-[10px] bg-yellow-50 text-yellow-800 p-2 rounded border border-yellow-100 mt-1">
+                              <span className="font-bold block mb-0.5">Zpráva pro rodiče:</span>
+                              {reg.adminNote}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const UserManager: React.FC = () => {
+  const { users, addUser, deleteUser, schools } = useData();
+  const [isAdding, setIsAdding] = useState(false);
+  const [formData, setFormData] = useState({ username: '', password: '', role: 'trainer' as 'admin' | 'trainer', name: '', schoolId: '' });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    addUser(formData);
+    setFormData({ username: '', password: '', role: 'trainer', name: '', schoolId: '' });
+    setIsAdding(false);
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+        <h2 className="text-xl font-bold text-gray-900">Správa uživatelů</h2>
+        <button 
+          onClick={() => setIsAdding(!isAdding)}
+          className="bg-brand-blue text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors flex items-center"
+        >
+          {isAdding ? <X size={16} className="mr-2" /> : <Plus size={16} className="mr-2" />}
+          {isAdding ? 'Zrušit' : 'Přidat uživatele'}
+        </button>
+      </div>
+
+      {isAdding && (
+        <div className="p-6 bg-gray-50 border-b border-gray-100">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <input type="text" placeholder="Jméno (např. Jan Novák)" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="px-4 py-2 border border-gray-300 rounded-lg outline-none" required />
+              <input type="text" placeholder="Přihlašovací jméno" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} className="px-4 py-2 border border-gray-300 rounded-lg outline-none" required />
+              <input type="text" placeholder="Heslo" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="px-4 py-2 border border-gray-300 rounded-lg outline-none" required />
+              <select value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as any})} className="px-4 py-2 border border-gray-300 rounded-lg outline-none">
+                <option value="trainer">Trenér/ka</option>
+                <option value="admin">Administrátor</option>
+              </select>
+              {formData.role === 'trainer' && (
+                <select value={formData.schoolId} onChange={e => setFormData({...formData, schoolId: e.target.value})} className="px-4 py-2 border border-gray-300 rounded-lg outline-none" required>
+                  <option value="">Vyberte školu...</option>
+                  {schools.map(s => <option key={s.id} value={s.id}>{s.name} ({s.day})</option>)}
+                </select>
+              )}
+            </div>
+            <button type="submit" className="bg-brand-red text-white px-6 py-2 rounded-lg font-bold">Uložit uživatele</button>
+          </form>
+        </div>
+      )}
+
+      <div className="p-6">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="border-b border-gray-100">
+              <th className="py-3 font-bold text-gray-500 text-sm">Jméno</th>
+              <th className="py-3 font-bold text-gray-500 text-sm">Login</th>
+              <th className="py-3 font-bold text-gray-500 text-sm">Heslo</th>
+              <th className="py-3 font-bold text-gray-500 text-sm">Role</th>
+              <th className="py-3 font-bold text-gray-500 text-sm">Přiřazená škola</th>
+              <th className="py-3 font-bold text-gray-500 text-sm">Akce</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map(user => {
+              const school = schools.find(s => s.id === user.schoolId);
+              return (
+                <tr key={user.id} className="border-b border-gray-50 hover:bg-gray-50">
+                  <td className="py-3 font-medium">{user.name}</td>
+                  <td className="py-3 text-gray-500">{user.username}</td>
+                  <td className="py-3 text-gray-500 font-mono text-xs">{user.password}</td>
+                  <td className="py-3">
+                    <span className={`px-2 py-1 rounded text-xs font-bold ${user.role === 'admin' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                      {user.role === 'admin' ? 'Administrátor' : 'Trenér/ka'}
+                    </span>
+                  </td>
+                  <td className="py-3 text-gray-500">{school ? school.name : '-'}</td>
+                  <td className="py-3">
+                    <button onClick={() => deleteUser(user.id)} className="text-gray-400 hover:text-brand-red"><Trash2 size={18} /></button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+const AttendanceManager: React.FC<{ currentUser: User | null }> = ({ currentUser }) => {
+  const { schools, schoolRegistrations, attendance, updateAttendance, excuses } = useData();
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  
+  if (!currentUser || currentUser.role !== 'trainer' || !currentUser.schoolId) {
+    return <div>Nemáte přiřazenou žádnou školu.</div>;
+  }
+
+  const school = schools.find(s => s.id === currentUser.schoolId);
+  const students = schoolRegistrations.filter(r => r.schoolId === currentUser.schoolId);
+  const currentAttendance = attendance.find(a => a.schoolId === currentUser.schoolId && a.date === selectedDate);
+  const records = currentAttendance?.records || {};
+
+  const handleToggle = (studentId: string, isPresent: boolean) => {
+    const newRecords = { ...records, [studentId]: isPresent };
+    updateAttendance(currentUser.schoolId!, selectedDate, newRecords);
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-brand-blue text-white">
+        <div>
+          <h2 className="text-xl font-bold">{school?.name}</h2>
+          <p className="text-blue-200 text-sm">{school?.day} {school?.time}</p>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Calendar size={18} />
+          <input 
+            type="date" 
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="px-3 py-1 rounded bg-white/20 border-none outline-none text-white font-bold"
+          />
+        </div>
+      </div>
+
+      <div className="p-6">
+        {students.length === 0 ? (
+          <p className="text-gray-500 text-center py-8">V této škole nejsou žádní přihlášení žáci.</p>
+        ) : (
+          <div className="space-y-4">
+            {students.map(student => {
+              const isPresent = records[student.id];
+              const excuse = excuses.find(e => e.registrationId === student.id && e.date === selectedDate);
+
+              return (
+                <div key={student.id} className="flex items-center justify-between p-4 border border-gray-100 rounded-xl hover:bg-gray-50">
+                  <div>
+                    <h3 className="font-bold text-gray-900">{student.childName}</h3>
+                    {excuse && (
+                      <p className="text-xs text-red-600 font-bold mt-1">
+                        Omluvenka: {excuse.reason}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex space-x-2">
+                    <button 
+                      onClick={() => handleToggle(student.id, true)}
+                      className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isPresent === true ? 'bg-green-500 text-white shadow-md' : 'bg-gray-100 text-gray-400 hover:bg-green-100 hover:text-green-600'}`}
+                    >
+                      <Check size={20} />
+                    </button>
+                    <button 
+                      onClick={() => handleToggle(student.id, false)}
+                      className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isPresent === false ? 'bg-red-500 text-white shadow-md' : 'bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-red-600'}`}
+                    >
+                      <XIcon size={20} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// --- SchoolRegistrationManager ---
+
+const SchoolRegistrationManager: React.FC = () => {
+  const { schoolRegistrations, schools, updateSchoolRegistration, excuses } = useData();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [adminNote, setAdminNote] = useState('');
+  const [showHistoryFor, setShowHistoryFor] = useState<string | null>(null);
+
+  const handleUpdateStatus = (id: string, status: SchoolRegistration['status']) => {
+    updateSchoolRegistration(id, { status });
+  };
+
+  const handleSaveNote = (id: string) => {
+    updateSchoolRegistration(id, { adminNote });
+    setEditingId(null);
+    setAdminNote('');
+  };
+
+  const getStatusBadge = (status: SchoolRegistration['status']) => {
+    switch (status) {
+      case 'approved':
+        return <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold flex items-center"><CheckCircleIcon size={12} className="mr-1" /> Schváleno</span>;
+      case 'pending_payment':
+        return <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold flex items-center"><Clock size={12} className="mr-1" /> Čeká na platbu</span>;
+      case 'pending_approval':
+        return <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold flex items-center"><Clock size={12} className="mr-1" /> Čeká na schválení</span>;
+      case 'action_required':
+        return <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold flex items-center"><AlertCircle size={12} className="mr-1" /> Vyžadována akce</span>;
+      case 'cancelled':
+        return <span className="bg-gray-100 text-gray-500 px-3 py-1 rounded-full text-xs font-bold flex items-center">Odhlášeno</span>;
+      default:
+        return <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-bold">{status}</span>;
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-900">Správa přihlášek (Kroužky)</h2>
+        <div className="text-sm text-gray-500">Celkem: {schoolRegistrations.length}</div>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Dítě / Škola</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Rodič / Kontakt</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Omluvenky / Historie</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Akce</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {schoolRegistrations.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-12 text-center text-gray-500 italic">Zatím žádné přihlášky na kroužky.</td>
+                </tr>
+              ) : (
+                schoolRegistrations.map((reg) => {
+                  const school = schools.find(s => s.id === reg.schoolId);
+                  const regExcuses = excuses.filter(e => e.registrationId === reg.id);
+                  return (
+                    <tr key={reg.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="font-bold text-gray-900">{reg.childName}</div>
+                        <div className="text-xs text-gray-500">{reg.childBirthDate} {reg.childPhone && `• ${reg.childPhone}`}</div>
+                        <div className="text-xs font-medium text-brand-blue mt-1">{school?.name} - {school?.city}</div>
+                        {reg.afterSchoolClub && (
+                           <div className="mt-1"><span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-[10px] font-bold">Školní družina</span></div>
+                        )}
+                        {reg.status === 'cancelled' && (
+                          <div className="mt-2 text-xs font-bold text-red-600 bg-red-50 p-1 rounded inline-block">
+                            ⚠️ DÍTĚ BYLO ODHLÁŠENO
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-medium text-gray-900">{reg.parentName}</div>
+                        <div className="text-xs text-gray-500">{reg.parentEmail}</div>
+                        <div className="text-xs text-gray-500">{reg.parentPhone}</div>
+                        <a 
+                          href={`mailto:${reg.parentEmail}?subject=Olymp Dance - ${school?.name}&body=Dobrý den,`}
+                          className="inline-flex items-center mt-1 text-xs text-brand-blue hover:underline"
+                        >
+                          <Mail size={12} className="mr-1" /> Napsat email
+                        </a>
+                      </td>
+                      <td className="px-6 py-4">
+                        {getStatusBadge(reg.status)}
+                      </td>
+                      <td className="px-6 py-4">
+                         <div className="text-xs space-y-1 max-h-32 overflow-y-auto">
+                            {regExcuses.length > 0 ? (
+                                regExcuses.map(exc => (
+                                    <div key={exc.id} className="bg-yellow-50 text-yellow-800 p-1 rounded border border-yellow-100">
+                                        <span className="font-bold">{exc.date}</span>: {exc.reason}
+                                    </div>
+                                ))
+                            ) : (
+                                <span className="text-gray-400">Žádné omluvenky</span>
+                            )}
+                         </div>
+                         <button 
+                           onClick={() => setShowHistoryFor(showHistoryFor === reg.id ? null : reg.id)} 
+                           className="text-xs text-brand-blue font-bold hover:underline mt-2 flex items-center"
+                         >
+                            <Clock size={12} className="mr-1"/> Historie změn
+                         </button>
+                         {showHistoryFor === reg.id && (
+                           <div className="mt-2 text-[10px] space-y-1 bg-gray-100 p-2 rounded max-h-40 overflow-y-auto">
+                             {reg.history && reg.history.length > 0 ? (
+                                reg.history.map((h, i) => (
+                                  <div key={i} className="border-b border-gray-200 pb-1 last:border-0 last:pb-0">
+                                    <span className="text-gray-500 block">{new Date(h.date).toLocaleString('cs-CZ')}</span>
+                                    <span className="font-medium">{h.message}</span>
+                                  </div>
+                                ))
+                             ) : (
+                                <span className="text-gray-500">Žádná historie.</span>
+                             )}
+                           </div>
+                         )}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-2">

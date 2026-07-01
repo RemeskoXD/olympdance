@@ -5,7 +5,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
-import pool, { initDb } from './db';
+import pool, { initDb } from './db.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -72,6 +72,10 @@ app.get('/api/data', async (req, res) => {
     const [galleryImages] = await pool.query('SELECT * FROM gallery_images');
     const [products] = await pool.query('SELECT * FROM products');
     const [registrations] = await pool.query('SELECT * FROM registrations');
+    const [schoolRegistrations] = await pool.query('SELECT * FROM school_registrations');
+    const [users] = await pool.query('SELECT * FROM users');
+    const [excuses] = await pool.query('SELECT * FROM excuses');
+    const [attendance] = await pool.query('SELECT * FROM attendance');
     const [settings] = await pool.query('SELECT * FROM settings WHERE id = 1');
 
     // Parse JSON fields
@@ -84,6 +88,17 @@ app.get('/api/data', async (req, res) => {
       ...r,
       documents: typeof r.documents === 'string' ? JSON.parse(r.documents) : r.documents
     }));
+
+    const parsedAttendance = (attendance as any[]).map(a => ({
+      ...a,
+      records: typeof a.records === 'string' ? JSON.parse(a.records) : a.records
+    }));
+    
+    const parsedSchoolRegistrations = (schoolRegistrations as any[]).map(r => ({
+      ...r,
+      history: typeof r.history === 'string' ? JSON.parse(r.history) : (r.history || []),
+      afterSchoolClub: Boolean(r.afterSchoolClub)
+    }));
     
     const currentSettings = (settings as any[])[0] || {};
 
@@ -93,6 +108,10 @@ app.get('/api/data', async (req, res) => {
       galleryImages,
       products: parsedProducts,
       registrations: parsedRegistrations,
+      schoolRegistrations: parsedSchoolRegistrations,
+      users,
+      excuses,
+      attendance: parsedAttendance,
       isMerchEnabled: currentSettings.isMerchEnabled === 1,
       campGeneralInfo: currentSettings.campGeneralInfo
     });
@@ -339,6 +358,114 @@ app.put('/api/registrations/:id', async (req, res) => {
   }
 });
 
+// School Registrations
+app.post('/api/school-registrations', async (req, res) => {
+  try {
+    const registration = req.body;
+    if (registration.history) {
+      registration.history = JSON.stringify(registration.history);
+    }
+    await pool.query('INSERT INTO school_registrations SET ?', registration);
+    res.json(registration);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.put('/api/school-registrations/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    if (updates.history) {
+      updates.history = JSON.stringify(updates.history);
+    }
+    await pool.query('UPDATE school_registrations SET ? WHERE id = ?', [updates, id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Users
+app.post('/api/users', async (req, res) => {
+  try {
+    const user = req.body;
+    await pool.query('INSERT INTO users SET ?', user);
+    res.json(user);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.delete('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query('DELETE FROM users WHERE id = ?', [id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.put('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    await pool.query('UPDATE users SET ? WHERE id = ?', [updates, id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Excuses
+app.post('/api/excuses', async (req, res) => {
+  try {
+    const excuse = req.body;
+    await pool.query('INSERT INTO excuses SET ?', excuse);
+    res.json(excuse);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Attendance
+app.post('/api/attendance', async (req, res) => {
+  try {
+    const attendance = req.body;
+    const formattedAttendance = {
+      ...attendance,
+      records: JSON.stringify(attendance.records)
+    };
+    await pool.query('INSERT INTO attendance SET ?', formattedAttendance);
+    res.json(attendance);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.put('/api/attendance/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    if (updates.records) {
+      updates.records = JSON.stringify(updates.records);
+    }
+    await pool.query('UPDATE attendance SET ? WHERE id = ?', [updates, id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 // Settings
 app.post('/api/settings', async (req, res) => {
   try {
@@ -381,7 +508,7 @@ if (process.env.NODE_ENV !== 'production') {
   app.use(express.static(distPath));
   
   // SPA fallback
-  app.get('*', (req, res) => {
+  app.get('*all', (req, res) => {
     if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
       return res.status(404).send('Not found');
     }

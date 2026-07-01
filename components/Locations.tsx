@@ -49,7 +49,7 @@ const Locations: React.FC = () => {
 
   const handleRegister = () => {
     if (selectedSchool) {
-      navigate(`/kontakt?skola=${encodeURIComponent(selectedSchool.name)}`);
+      navigate(`/registrace-krouzek/${selectedSchool.id}`);
     }
   };
 

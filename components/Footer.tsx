@@ -24,7 +24,7 @@ const Footer: React.FC = () => {
           <div className="md:col-span-1">
              <Link to="/" className="flex items-center gap-3 mb-6 group">
                 <img 
-                  src="https://web2.itnahodinu.cz/olympdance/logo.png" 
+                  src="https://web2.itnahodinu.cz/olympdance/logobile.webp" 
                   alt="Olymp Dance Logo" 
                   className="h-16 w-auto transition-transform group-hover:scale-105"
                 />
