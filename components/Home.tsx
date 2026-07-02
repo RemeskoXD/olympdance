@@ -122,7 +122,7 @@ const Home: React.FC = () => {
                   <p className="text-gray-200 mb-6 max-w-md hidden sm:block">
                     Pohodlně přímo ve vaší škole bez nutnosti dojíždění. Moderní styly, street dance, disko a skvělá parta.
                   </p>
-                  <Link to="/krouzky" className="inline-flex items-center text-white font-bold hover:text-brand-lightBlue transition-colors group-hover:translate-x-2 duration-300">
+                  <Link to="/tanecnikrouzky" className="inline-flex items-center text-white font-bold hover:text-brand-lightBlue transition-colors group-hover:translate-x-2 duration-300">
                     Najít moji školu <ArrowRight className="ml-2 w-5 h-5" />
                   </Link>
                 </div>
@@ -146,7 +146,7 @@ const Home: React.FC = () => {
                   <p className="text-gray-200 mb-6 max-w-md hidden sm:block">
                     Týden plný zážitků, her a tance v přírodě nebo ve městě. Příměstské i pobytové varianty pro všechny.
                   </p>
-                  <Link to="/tabory" className="inline-flex items-center text-white font-bold hover:text-orange-400 transition-colors group-hover:translate-x-2 duration-300">
+                  <Link to="/letnicampy" className="inline-flex items-center text-white font-bold hover:text-orange-400 transition-colors group-hover:translate-x-2 duration-300">
                     Vybrat turnus <ArrowRight className="ml-2 w-5 h-5" />
                   </Link>
                 </div>

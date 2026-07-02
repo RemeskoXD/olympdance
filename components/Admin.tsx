@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from '../context/DataContext';
-import { Trash2, Plus, School as SchoolIcon, Tent, LogOut, Lock, Image as ImageIcon, Edit2, Save, X, ShoppingBag, ToggleLeft, ToggleRight, FileText, CheckCircle as CheckCircleIcon, Clock, AlertCircle, Mail, Users, Check, X as XIcon, Calendar } from 'lucide-react';
+import { Trash2, Plus, School as SchoolIcon, Tent, LogOut, Lock, Image as ImageIcon, Edit2, Save, X, ShoppingBag, ToggleLeft, ToggleRight, FileText, CheckCircle as CheckCircleIcon, Clock, AlertCircle, Mail, Users, Check, X as XIcon, Calendar, Info, LayoutDashboard, DollarSign, Users as UsersIcon } from 'lucide-react';
 import { School, Camp, Product, Registration, User, SchoolRegistration } from '../types';
 
 const Admin: React.FC = () => {
@@ -9,7 +9,7 @@ const Admin: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [activeTab, setActiveTab] = useState<'schools' | 'camps' | 'gallery' | 'merch' | 'registrations' | 'school_registrations' | 'users' | 'attendance'>('schools');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'schools' | 'camps' | 'gallery' | 'merch' | 'registrations' | 'school_registrations' | 'users' | 'attendance'>('dashboard');
 
   // Check for persisted login on mount
   useEffect(() => {
@@ -128,6 +128,17 @@ const Admin: React.FC = () => {
           {(currentUser?.role === 'admin' || currentUser?.role === undefined) && (
             <>
               <button
+                onClick={() => setActiveTab('dashboard')}
+                className={`flex items-center px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+                  activeTab === 'dashboard' 
+                  ? 'bg-brand-blue text-white shadow-md' 
+                  : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <LayoutDashboard size={18} className="mr-2" />
+                Přehled
+              </button>
+              <button
                 onClick={() => setActiveTab('schools')}
                 className={`flex items-center px-6 py-2 rounded-lg text-sm font-bold transition-all ${
                   activeTab === 'schools' 
@@ -222,6 +233,7 @@ const Admin: React.FC = () => {
           )}
         </div>
 
+        {activeTab === 'dashboard' && <DashboardManager />}
         {activeTab === 'schools' && <SchoolManager />}
         {activeTab === 'camps' && <CampManager />}
         {activeTab === 'gallery' && <GalleryManager />}
@@ -236,6 +248,154 @@ const Admin: React.FC = () => {
 };
 
 // --- Sub-components for better organization ---
+
+const DashboardManager: React.FC = () => {
+  const { schoolRegistrations, registrations, schools, camps } = useData();
+
+  // Calculate stats
+  const totalSchoolKids = schoolRegistrations.filter(r => r.status !== 'cancelled').length;
+  const totalCampKids = registrations.filter(r => r.status !== 'cancelled').length;
+  const totalKids = totalSchoolKids + totalCampKids;
+
+  // Calculate revenue from approved registrations
+  const calculateRevenue = () => {
+    let total = 0;
+    
+    // Schools
+    schoolRegistrations.filter(r => r.status === 'approved').forEach(reg => {
+      const school = schools.find(s => s.id === reg.schoolId);
+      if (school && school.price) {
+        const amount = parseFloat(school.price.replace(/\s/g, '').replace('Kč', ''));
+        if (!isNaN(amount)) total += amount;
+      }
+    });
+
+    // Camps
+    registrations.filter(r => r.status === 'approved').forEach(reg => {
+      const camp = camps.find(c => c.id === reg.campId);
+      if (camp && camp.price) {
+        const amount = parseFloat(camp.price.replace(/\s/g, '').replace('Kč', ''));
+        if (!isNaN(amount)) total += amount;
+      }
+    });
+
+    return total;
+  };
+
+  const calculatePendingRevenue = () => {
+    let total = 0;
+    
+    // Schools
+    schoolRegistrations.filter(r => r.status === 'pending_payment').forEach(reg => {
+      const school = schools.find(s => s.id === reg.schoolId);
+      if (school && school.price) {
+        const amount = parseFloat(school.price.replace(/\s/g, '').replace('Kč', ''));
+        if (!isNaN(amount)) total += amount;
+      }
+    });
+
+    // Camps
+    registrations.filter(r => r.status === 'pending_payment').forEach(reg => {
+      const camp = camps.find(c => c.id === reg.campId);
+      if (camp && camp.price) {
+        const amount = parseFloat(camp.price.replace(/\s/g, '').replace('Kč', ''));
+        if (!isNaN(amount)) total += amount;
+      }
+    });
+
+    return total;
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-900">Přehled a Statistiky</h2>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center">
+          <div className="p-4 bg-blue-50 text-brand-blue rounded-xl mr-4">
+            <UsersIcon size={24} />
+          </div>
+          <div>
+            <p className="text-sm text-gray-500 font-medium">Celkem dětí</p>
+            <p className="text-2xl font-bold text-gray-900">{totalKids}</p>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center">
+          <div className="p-4 bg-green-50 text-green-600 rounded-xl mr-4">
+            <DollarSign size={24} />
+          </div>
+          <div>
+            <p className="text-sm text-gray-500 font-medium">Vybraná částka</p>
+            <p className="text-2xl font-bold text-gray-900">{calculateRevenue().toLocaleString('cs-CZ')} Kč</p>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center">
+          <div className="p-4 bg-yellow-50 text-yellow-600 rounded-xl mr-4">
+            <Clock size={24} />
+          </div>
+          <div>
+            <p className="text-sm text-gray-500 font-medium">Čeká na platbu</p>
+            <p className="text-2xl font-bold text-gray-900">{calculatePendingRevenue().toLocaleString('cs-CZ')} Kč</p>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center">
+          <div className="p-4 bg-purple-50 text-purple-600 rounded-xl mr-4">
+            <SchoolIcon size={24} />
+          </div>
+          <div>
+            <p className="text-sm text-gray-500 font-medium">Aktivní školy/tábory</p>
+            <p className="text-2xl font-bold text-gray-900">{schools.length + camps.length}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <h3 className="font-bold text-gray-900 mb-4 border-b pb-2">Rozdělení dětí</h3>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600 flex items-center"><SchoolIcon size={16} className="mr-2 text-brand-blue"/> Kroužky na školách</span>
+              <span className="font-bold">{totalSchoolKids} dětí</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600 flex items-center"><Tent size={16} className="mr-2 text-brand-blue"/> Letní tábory</span>
+              <span className="font-bold">{totalCampKids} dětí</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <h3 className="font-bold text-gray-900 mb-4 border-b pb-2">Stav přihlášek</h3>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600 flex items-center"><CheckCircleIcon size={16} className="mr-2 text-green-500"/> Schválené</span>
+              <span className="font-bold">
+                {schoolRegistrations.filter(r => r.status === 'approved').length + registrations.filter(r => r.status === 'approved').length}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600 flex items-center"><Clock size={16} className="mr-2 text-yellow-500"/> Čeká na platbu</span>
+              <span className="font-bold">
+                {schoolRegistrations.filter(r => r.status === 'pending_payment').length + registrations.filter(r => r.status === 'pending_payment').length}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600 flex items-center"><Clock size={16} className="mr-2 text-blue-500"/> Čeká na schválení</span>
+              <span className="font-bold">
+                {schoolRegistrations.filter(r => r.status === 'pending_approval').length + registrations.filter(r => r.status === 'pending_approval').length}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const SchoolManager: React.FC = () => {
   const { schools, addSchool, updateSchool, deleteSchool } = useData();
@@ -763,6 +923,7 @@ const RegistrationManager: React.FC = () => {
               <tr className="bg-gray-50 border-b border-gray-100">
                 <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Dítě / Tábor</th>
                 <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Rodič / Kontakt</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Dokumenty</th>
                 <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Status</th>
                 <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Akce</th>
               </tr>
@@ -770,7 +931,7 @@ const RegistrationManager: React.FC = () => {
             <tbody className="divide-y divide-gray-100">
               {registrations.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center text-gray-500 italic">Zatím žádné přihlášky.</td>
+                  <td colSpan={5} className="px-6 py-12 text-center text-gray-500 italic">Zatím žádné přihlášky.</td>
                 </tr>
               ) : (
                 registrations.map((reg) => {
@@ -792,6 +953,26 @@ const RegistrationManager: React.FC = () => {
                         >
                           <Mail size={12} className="mr-1" /> Napsat email
                         </a>
+                      </td>
+                      <td className="px-6 py-4">
+                        {reg.documents && reg.documents.length > 0 ? (
+                          <div className="space-y-1">
+                            {reg.documents.map((doc, idx) => (
+                              <a 
+                                key={idx} 
+                                href={doc} 
+                                target="_blank" 
+                                rel="noreferrer"
+                                className="block text-xs text-brand-blue hover:underline truncate max-w-[150px]"
+                                title={doc.split('/').pop() || 'Dokument'}
+                              >
+                                {doc.split('/').pop() || `Dokument ${idx + 1}`}
+                              </a>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400 italic">Nedodáno</span>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         {getStatusBadge(reg.status)}
@@ -962,7 +1143,8 @@ const UserManager: React.FC = () => {
 const AttendanceManager: React.FC<{ currentUser: User | null }> = ({ currentUser }) => {
   const { schools, schoolRegistrations, attendance, updateAttendance, excuses } = useData();
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  
+  const [expandedInfo, setExpandedInfo] = useState<string | null>(null);
+
   if (!currentUser || currentUser.role !== 'trainer' || !currentUser.schoolId) {
     return <div>Nemáte přiřazenou žádnou školu.</div>;
   }
@@ -1005,29 +1187,47 @@ const AttendanceManager: React.FC<{ currentUser: User | null }> = ({ currentUser
               const excuse = excuses.find(e => e.registrationId === student.id && e.date === selectedDate);
 
               return (
-                <div key={student.id} className="flex items-center justify-between p-4 border border-gray-100 rounded-xl hover:bg-gray-50">
-                  <div>
-                    <h3 className="font-bold text-gray-900">{student.childName}</h3>
-                    {excuse && (
-                      <p className="text-xs text-red-600 font-bold mt-1">
-                        Omluvenka: {excuse.reason}
-                      </p>
-                    )}
+                <div key={student.id} className="flex flex-col p-4 border border-gray-100 rounded-xl hover:bg-gray-50">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <h3 className="font-bold text-gray-900">{student.childName}</h3>
+                        <button 
+                          onClick={() => setExpandedInfo(expandedInfo === student.id ? null : student.id)}
+                          className="text-gray-400 hover:text-brand-blue transition-colors"
+                          title="Informace o rodičích"
+                        >
+                          <Info size={16} />
+                        </button>
+                      </div>
+                      {excuse && (
+                        <p className="text-xs text-red-600 font-bold mt-1">
+                          Omluvenka: {excuse.reason}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex space-x-2">
+                      <button 
+                        onClick={() => handleToggle(student.id, true)}
+                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isPresent === true ? 'bg-green-500 text-white shadow-md' : 'bg-gray-100 text-gray-400 hover:bg-green-100 hover:text-green-600'}`}
+                      >
+                        <Check size={20} />
+                      </button>
+                      <button 
+                        onClick={() => handleToggle(student.id, false)}
+                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isPresent === false ? 'bg-red-500 text-white shadow-md' : 'bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-red-600'}`}
+                      >
+                        <XIcon size={20} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex space-x-2">
-                    <button 
-                      onClick={() => handleToggle(student.id, true)}
-                      className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isPresent === true ? 'bg-green-500 text-white shadow-md' : 'bg-gray-100 text-gray-400 hover:bg-green-100 hover:text-green-600'}`}
-                    >
-                      <Check size={20} />
-                    </button>
-                    <button 
-                      onClick={() => handleToggle(student.id, false)}
-                      className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isPresent === false ? 'bg-red-500 text-white shadow-md' : 'bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-red-600'}`}
-                    >
-                      <XIcon size={20} />
-                    </button>
-                  </div>
+                  {expandedInfo === student.id && (
+                    <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg text-sm space-y-1">
+                      <p><span className="font-bold">Rodič:</span> {student.parentName}</p>
+                      <p><span className="font-bold">Telefon:</span> <a href={`tel:${student.parentPhone}`} className="text-brand-blue hover:underline">{student.parentPhone}</a></p>
+                      <p><span className="font-bold">Email:</span> <a href={`mailto:${student.parentEmail}`} className="text-brand-blue hover:underline">{student.parentEmail}</a></p>
+                    </div>
+                  )}
                 </div>
               );
             })}

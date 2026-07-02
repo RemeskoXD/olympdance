@@ -1,8 +1,13 @@
 import React from 'react';
 import { Heart, Users, Trophy, Smile } from 'lucide-react';
 import RevealOnScroll from './RevealOnScroll';
+import { useData } from '../context/DataContext';
 
 const About: React.FC = () => {
+  const { siteContent } = useData();
+  const defaultAboutText = `<strong>Taneční klub Olymp Olomouc</strong> se již řadu let věnuje práci s dětmi a mládeží. Naším cílem není jen naučit děti taneční kroky, ale především v nich vybudovat <span class="text-brand-red font-bold">lásku k pohybu</span>, která jim vydrží celý život.<br/><br/>Zaměřujeme se na moderní taneční styly, disko tance a street dance. Klademe důraz na týmovou spolupráci, fair play a přátelskou atmosféru na trénincích.`;
+  const aboutText = siteContent?.aboutText || defaultAboutText;
+
   return (
     <section className="py-12 bg-white overflow-hidden min-h-screen">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -30,16 +35,7 @@ const About: React.FC = () => {
               <h3 className="text-3xl md:text-4xl font-display font-bold text-gray-900 mt-2 mb-6">
                 Více než jen taneční kroužek
               </h3>
-              <div className="space-y-6 text-gray-600 text-lg leading-relaxed">
-                <p>
-                  <strong>Taneční klub Olymp Olomouc</strong> se již řadu let věnuje práci s dětmi a mládeží. 
-                  Naším cílem není jen naučit děti taneční kroky, ale především v nich vybudovat 
-                  <span className="text-brand-red font-bold"> lásku k pohybu</span>, která jim vydrží celý život.
-                </p>
-                <p>
-                  Zaměřujeme se na moderní taneční styly, disko tance a street dance. 
-                  Klademe důraz na týmovou spolupráci, fair play a přátelskou atmosféru na trénincích.
-                </p>
+              <div className="space-y-6 text-gray-600 text-lg leading-relaxed" dangerouslySetInnerHTML={{ __html: aboutText.replace(/\n/g, '<br/>') }}>
               </div>
               
               <div className="mt-8 grid grid-cols-2 gap-4">

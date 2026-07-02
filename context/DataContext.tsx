@@ -14,6 +14,8 @@ interface DataContextType {
   attendance: Attendance[];
   isMerchEnabled: boolean;
   campGeneralInfo: string;
+  siteContent: any;
+  updateSiteContent: (newContent: any) => void;
   addSchool: (school: Omit<School, 'id'>) => void;
   updateSchool: (id: string, updatedSchool: Partial<School>) => void;
   deleteSchool: (id: string) => void;
@@ -52,6 +54,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [isMerchEnabled, setIsMerchEnabled] = useState<boolean>(true);
   const [campGeneralInfo, setCampGeneralInfo] = useState<string>('');
+  const [siteContent, setSiteContent] = useState<any>({
+    heroTitle: 'Objevte pravou radost z pohybu a tance',
+    heroSubtitle: 'Taneční kroužky pro děti přímo na vaší škole. Moderní styly, skvělá parta a profesionální lektoři. Přidejte se k týmu Olymp Dance!',
+    aboutText: '<strong>Taneční klub Olymp Olomouc</strong> se již řadu let věnuje práci s dětmi a mládeží. Naším cílem není jen naučit děti taneční kroky, ale především v nich vybudovat <span class="text-brand-red font-bold">lásku k pohybu</span>, která jim vydrží celý život.\n\nZaměřujeme se na moderní taneční styly, disko tance a street dance. Klademe důraz na týmovou spolupráci, fair play a přátelskou atmosféru na trénincích.'
+  });
   const [isLoading, setIsLoading] = useState(true);
 
   // Fetch data from API
@@ -72,6 +79,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setAttendance(data.attendance || []);
           setIsMerchEnabled(data.isMerchEnabled ?? true);
           setCampGeneralInfo(data.campGeneralInfo || '');
+          if (data.siteContent && Object.keys(data.siteContent).length > 0) {
+            setSiteContent(data.siteContent);
+          }
         }
       } catch (error) {
         console.error('Failed to fetch data:', error);
@@ -250,6 +260,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await apiCall('/api/settings', 'POST', { campGeneralInfo: info });
   };
 
+  const updateSiteContent = async (newContent: any) => {
+      setSiteContent(newContent);
+      await apiCall('/api/settings', 'POST', { siteContent: newContent });
+  };
+
   const uploadFile = async (file: File): Promise<string> => {
     const formData = new FormData();
     formData.append('file', file);
@@ -273,7 +288,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <DataContext.Provider value={{ 
-      schools, camps, galleryImages, products, registrations, schoolRegistrations, users, excuses, attendance, isMerchEnabled, campGeneralInfo,
+      schools, camps, galleryImages, products, registrations, schoolRegistrations, users, excuses, attendance, isMerchEnabled, campGeneralInfo, siteContent, updateSiteContent,
       addSchool, updateSchool, deleteSchool, 
       addCamp, updateCamp, deleteCamp,
       addGalleryImage, deleteGalleryImage,
@@ -282,7 +297,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       addSchoolRegistration, updateSchoolRegistration,
       addUser, updateUser, deleteUser,
       addExcuse, updateAttendance,
-      toggleMerch, updateCampGeneralInfo,
+      toggleMerch, updateCampGeneralInfo, updateSiteContent,
       uploadFile
     }}>
       {children}

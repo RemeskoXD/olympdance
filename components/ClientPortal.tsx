@@ -100,7 +100,7 @@ const ClientPortal: React.FC = () => {
               Zapomněli jste heslo? <button onClick={() => navigate('/kontakt')} className="text-brand-blue font-bold">Kontaktujte nás</button>
             </p>
             <p className="text-sm text-gray-500">
-              Nemáte ještě účet? <button onClick={() => navigate('/tabory')} className="text-brand-red font-bold">Vyberte si tábor</button>
+              Nemáte ještě účet? <button onClick={() => navigate('/letnicampy')} className="text-brand-red font-bold">Vyberte si tábor</button>
             </p>
           </div>
         </div>

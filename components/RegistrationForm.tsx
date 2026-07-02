@@ -30,7 +30,7 @@ const RegistrationForm: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-2xl font-bold mb-4">Tábor nebyl nalezen</h2>
-          <button onClick={() => navigate('/tabory')} className="bg-brand-red text-white px-6 py-2 rounded-lg">Zpět na tábory</button>
+          <button onClick={() => navigate('/letnicampy')} className="bg-brand-red text-white px-6 py-2 rounded-lg">Zpět na tábory</button>
         </div>
       </div>
     );
@@ -332,7 +332,7 @@ const RegistrationForm: React.FC = () => {
                   </button>
                   <button 
                     type="button"
-                    onClick={() => navigate('/tabory')}
+                    onClick={() => navigate('/letnicampy')}
                     className="w-full bg-white text-gray-600 font-bold py-3 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors"
                   >
                     Zpět na přehled táborů

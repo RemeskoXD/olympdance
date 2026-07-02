@@ -30,7 +30,8 @@ export const VersionCheck: React.FC = () => {
         setIsVisible(true);
       }
     } catch (error) {
-      console.error('Failed to check version', error);
+      // Silently ignore fetch errors in background version check
+      // console.error('Failed to check version', error);
     }
   };
 

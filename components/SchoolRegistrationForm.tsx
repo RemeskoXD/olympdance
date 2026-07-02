@@ -44,7 +44,7 @@ const SchoolRegistrationForm: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-2xl font-bold mb-4">Kroužek nebyl nalezen</h2>
-          <button onClick={() => navigate('/krouzky')} className="bg-brand-red text-white px-6 py-2 rounded-lg">Zpět na kroužky</button>
+          <button onClick={() => navigate('/tanecnikrouzky')} className="bg-brand-red text-white px-6 py-2 rounded-lg">Zpět na kroužky</button>
         </div>
       </div>
     );
@@ -417,7 +417,7 @@ const SchoolRegistrationForm: React.FC = () => {
                   </button>
                   <button 
                     type="button"
-                    onClick={() => navigate('/krouzky')}
+                    onClick={() => navigate('/tanecnikrouzky')}
                     className="w-full bg-white text-gray-600 font-bold py-3 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors"
                   >
                     Zpět na přehled škol

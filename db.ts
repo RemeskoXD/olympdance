@@ -184,6 +184,12 @@ export const initDb = async () => {
       )
     `);
 
+    try {
+      await connection.query('ALTER TABLE settings ADD COLUMN siteContent JSON');
+    } catch (e) {
+      // Column might already exist
+    }
+
     // Seed data
     
     // Schools

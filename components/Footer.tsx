@@ -47,8 +47,8 @@ const Footer: React.FC = () => {
           <div className="md:col-span-1">
             <h4 className="text-white font-bold mb-4 uppercase tracking-wider text-sm">Rychlé odkazy</h4>
             <ul className="space-y-2 text-sm">
-              <li><Link to="/krouzky" className="hover:text-brand-red transition-colors block py-1">Taneční kroužky</Link></li>
-              <li><Link to="/tabory" className="hover:text-brand-red transition-colors block py-1">Letní tábory</Link></li>
+              <li><Link to="/tanecnikrouzky" className="hover:text-brand-red transition-colors block py-1">Taneční kroužky</Link></li>
+              <li><Link to="/letnicampy" className="hover:text-brand-red transition-colors block py-1">Letní tábory</Link></li>
               <li><Link to="/galerie" className="hover:text-brand-red transition-colors block py-1">Galerie</Link></li>
               <li><Link to="/o-nas" className="hover:text-brand-red transition-colors block py-1">O nás</Link></li>
               <li><Link to="/kontakt" className="hover:text-brand-red transition-colors block py-1">Kontakt</Link></li>

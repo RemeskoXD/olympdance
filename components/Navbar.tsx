@@ -21,8 +21,8 @@ const Navbar: React.FC = () => {
 
   const navLinks = [
     { path: '/', label: 'Domů' },
-    { path: '/krouzky', label: 'Taneční Kroužky' },
-    { path: '/tabory', label: 'Letní Campy' },
+    { path: '/tanecnikrouzky', label: 'Taneční Kroužky' },
+    { path: '/letnicampy', label: 'Letní Campy' },
     { path: '/galerie', label: 'Galerie' },
     { path: '/o-nas', label: 'O nás' },
     { path: '/kontakt', label: 'Kontakt' },

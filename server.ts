@@ -113,7 +113,8 @@ app.get('/api/data', async (req, res) => {
       excuses,
       attendance: parsedAttendance,
       isMerchEnabled: currentSettings.isMerchEnabled === 1,
-      campGeneralInfo: currentSettings.campGeneralInfo
+      campGeneralInfo: currentSettings.campGeneralInfo,
+      siteContent: typeof currentSettings.siteContent === 'string' ? JSON.parse(currentSettings.siteContent) : (currentSettings.siteContent || {})
     });
   } catch (error) {
     console.error('Error fetching data:', error);
@@ -350,6 +351,23 @@ app.put('/api/registrations/:id', async (req, res) => {
     if (updates.documents) {
       updates.documents = JSON.stringify(updates.documents);
     }
+    
+    // Check if status is being updated to 'approved'
+    if (updates.status === 'approved') {
+      const [rows] = await pool.query('SELECT * FROM registrations WHERE id = ?', [id]);
+      const registration = (rows as any[])[0];
+      if (registration && registration.status !== 'approved') {
+        const emailHtml = `
+          <h1>Potvrzení platby a schválení registrace</h1>
+          <p>Dobrý den, ${registration.parentName},</p>
+          <p>Vaše platba byla úspěšně přijata a registrace dítěte <strong>${registration.childName}</strong> na tábor byla schválena.</p>
+          <p>Děkujeme a těšíme se!</p>
+          <p>S pozdravem,<br>Tým Olymp Dance</p>
+        `;
+        sendEmail(registration.parentEmail, 'Platba přijata - Olymp Dance', emailHtml).catch(console.error);
+      }
+    }
+
     await pool.query('UPDATE registrations SET ? WHERE id = ?', [updates, id]);
     res.json({ success: true });
   } catch (error) {
@@ -380,6 +398,23 @@ app.put('/api/school-registrations/:id', async (req, res) => {
     if (updates.history) {
       updates.history = JSON.stringify(updates.history);
     }
+
+    // Check if status is being updated to 'approved'
+    if (updates.status === 'approved') {
+      const [rows] = await pool.query('SELECT * FROM school_registrations WHERE id = ?', [id]);
+      const registration = (rows as any[])[0];
+      if (registration && registration.status !== 'approved') {
+        const emailHtml = `
+          <h1>Potvrzení platby a schválení registrace</h1>
+          <p>Dobrý den, ${registration.parentName},</p>
+          <p>Vaše platba byla úspěšně přijata a registrace dítěte <strong>${registration.childName}</strong> na kroužek byla schválena.</p>
+          <p>Děkujeme a těšíme se!</p>
+          <p>S pozdravem,<br>Tým Olymp Dance</p>
+        `;
+        sendEmail(registration.parentEmail, 'Platba přijata - Olymp Dance', emailHtml).catch(console.error);
+      }
+    }
+
     await pool.query('UPDATE school_registrations SET ? WHERE id = ?', [updates, id]);
     res.json({ success: true });
   } catch (error) {
@@ -469,10 +504,11 @@ app.put('/api/attendance/:id', async (req, res) => {
 // Settings
 app.post('/api/settings', async (req, res) => {
   try {
-    const { isMerchEnabled, campGeneralInfo } = req.body;
+    const { isMerchEnabled, campGeneralInfo, siteContent } = req.body;
     const updates: any = {};
     if (isMerchEnabled !== undefined) updates.isMerchEnabled = isMerchEnabled;
     if (campGeneralInfo !== undefined) updates.campGeneralInfo = campGeneralInfo;
+    if (siteContent !== undefined) updates.siteContent = JSON.stringify(siteContent);
     
     await pool.query('UPDATE settings SET ? WHERE id = 1', updates);
     res.json({ success: true });

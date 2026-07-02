@@ -227,7 +227,7 @@ const SchoolPortal: React.FC = () => {
               Zapomněli jste heslo? <button onClick={() => navigate('/kontakt')} className="text-brand-blue font-bold">Kontaktujte nás</button>
             </p>
             <p className="text-sm text-gray-500">
-              Nemáte ještě účet? <button onClick={() => navigate('/krouzky')} className="text-brand-red font-bold">Přihlaste se do kroužku</button>
+              Nemáte ještě účet? <button onClick={() => navigate('/tanecnikrouzky')} className="text-brand-red font-bold">Přihlaste se do kroužku</button>
             </p>
           </div>
         </div>
