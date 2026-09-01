@@ -1,54 +1,119 @@
 <!DOCTYPE html>
-<html lang="cs">
+<html lang="cs" prefix="og: https://ogp.me/ns#">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
-    <meta name="description" content="Taneční škola Olymp Dance Olomouc. Taneční kroužky pro děti na základních a mateřských školách, letní příměstské a pobytové tábory. Přihlaste své dítě do Olymp Dance!" />
-    <meta name="keywords" content="taneční škola, Olymp Dance, Olomouc, taneční kroužky, tanec pro děti, letní tábory, příměstské tábory, taneční tábor" />
-    <meta name="author" content="Olymp Dance Olomouc" />
-    <meta property="og:title" content="Olymp Dance Olomouc - Taneční škola a letní tábory" />
-    <meta property="og:description" content="Taneční škola Olymp Dance Olomouc. Taneční kroužky pro děti na základních a mateřských školách, letní příměstské a pobytové tábory. Přihlaste své dítě do Olymp Dance!" />
+    <!-- Primary Meta Tags -->
+    <title>Olymp Dance Olomouc | Taneční kroužky na školách a letní tábory</title>
+    <meta name="title" content="Olymp Dance Olomouc | Taneční kroužky na školách a letní tábory" />
+    <meta name="description" content="Oficiální stránky tanečního klubu Olymp Dance Olomouc. Taneční kroužky pro děti přímo na ZŠ a MŠ v Olomouci a okolí, letní příměstské a pobytové tábory plné pohybu a zábavy." />
+    <meta name="keywords" content="taneční škola, Olymp Dance, Olomouc, taneční kroužky, tanec pro děti, kroužky ZŠ, kroužky MŠ, letní tábory, příměstské tábory Olomouc, taneční tábor Prostějov, moderní tanec, street dance, hip hop děti" />
+    <meta name="author" content="Taneční klub Olymp Olomouc, z. s." />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="theme-color" content="#1e3a8a" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="canonical" href="https://olympdance.cz/" />
+
+    <!-- Geo & Local SEO -->
+    <meta name="geo.region" content="CZ-71" />
+    <meta name="geo.placename" content="Olomouc" />
+    <meta name="geo.position" content="49.5898;17.2505" />
+    <meta name="ICBM" content="49.5898, 17.2505" />
+
+    <!-- Favicon & Icons -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <link rel="mask-icon" href="/favicon.svg" color="#1e3a8a" />
+
+    <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
+    <meta property="og:locale" content="cs_CZ" />
+    <meta property="og:site_name" content="Olymp Dance Olomouc" />
     <meta property="og:url" content="https://olympdance.cz/" />
-    <meta property="og:image" content="https://olympdance.cz/vite.svg" />
+    <meta property="og:title" content="Olymp Dance Olomouc | Taneční kroužky a letní tábory" />
+    <meta property="og:description" content="Taneční kroužky pro děti na ZŠ a MŠ v Olomouci, Prostějově a okolí. Letní příměstské i pobytové tábory. Radost z pohybu, skvělá parta a profesionální lektoři!" />
+    <meta property="og:image" content="https://web2.itnahodinu.cz/olympdance/prostejov/img_14_optimized.02.25_00050.jpg" />
+    <meta property="og:image:secure_url" content="https://web2.itnahodinu.cz/olympdance/prostejov/img_14_optimized.02.25_00050.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Olymp Dance Olomouc - Taneční vystoupení a tábory" />
+
+    <!-- Twitter Cards -->
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://olympdance.cz/" />
+    <meta name="twitter:title" content="Olymp Dance Olomouc | Taneční kroužky a letní tábory" />
+    <meta name="twitter:description" content="Taneční kroužky pro děti na ZŠ a MŠ v Olomouci a okolí, letní příměstské i pobytové tábory. Přihlaste své dítě do Olymp Dance!" />
+    <meta name="twitter:image" content="https://web2.itnahodinu.cz/olympdance/prostejov/img_14_optimized.02.25_00050.jpg" />
+    <meta name="twitter:image:alt" content="Olymp Dance Olomouc" />
     
-    <!-- JSON-LD Structured Data -->
+    <!-- JSON-LD Structured Data (Schema.org) -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "SportsActivityLocation",
-      "name": "Olymp Dance Olomouc",
-      "description": "Taneční škola Olymp Dance Olomouc. Taneční kroužky pro děti a letní tábory.",
-      "url": "https://olympdance.cz/",
-      "telephone": "+420123456789",
-      "address": {
-        "@type": "PostalAddress",
-        "addressLocality": "Olomouc",
-        "addressRegion": "Olomoucký kraj",
-        "addressCountry": "CZ"
-      },
-      "sameAs": [
-        "https://www.facebook.com/olympdance",
-        "https://www.instagram.com/olympdance"
-      ],
-      "offers": {
-        "@type": "AggregateOffer",
-        "name": "Taneční kroužky a Letní tábory",
-        "description": "Zájmové útvary v ZŠ a MŠ, příměstské a pobytové tábory pro děti."
-      }
+      "@graph": [
+        {
+          "@type": "SportsClub",
+          "@id": "https://olympdance.cz/#organization",
+          "name": "Olymp Dance Olomouc",
+          "legalName": "Taneční klub Olymp Olomouc, z. s.",
+          "url": "https://olympdance.cz/",
+          "logo": "https://web2.itnahodinu.cz/olympdance/logobile.webp",
+          "image": "https://web2.itnahodinu.cz/olympdance/prostejov/img_14_optimized.02.25_00050.jpg",
+          "description": "Taneční klub pro děti a mládež se zaměřením na taneční kroužky na školách, street dance, moderní tanec a letní tábory.",
+          "telephone": "+420722017700",
+          "email": "info@olympdance.cz",
+          "taxID": "68347286",
+          "address": {
+            "@type": "PostalAddress",
+            "streetAddress": "Holečkova 10",
+            "addressLocality": "Olomouc",
+            "postalCode": "77900",
+            "addressRegion": "Olomoucký kraj",
+            "addressCountry": "CZ"
+          },
+          "geo": {
+            "@type": "GeoCoordinates",
+            "latitude": 49.5898,
+            "longitude": 17.2505
+          },
+          "areaServed": [
+            { "@type": "City", "name": "Olomouc" },
+            { "@type": "City", "name": "Prostějov" },
+            { "@type": "City", "name": "Přerov" },
+            { "@type": "City", "name": "Lutín" },
+            { "@type": "City", "name": "Bohuňovice" },
+            { "@type": "City", "name": "Hněvotín" },
+            { "@type": "City", "name": "Štěpánov" }
+          ],
+          "priceRange": "$$",
+          "sameAs": [
+            "https://www.facebook.com/olympdance",
+            "https://www.instagram.com/olympdance"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://olympdance.cz/#website",
+          "url": "https://olympdance.cz/",
+          "name": "Olymp Dance Olomouc",
+          "publisher": {
+            "@id": "https://olympdance.cz/#organization"
+          },
+          "inLanguage": "cs-CZ"
+        }
+      ]
     }
     </script>
     
-    <!-- Cache Control Meta Tags to force updates -->
+    <!-- Cache Control Meta Tags for Live Freshness -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-    <meta name="app-version" content="2025.02.25.v4" />
+    <meta name="app-version" content="2026.09.01" />
     
-    <title>Olymp Dance Olomouc</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -59,8 +124,8 @@
           extend: {
             colors: {
               brand: {
-                red: '#d32f2f', // Approximate from logo
-                blue: '#1e3a8a', // Deep blue
+                red: '#d32f2f',
+                blue: '#1e3a8a',
                 lightBlue: '#3b82f6',
                 gray: '#f3f4f6',
               }
@@ -112,6 +177,6 @@
   <body>
     <div id="root"></div>
     <script type="module" src="./index.tsx"></script>
-  <script type="module" src="/index.tsx"></script>
-</body>
+    <script type="module" src="/index.tsx"></script>
+  </body>
 </html>

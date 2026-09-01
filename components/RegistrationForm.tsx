@@ -112,18 +112,18 @@ const RegistrationForm: React.FC = () => {
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          <div className="bg-brand-blue p-6 text-white">
-            <h2 className="text-2xl font-bold">Přihláška na tábor</h2>
-            <p className="text-blue-100">{camp.title}</p>
+          <div className="bg-brand-blue p-5 sm:p-6 text-white">
+            <h2 className="text-xl sm:text-2xl font-bold">Přihláška na tábor</h2>
+            <p className="text-sm sm:text-base text-blue-100">{camp.title}</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-8">
+          <form onSubmit={handleSubmit} className="p-4 sm:p-8">
             {step === 1 && (
-              <div className="space-y-6 animate-fadeIn">
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
+              <div className="space-y-5 sm:space-y-6 animate-fadeIn">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                  <div className="space-y-1.5 sm:space-y-2">
                     <label className="text-sm font-bold text-gray-700 flex items-center">
-                      <User size={16} className="mr-2 text-brand-blue" /> Jméno a příjmení dítěte
+                      <User size={16} className="mr-2 text-brand-blue shrink-0" /> Jméno a příjmení dítěte
                     </label>
                     <input
                       required
@@ -131,13 +131,13 @@ const RegistrationForm: React.FC = () => {
                       name="childName"
                       value={formData.childName}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-transparent outline-none"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-transparent outline-none text-sm sm:text-base"
                       placeholder="Jan Novák"
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-1.5 sm:space-y-2">
                     <label className="text-sm font-bold text-gray-700 flex items-center">
-                      <CalendarIcon size={16} className="mr-2 text-brand-blue" /> Datum narození dítěte
+                      <CalendarIcon size={16} className="mr-2 text-brand-blue shrink-0" /> Datum narození dítěte
                     </label>
                     <input
                       required
@@ -145,17 +145,17 @@ const RegistrationForm: React.FC = () => {
                       name="childBirthDate"
                       value={formData.childBirthDate}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-transparent outline-none"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-transparent outline-none text-sm sm:text-base"
                     />
                   </div>
                 </div>
 
-                <div className="h-px bg-gray-100 my-6" />
+                <div className="h-px bg-gray-100 my-4 sm:my-6" />
 
-                <div className="space-y-6">
-                  <div className="space-y-2">
+                <div className="space-y-4 sm:space-y-6">
+                  <div className="space-y-1.5 sm:space-y-2">
                     <label className="text-sm font-bold text-gray-700 flex items-center">
-                      <User size={16} className="mr-2 text-brand-blue" /> Jméno zákonného zástupce
+                      <User size={16} className="mr-2 text-brand-blue shrink-0" /> Jméno zákonného zástupce
                     </label>
                     <input
                       required
@@ -163,14 +163,14 @@ const RegistrationForm: React.FC = () => {
                       name="parentName"
                       value={formData.parentName}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-transparent outline-none"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-transparent outline-none text-sm sm:text-base"
                       placeholder="Petr Novák"
                     />
                   </div>
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                    <div className="space-y-1.5 sm:space-y-2">
                       <label className="text-sm font-bold text-gray-700 flex items-center">
-                        <Mail size={16} className="mr-2 text-brand-blue" /> Email
+                        <Mail size={16} className="mr-2 text-brand-blue shrink-0" /> Email
                       </label>
                       <input
                         required
@@ -178,13 +178,13 @@ const RegistrationForm: React.FC = () => {
                         name="parentEmail"
                         value={formData.parentEmail}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-transparent outline-none"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-transparent outline-none text-sm sm:text-base"
                         placeholder="email@priklad.cz"
                       />
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5 sm:space-y-2">
                       <label className="text-sm font-bold text-gray-700 flex items-center">
-                        <Phone size={16} className="mr-2 text-brand-blue" /> Telefon
+                        <Phone size={16} className="mr-2 text-brand-blue shrink-0" /> Telefon
                       </label>
                       <input
                         required
@@ -192,22 +192,22 @@ const RegistrationForm: React.FC = () => {
                         name="parentPhone"
                         value={formData.parentPhone}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-transparent outline-none"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-transparent outline-none text-sm sm:text-base"
                         placeholder="+420 123 456 789"
                       />
                     </div>
                   </div>
 
-                  <div className="h-px bg-gray-100 my-6" />
+                  <div className="h-px bg-gray-100 my-4 sm:my-6" />
 
-                  <div className="space-y-4">
+                  <div className="space-y-3 sm:space-y-4">
                     <label className="flex items-start space-x-3 cursor-pointer">
                       <input 
                         type="checkbox" 
                         required 
-                        className="mt-1 w-5 h-5 rounded border-gray-300 text-brand-blue focus:ring-brand-blue"
+                        className="mt-1 w-5 h-5 rounded border-gray-300 text-brand-blue focus:ring-brand-blue shrink-0"
                       />
-                      <span className="text-sm text-gray-600">
+                      <span className="text-xs sm:text-sm text-gray-600">
                         Souhlasím se zpracováním osobních údajů (GDPR) pro účely organizace tábora.
                       </span>
                     </label>
@@ -215,9 +215,9 @@ const RegistrationForm: React.FC = () => {
                       <input 
                         type="checkbox" 
                         required 
-                        className="mt-1 w-5 h-5 rounded border-gray-300 text-brand-blue focus:ring-brand-blue"
+                        className="mt-1 w-5 h-5 rounded border-gray-300 text-brand-blue focus:ring-brand-blue shrink-0"
                       />
-                      <span className="text-sm text-gray-600">
+                      <span className="text-xs sm:text-sm text-gray-600">
                         Souhlasím s <a href="#" className="text-brand-blue hover:underline">obchodními podmínkami</a> a storno podmínkami.
                       </span>
                     </label>
@@ -228,24 +228,24 @@ const RegistrationForm: React.FC = () => {
 
             {step === 2 && (
               <div className="space-y-6 animate-fadeIn">
-                <div className="bg-blue-50 p-6 rounded-xl border border-blue-100">
-                  <h3 className="font-bold text-brand-blue mb-2 flex items-center">
-                    <Upload size={18} className="mr-2" /> Nahrání dokumentů
+                <div className="bg-blue-50 p-4 sm:p-6 rounded-xl border border-blue-100">
+                  <h3 className="font-bold text-brand-blue mb-2 flex items-center text-base sm:text-lg">
+                    <Upload size={18} className="mr-2 shrink-0" /> Nahrání dokumentů
                   </h3>
-                  <p className="text-sm text-gray-600 mb-4">
+                  <p className="text-xs sm:text-sm text-gray-600 mb-4">
                     Zde můžete nahrát potřebné dokumenty (např. potvrzení o bezinfekčnosti, kopii kartičky pojišťovny). 
                     Dokumenty můžete nahrát i později ve svém klientském portálu.
                   </p>
                   
-                  <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-brand-blue transition-colors cursor-pointer relative">
+                  <div className="border-2 border-dashed border-gray-300 rounded-xl p-5 sm:p-8 text-center hover:border-brand-blue transition-colors cursor-pointer relative bg-white/50">
                     <input 
                       type="file" 
                       multiple 
                       onChange={handleFileChange}
                       className="absolute inset-0 opacity-0 cursor-pointer"
                     />
-                    <Upload className="mx-auto text-gray-400 mb-4" size={48} />
-                    <p className="text-gray-600 font-medium">Klikněte nebo přetáhněte soubory sem</p>
+                    <Upload className="mx-auto text-gray-400 mb-3 sm:mb-4" size={36} />
+                    <p className="text-sm sm:text-base text-gray-600 font-medium">Klikněte nebo přetáhněte soubory sem</p>
                     <p className="text-xs text-gray-400 mt-1">PDF, JPG, PNG (max. 5MB na soubor)</p>
                   </div>
 
@@ -253,12 +253,12 @@ const RegistrationForm: React.FC = () => {
                     <div className="mt-6 space-y-2">
                       <p className="text-sm font-bold text-gray-700">Vybrané soubory:</p>
                       {documents.map((file, i) => (
-                        <div key={i} className="flex items-center justify-between bg-white p-3 rounded-lg border border-gray-200 text-sm">
-                          <span className="truncate">{file.name}</span>
+                        <div key={i} className="flex items-center justify-between bg-white p-3 rounded-lg border border-gray-200 text-xs sm:text-sm">
+                          <span className="truncate pr-2">{file.name}</span>
                           <button 
                             type="button"
                             onClick={() => setDocuments(documents.filter((_, idx) => idx !== i))}
-                            className="text-red-500 hover:text-red-700"
+                            className="text-red-500 hover:text-red-700 font-medium shrink-0"
                           >
                             Odstranit
                           </button>
@@ -271,27 +271,27 @@ const RegistrationForm: React.FC = () => {
             )}
 
             {step === 3 && registrationResult && (
-              <div className="space-y-8 animate-fadeIn">
+              <div className="space-y-6 sm:space-y-8 animate-fadeIn">
                 <div className="text-center">
-                  <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <CheckCircle size={32} />
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                    <CheckCircle size={28} className="sm:w-8 sm:h-8" />
                   </div>
-                  <h3 className="text-2xl font-bold text-gray-900">Registrace byla úspěšná!</h3>
-                  <p className="text-gray-600">Nyní prosím proveďte platbu pro dokončení rezervace.</p>
+                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900">Registrace byla úspěšná!</h3>
+                  <p className="text-sm sm:text-base text-gray-600">Nyní prosím proveďte platbu pro dokončení rezervace.</p>
                 </div>
 
-                <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200">
-                  <div className="flex flex-col md:flex-row gap-8 items-center">
-                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                      <QRCodeSVG value={qrData} size={200} />
+                <div className="bg-gray-50 p-4 sm:p-6 rounded-2xl border border-gray-200">
+                  <div className="flex flex-col sm:flex-row gap-6 sm:gap-8 items-center sm:items-start text-center sm:text-left">
+                    <div className="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-gray-100 shrink-0">
+                      <QRCodeSVG value={qrData} size={150} />
                       <p className="text-[10px] text-center mt-2 text-gray-400 font-mono">SPAY QR PLATBA</p>
                     </div>
                     
-                    <div className="flex-1 space-y-4">
-                      <h4 className="font-bold text-gray-900 flex items-center">
-                        <CreditCard size={18} className="mr-2 text-brand-blue" /> Platební údaje
+                    <div className="flex-1 space-y-3 sm:space-y-4 w-full">
+                      <h4 className="font-bold text-gray-900 flex items-center justify-center sm:justify-start text-sm sm:text-base">
+                        <CreditCard size={18} className="mr-2 text-brand-blue shrink-0" /> Platební údaje
                       </h4>
-                      <div className="grid grid-cols-2 gap-y-2 text-sm">
+                      <div className="grid grid-cols-2 gap-y-2 text-xs sm:text-sm text-left">
                         <span className="text-gray-500">Číslo účtu:</span>
                         <span className="font-bold">{BANK_INFO.account}</span>
                         <span className="text-gray-500">Částka:</span>
@@ -299,41 +299,41 @@ const RegistrationForm: React.FC = () => {
                         <span className="text-gray-500">Variabilní symbol:</span>
                         <span className="font-bold">{camp.variableSymbol}</span>
                         <span className="text-gray-500">Zpráva pro příjemce:</span>
-                        <span className="font-bold">{formData.childName} {formData.childBirthDate}</span>
+                        <span className="font-bold break-all">{formData.childName} {formData.childBirthDate}</span>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-brand-blue/5 p-6 rounded-2xl border border-brand-blue/10">
-                  <h4 className="font-bold text-brand-blue mb-2">Vaše přístupové údaje do portálu</h4>
-                  <p className="text-sm text-gray-600 mb-4">
+                <div className="bg-brand-blue/5 p-4 sm:p-6 rounded-2xl border border-brand-blue/10">
+                  <h4 className="font-bold text-brand-blue mb-2 text-sm sm:text-base">Vaše přístupové údaje do portálu</h4>
+                  <p className="text-xs sm:text-sm text-gray-600 mb-4">
                     Zde můžete sledovat stav schválení přihlášky a spravovat dokumenty.
                   </p>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
                     <div className="bg-white p-3 rounded-lg border border-gray-200">
                       <span className="text-gray-400 block text-xs">Email</span>
-                      <span className="font-bold">{formData.parentEmail}</span>
+                      <span className="font-bold text-sm sm:text-base break-all">{formData.parentEmail}</span>
                     </div>
                     <div className="bg-white p-3 rounded-lg border border-gray-200">
                       <span className="text-gray-400 block text-xs">Heslo</span>
-                      <span className="font-bold">{registrationResult.password}</span>
+                      <span className="font-bold font-mono tracking-wider text-sm sm:text-base">{registrationResult.password}</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-3 sm:gap-4">
                   <button 
                     type="button"
                     onClick={() => navigate('/portal')}
-                    className="w-full bg-brand-blue text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition-colors shadow-lg"
+                    className="w-full bg-brand-blue text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition-colors shadow-lg text-sm sm:text-base"
                   >
                     Přejít do klientského portálu
                   </button>
                   <button 
                     type="button"
                     onClick={() => navigate('/letnicampy')}
-                    className="w-full bg-white text-gray-600 font-bold py-3 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors"
+                    className="w-full bg-white text-gray-600 font-bold py-3 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors text-sm sm:text-base"
                   >
                     Zpět na přehled táborů
                   </button>

@@ -21,7 +21,7 @@ const SchoolRegistrationForm: React.FC = () => {
   });
   
   const [children, setChildren] = useState([
-    { id: 1, childName: '', childBirthDate: '', childPhone: '', afterSchoolClub: false, schoolId: schoolId || '' }
+    { id: 1, childName: '', childSurname: '', childRodneCislo: '', childClass: '', childPhone: '', afterSchoolClub: false, schoolId: schoolId || '' }
   ]);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -61,7 +61,7 @@ const SchoolRegistrationForm: React.FC = () => {
 
   const addChild = () => {
     if (children.length < 5) {
-      setChildren([...children, { id: Date.now(), childName: '', childBirthDate: '', childPhone: '', afterSchoolClub: false, schoolId: initialSchool?.id || '' }]);
+      setChildren([...children, { id: Date.now(), childName: '', childSurname: '', childRodneCislo: '', childClass: '', childPhone: '', afterSchoolClub: false, schoolId: initialSchool?.id || '' }]);
     }
   };
 
@@ -89,7 +89,9 @@ const SchoolRegistrationForm: React.FC = () => {
             parentPhone: parentData.parentPhone,
             parentAddress: parentData.parentAddress,
             childName: child.childName,
-            childBirthDate: child.childBirthDate,
+            childSurname: child.childSurname,
+            childRodneCislo: child.childRodneCislo,
+            childClass: child.childClass,
             childPhone: child.childPhone,
             afterSchoolClub: child.afterSchoolClub,
             password: sharedPassword,
@@ -135,21 +137,21 @@ const SchoolRegistrationForm: React.FC = () => {
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          <div className="bg-brand-blue p-6 text-white">
-            <h2 className="text-2xl font-bold">Přihláška do kroužků</h2>
-            <p className="text-blue-100">Registrace dětí do tanečních kroužků</p>
+          <div className="bg-brand-blue p-5 sm:p-6 text-white">
+            <h2 className="text-xl sm:text-2xl font-bold">Přihláška do kroužků</h2>
+            <p className="text-sm sm:text-base text-blue-100">Registrace dětí do tanečních kroužků</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-8">
+          <form onSubmit={handleSubmit} className="p-4 sm:p-8">
             {step === 1 && (
-              <div className="space-y-8 animate-fadeIn">
+              <div className="space-y-6 sm:space-y-8 animate-fadeIn">
                 {/* Parent Data */}
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900 border-b pb-2 mb-4">Údaje zákonného zástupce</h3>
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
+                  <h3 className="text-base sm:text-lg font-bold text-gray-900 border-b pb-2 mb-4">Údaje zákonného zástupce</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                    <div className="space-y-1.5 sm:space-y-2">
                       <label className="text-sm font-bold text-gray-700 flex items-center">
-                        <User size={16} className="mr-2 text-brand-blue" /> Celé jméno (rodiče)
+                        <User size={16} className="mr-2 text-brand-blue shrink-0" /> Celé jméno (rodiče)
                       </label>
                       <input
                         required
@@ -157,13 +159,13 @@ const SchoolRegistrationForm: React.FC = () => {
                         name="parentName"
                         value={parentData.parentName}
                         onChange={handleParentChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue outline-none"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue outline-none text-sm sm:text-base"
                         placeholder="Petr Novák"
                       />
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5 sm:space-y-2">
                       <label className="text-sm font-bold text-gray-700 flex items-center">
-                        <MapPin size={16} className="mr-2 text-brand-blue" /> Adresa (rodiče)
+                        <MapPin size={16} className="mr-2 text-brand-blue shrink-0" /> Adresa bydliště dítěte
                       </label>
                       <input
                         required
@@ -171,13 +173,13 @@ const SchoolRegistrationForm: React.FC = () => {
                         name="parentAddress"
                         value={parentData.parentAddress}
                         onChange={handleParentChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue outline-none"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue outline-none text-sm sm:text-base"
                         placeholder="Ulice, Město, PSČ"
                       />
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5 sm:space-y-2">
                       <label className="text-sm font-bold text-gray-700 flex items-center">
-                        <Mail size={16} className="mr-2 text-brand-blue" /> E-mail (rodiče)
+                        <Mail size={16} className="mr-2 text-brand-blue shrink-0" /> E-mail (rodiče)
                       </label>
                       <input
                         required
@@ -185,13 +187,13 @@ const SchoolRegistrationForm: React.FC = () => {
                         name="parentEmail"
                         value={parentData.parentEmail}
                         onChange={handleParentChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue outline-none"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue outline-none text-sm sm:text-base"
                         placeholder="email@priklad.cz"
                       />
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5 sm:space-y-2">
                       <label className="text-sm font-bold text-gray-700 flex items-center">
-                        <Phone size={16} className="mr-2 text-brand-blue" /> Telefonní číslo (rodiče)
+                        <Phone size={16} className="mr-2 text-brand-blue shrink-0" /> Telefonní číslo (rodiče)
                       </label>
                       <input
                         required
@@ -199,7 +201,7 @@ const SchoolRegistrationForm: React.FC = () => {
                         name="parentPhone"
                         value={parentData.parentPhone}
                         onChange={handleParentChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue outline-none"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue outline-none text-sm sm:text-base"
                         placeholder="+420 123 456 789"
                       />
                     </div>
@@ -209,83 +211,119 @@ const SchoolRegistrationForm: React.FC = () => {
                 {/* Children Data */}
                 <div>
                   <div className="flex justify-between items-center border-b pb-2 mb-4">
-                    <h3 className="text-lg font-bold text-gray-900">Přihlášené děti (max 5)</h3>
+                    <h3 className="text-base sm:text-lg font-bold text-gray-900">Přihlášené děti (max 5)</h3>
                     {children.length < 5 && (
                       <button 
                         type="button" 
                         onClick={addChild}
                         className="text-brand-blue font-bold text-sm flex items-center hover:text-blue-700"
                       >
-                        <Plus size={16} className="mr-1" /> Přidat dítě
+                        <Plus size={16} className="mr-1 shrink-0" /> Přidat dítě
                       </button>
                     )}
                   </div>
 
-                  <div className="space-y-6">
+                  <div className="space-y-4 sm:space-y-6">
                     {children.map((child, index) => (
-                      <div key={child.id} className="bg-gray-50 p-6 rounded-xl border border-gray-100 relative">
+                      <div key={child.id} className="bg-gray-50 p-4 sm:p-6 rounded-xl border border-gray-100 relative">
                         {children.length > 1 && (
                           <button 
                             type="button"
                             onClick={() => removeChild(child.id)}
-                            className="absolute top-4 right-4 text-gray-400 hover:text-red-500 transition-colors"
+                            className="absolute top-4 right-4 text-gray-400 hover:text-red-500 transition-colors p-1"
                             title="Odebrat dítě"
                           >
                             <Trash2 size={18} />
                           </button>
                         )}
-                        <h4 className="font-bold text-gray-700 mb-4">Dítě {index + 1}</h4>
+                        <h4 className="font-bold text-gray-700 mb-3 sm:mb-4">Dítě {index + 1}</h4>
                         
-                        <div className="grid md:grid-cols-2 gap-4 mb-4">
-                          <div className="space-y-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-3 sm:mb-4">
+                          <div className="space-y-1.5 sm:space-y-2">
                             <label className="text-sm font-bold text-gray-700 flex items-center">
-                              <User size={14} className="mr-1 text-brand-blue" /> Celé jméno
+                              <User size={14} className="mr-1 text-brand-blue shrink-0" /> Křestní jméno dítěte
                             </label>
                             <input
                               required
                               type="text"
                               value={child.childName}
                               onChange={(e) => handleChildChange(child.id, 'childName', e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue outline-none"
-                              placeholder="Jan Novák"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue outline-none text-sm sm:text-base"
+                              placeholder="Jan"
                             />
                           </div>
-                          <div className="space-y-2">
+                          <div className="space-y-1.5 sm:space-y-2">
                             <label className="text-sm font-bold text-gray-700 flex items-center">
-                              <CalendarIcon size={14} className="mr-1 text-brand-blue" /> Datum narození
+                              <User size={14} className="mr-1 text-brand-blue shrink-0" /> Příjmení dítěte
                             </label>
                             <input
                               required
-                              type="date"
-                              value={child.childBirthDate}
-                              onChange={(e) => handleChildChange(child.id, 'childBirthDate', e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue outline-none"
+                              type="text"
+                              value={child.childSurname}
+                              onChange={(e) => handleChildChange(child.id, 'childSurname', e.target.value)}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue outline-none text-sm sm:text-base"
+                              placeholder="Novák"
                             />
                           </div>
                         </div>
 
-                        <div className="grid md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-3 sm:mb-4">
+                          <div className="space-y-1.5 sm:space-y-2">
                             <label className="text-sm font-bold text-gray-700 flex items-center">
-                              <Phone size={14} className="mr-1 text-brand-blue" /> Telefonní číslo (nepovinné)
+                              <User size={14} className="mr-1 text-brand-blue shrink-0" /> Rodné číslo (bez lomítka)
+                            </label>
+                            <input
+                              required
+                              type="text"
+                              maxLength={10}
+                              pattern="\d{10}"
+                              title="Rodné číslo musí obsahovat přesně 10 číslic bez mezer a lomítek."
+                              value={child.childRodneCislo}
+                              onChange={(e) => {
+                                const val = e.target.value.replace(/\D/g, '');
+                                handleChildChange(child.id, 'childRodneCislo', val);
+                              }}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue outline-none text-sm sm:text-base"
+                              placeholder="1234567890"
+                            />
+                          </div>
+                          <div className="space-y-1.5 sm:space-y-2">
+                            <label className="text-sm font-bold text-gray-700 flex items-center">
+                              <SchoolIcon size={14} className="mr-1 text-brand-blue shrink-0" /> Třída
+                            </label>
+                            <input
+                              required
+                              type="text"
+                              value={child.childClass}
+                              onChange={(e) => handleChildChange(child.id, 'childClass', e.target.value)}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue outline-none text-sm sm:text-base"
+                              placeholder="např. 3.A"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                          <div className="space-y-1.5 sm:space-y-2">
+                            <label className="text-sm font-bold text-gray-700 flex items-center">
+                              <Phone size={14} className="mr-1 text-brand-blue shrink-0" /> Telefonní číslo (nepovinné)
                             </label>
                             <input
                               type="tel"
                               value={child.childPhone}
                               onChange={(e) => handleChildChange(child.id, 'childPhone', e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue outline-none"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue outline-none text-sm sm:text-base"
                               placeholder="+420 123 456 789"
                             />
                           </div>
-                          <div className="space-y-2">
+                          <div className="space-y-1.5 sm:space-y-2">
                             <label className="text-sm font-bold text-gray-700 flex items-center">
-                              <SchoolIcon size={14} className="mr-1 text-brand-blue" /> Výběr kroužku
+                              <SchoolIcon size={14} className="mr-1 text-brand-blue shrink-0" /> Výběr kroužku
                             </label>
                             <select
                               required
                               value={child.schoolId}
                               onChange={(e) => handleChildChange(child.id, 'schoolId', e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue outline-none bg-white"
+                              className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue outline-none bg-white text-sm sm:text-base"
                             >
                               <option value="" disabled>Vyberte kroužek...</option>
                               {schools.map(s => (
@@ -304,7 +342,7 @@ const SchoolRegistrationForm: React.FC = () => {
                             className="w-4 h-4 text-brand-blue rounded border-gray-300 focus:ring-brand-blue"
                           />
                           <label htmlFor={`druzina-${child.id}`} className="ml-2 text-sm text-gray-700">
-                            Dítě navštěvuje školní družinu
+                            Vyzvednout dítě z družiny
                           </label>
                         </div>
                       </div>
@@ -341,6 +379,11 @@ const SchoolRegistrationForm: React.FC = () => {
                         Souhlasím s <a href="#" className="text-brand-blue hover:underline">obchodními podmínkami</a> a řádem tanečního klubu.
                       </span>
                     </label>
+                    <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200 mt-4">
+                      <p className="text-sm text-yellow-800">
+                        <strong>Upozornění:</strong> V případě, že kurzovné nebude zaplaceno ve správném termínu, bude pololetní cena kurzovného navýšena o 200 Kč.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -360,28 +403,28 @@ const SchoolRegistrationForm: React.FC = () => {
                   {children.map((child) => {
                     const childSchool = schools.find(s => s.id === child.schoolId);
                     const amount = childSchool ? parseFloat(childSchool.price.replace(/\s/g, '').replace('Kč', '')) || 0 : 0;
-                    const childQrData = `SPD*1.0*ACC:${BANK_INFO.iban}*AM:${amount}*CC:CZK*MSG:${child.childName} ${child.childBirthDate}`;
+                    const childQrData = `SPD*1.0*ACC:${BANK_INFO.iban}*AM:${amount}*CC:CZK*MSG:${child.childName} ${child.childSurname} ${child.childRodneCislo}`;
 
                     return (
-                      <div key={child.id} className="bg-gray-50 p-6 rounded-2xl border border-gray-200">
-                        <h4 className="font-bold text-gray-700 mb-4 border-b pb-2">Platba pro: {child.childName}</h4>
-                        <div className="flex flex-col md:flex-row gap-8 items-center">
-                          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                            <QRCodeSVG value={childQrData} size={160} />
+                      <div key={child.id} className="bg-gray-50 p-4 sm:p-6 rounded-2xl border border-gray-200">
+                        <h4 className="font-bold text-gray-700 mb-4 border-b pb-2 text-sm sm:text-base">Platba pro: {child.childName} {child.childSurname}</h4>
+                        <div className="flex flex-col sm:flex-row gap-6 sm:gap-8 items-center sm:items-start text-center sm:text-left">
+                          <div className="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-gray-100 shrink-0">
+                            <QRCodeSVG value={childQrData} size={140} />
                             <p className="text-[10px] text-center mt-2 text-gray-400 font-mono">SPAY QR PLATBA</p>
                           </div>
                           
-                          <div className="flex-1 space-y-4">
-                            <h4 className="font-bold text-gray-900 flex items-center">
-                              <CreditCard size={18} className="mr-2 text-brand-blue" /> Platební údaje (za 1. pololetí)
+                          <div className="flex-1 space-y-3 sm:space-y-4 w-full">
+                            <h4 className="font-bold text-gray-900 flex items-center justify-center sm:justify-start text-sm sm:text-base">
+                              <CreditCard size={18} className="mr-2 text-brand-blue shrink-0" /> Platební údaje (za 1. pololetí)
                             </h4>
-                            <div className="grid grid-cols-2 gap-y-2 text-sm">
+                            <div className="grid grid-cols-2 gap-y-2 text-xs sm:text-sm text-left">
                               <span className="text-gray-500">Číslo účtu:</span>
                               <span className="font-bold">{BANK_INFO.account}</span>
                               <span className="text-gray-500">Částka:</span>
                               <span className="font-bold text-brand-red">{amount} Kč</span>
                               <span className="text-gray-500">Zpráva pro příjemce:</span>
-                              <span className="font-bold">{child.childName} {child.childBirthDate}</span>
+                              <span className="font-bold break-all">{child.childName} {child.childSurname} {child.childRodneCislo}</span>
                             </div>
                           </div>
                         </div>
@@ -390,19 +433,19 @@ const SchoolRegistrationForm: React.FC = () => {
                   })}
                 </div>
 
-                <div className="bg-brand-blue/5 p-6 rounded-2xl border border-brand-blue/10">
-                  <h4 className="font-bold text-brand-blue mb-2">Vaše přístupové údaje do portálu</h4>
-                  <p className="text-sm text-gray-600 mb-4">
+                <div className="bg-brand-blue/5 p-4 sm:p-6 rounded-2xl border border-brand-blue/10">
+                  <h4 className="font-bold text-brand-blue mb-2 text-sm sm:text-base">Vaše přístupové údaje do portálu</h4>
+                  <p className="text-xs sm:text-sm text-gray-600 mb-4">
                     Tyto údaje slouží pro přihlášení do klientského portálu, kde můžete spravovat všechny přihlášené děti, stahovat faktury a psát omluvenky.
                   </p>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
                     <div className="bg-white p-3 rounded-lg border border-gray-200">
                       <span className="text-gray-400 block text-xs">Email (Váš login)</span>
-                      <span className="font-bold">{parentData.parentEmail}</span>
+                      <span className="font-bold text-sm sm:text-base break-all">{parentData.parentEmail}</span>
                     </div>
                     <div className="bg-white p-3 rounded-lg border border-gray-200">
                       <span className="text-gray-400 block text-xs">Heslo</span>
-                      <span className="font-bold font-mono tracking-wider">{registrationResult.password}</span>
+                      <span className="font-bold font-mono tracking-wider text-sm sm:text-base">{registrationResult.password}</span>
                     </div>
                   </div>
                 </div>

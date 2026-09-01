@@ -297,7 +297,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       addSchoolRegistration, updateSchoolRegistration,
       addUser, updateUser, deleteUser,
       addExcuse, updateAttendance,
-      toggleMerch, updateCampGeneralInfo, updateSiteContent,
+      toggleMerch, updateCampGeneralInfo,
       uploadFile
     }}>
       {children}

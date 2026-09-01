@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { Registration, Camp } from '../types';
-import { LogIn, User, FileText, CheckCircle, Clock, AlertCircle, LogOut, ChevronRight, Download } from 'lucide-react';
+import { LogIn, User, FileText, CheckCircle, Clock, AlertCircle, LogOut, ChevronRight, Download, ShieldCheck, Copy, Check } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { BANK_INFO } from '../constants';
 import { useNavigate } from 'react-router-dom';
+import { InsuranceConfirmationModal } from './InsuranceConfirmationModal';
 
 const ClientPortal: React.FC = () => {
   const navigate = useNavigate();
@@ -14,6 +15,14 @@ const ClientPortal: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState<Registration | null>(null);
   const [error, setError] = useState('');
+  const [showInsuranceModal, setShowInsuranceModal] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  const copyToClipboard = (text: string, field: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -203,6 +212,26 @@ const ClientPortal: React.FC = () => {
                       </div>
                     )}
 
+                    {/* Confirmation for Health Insurance / FKSP */}
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 rounded-xl bg-brand-blue text-white flex items-center justify-center shrink-0 shadow-sm">
+                          <ShieldCheck size={20} />
+                        </div>
+                        <div>
+                          <h5 className="font-bold text-gray-900 text-sm">Potvrzení pro zdravotní pojišťovnu / FKSP</h5>
+                          <p className="text-xs text-gray-500">Získejte příspěvek na tábor od vaší pojišťovny (až 1 500 Kč)</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setShowInsuranceModal(true)}
+                        className="bg-brand-blue hover:bg-blue-700 text-white text-xs sm:text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm flex items-center shrink-0 w-full sm:w-auto justify-center"
+                      >
+                        <FileText size={14} className="mr-1.5" />
+                        Zobrazit doklad
+                      </button>
+                    </div>
+
                     <div className="space-y-4">
                       <h5 className="font-bold text-sm text-gray-700">Dokumenty:</h5>
                       {currentUser.documents.length > 0 ? (
@@ -225,24 +254,69 @@ const ClientPortal: React.FC = () => {
 
                     {currentUser.status === 'pending_payment' && (
                       <div className="mt-8 pt-6 border-t border-gray-200">
-                        <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 mb-6">
-                          <h4 className="font-bold text-brand-blue mb-4">Platební údaje</h4>
+                        <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100 mb-6 shadow-sm">
+                          <h4 className="font-bold text-brand-blue text-base mb-4 flex items-center">
+                            <span>Platební údaje (převod / QR platba)</span>
+                          </h4>
                           <div className="flex flex-col md:flex-row gap-6 items-center">
-                            <div className="bg-white p-2 rounded-lg shadow-sm">
+                            <div className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center">
                               <QRCodeSVG 
                                 value={`SPD*1.0*ACC:${BANK_INFO.iban}*AM:${parseFloat(camp?.price.replace(/\s/g, '').replace('Kč', '') || '0')}*CC:CZK*MSG:${currentUser.childName} ${currentUser.childBirthDate}*VS:${camp?.variableSymbol || ''}`} 
-                                size={120} 
+                                size={130} 
                               />
+                              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-2">Naskenujte v bance</span>
                             </div>
-                            <div className="flex-1 grid grid-cols-2 gap-y-2 text-sm">
-                              <span className="text-gray-500">Číslo účtu:</span>
-                              <span className="font-bold">{BANK_INFO.account}</span>
-                              <span className="text-gray-500">Částka:</span>
-                              <span className="font-bold text-brand-red">{camp?.price}</span>
-                              <span className="text-gray-500">Variabilní symbol:</span>
-                              <span className="font-bold">{camp?.variableSymbol}</span>
-                              <span className="text-gray-500">Zpráva pro příjemce:</span>
-                              <span className="font-bold">{currentUser.childName} {currentUser.childBirthDate}</span>
+                            
+                            <div className="flex-1 w-full space-y-2.5 text-sm">
+                              <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-gray-100">
+                                <div>
+                                  <span className="text-xs text-gray-400 block font-medium">Číslo účtu</span>
+                                  <span className="font-bold text-gray-900">{BANK_INFO.account}</span>
+                                </div>
+                                <button
+                                  onClick={() => copyToClipboard(BANK_INFO.account, 'acc')}
+                                  className="text-xs font-bold text-brand-blue hover:text-blue-700 p-1.5 rounded-lg hover:bg-blue-50 transition-colors flex items-center"
+                                  title="Kopírovat číslo účtu"
+                                >
+                                  {copiedField === 'acc' ? <Check size={14} className="text-green-600 mr-1" /> : <Copy size={14} className="mr-1" />}
+                                  {copiedField === 'acc' ? 'Zkopírováno' : 'Kopírovat'}
+                                </button>
+                              </div>
+
+                              <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-gray-100">
+                                <div>
+                                  <span className="text-xs text-gray-400 block font-medium">Částka</span>
+                                  <span className="font-bold text-brand-red">{camp?.price}</span>
+                                </div>
+                                <button
+                                  onClick={() => copyToClipboard(camp?.price?.replace(/[^0-9]/g, '') || '', 'amount')}
+                                  className="text-xs font-bold text-brand-blue hover:text-blue-700 p-1.5 rounded-lg hover:bg-blue-50 transition-colors flex items-center"
+                                  title="Kopírovat částku"
+                                >
+                                  {copiedField === 'amount' ? <Check size={14} className="text-green-600 mr-1" /> : <Copy size={14} className="mr-1" />}
+                                  {copiedField === 'amount' ? 'Zkopírováno' : 'Kopírovat'}
+                                </button>
+                              </div>
+
+                              <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-gray-100">
+                                <div>
+                                  <span className="text-xs text-gray-400 block font-medium">Variabilní symbol</span>
+                                  <span className="font-bold text-gray-900">{camp?.variableSymbol}</span>
+                                </div>
+                                <button
+                                  onClick={() => copyToClipboard(camp?.variableSymbol || '', 'vs')}
+                                  className="text-xs font-bold text-brand-blue hover:text-blue-700 p-1.5 rounded-lg hover:bg-blue-50 transition-colors flex items-center"
+                                  title="Kopírovat VS"
+                                >
+                                  {copiedField === 'vs' ? <Check size={14} className="text-green-600 mr-1" /> : <Copy size={14} className="mr-1" />}
+                                  {copiedField === 'vs' ? 'Zkopírováno' : 'Kopírovat'}
+                                </button>
+                              </div>
+
+                              <div className="p-2.5 bg-white rounded-xl border border-gray-100">
+                                <span className="text-xs text-gray-400 block font-medium">Zpráva pro příjemce</span>
+                                <span className="font-bold text-gray-800 text-xs">{currentUser.childName} {currentUser.childBirthDate}</span>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -262,6 +336,27 @@ const ClientPortal: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Insurance Modal */}
+      {showInsuranceModal && currentUser && (
+        <InsuranceConfirmationModal
+          data={{
+            childName: currentUser.childName,
+            childBirthDate: currentUser.childBirthDate,
+            parentName: currentUser.parentName,
+            parentPhone: currentUser.parentPhone,
+            parentEmail: currentUser.parentEmail,
+            activityTitle: `Letní tábor: ${camp?.title || 'Olymp Dance'}`,
+            activityType: 'tabor',
+            location: camp?.location || 'Olomouc / Prostějov / Bílá',
+            periodOrDate: camp?.date || 'Léto 2026',
+            price: camp?.price || '0 Kč',
+            variableSymbol: camp?.variableSymbol,
+            paymentStatus: currentUser.status
+          }}
+          onClose={() => setShowInsuranceModal(false)}
+        />
+      )}
     </div>
   );
 };

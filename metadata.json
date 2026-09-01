@@ -1,5 +1,6 @@
 {
   "name": "Olymp Dance Olomouc",
-  "description": "Moderní webová prezentace pro taneční klub Olymp Dance Olomouc se zaměřením na taneční kroužky a letní tábory.",
-  "requestFramePermissions": []
+  "description": "Oficiální stránky tanečního klubu Olymp Dance Olomouc. Taneční kroužky na školách, letní tábory a moderní tanec pro děti.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

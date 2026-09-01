@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useData } from '../context/DataContext';
-import { Trash2, Plus, School as SchoolIcon, Tent, LogOut, Lock, Image as ImageIcon, Edit2, Save, X, ShoppingBag, ToggleLeft, ToggleRight, FileText, CheckCircle as CheckCircleIcon, Clock, AlertCircle, Mail, Users, Check, X as XIcon, Calendar, Info, LayoutDashboard, DollarSign, Users as UsersIcon } from 'lucide-react';
+import { Trash2, Plus, School as SchoolIcon, Tent, LogOut, Lock, Image as ImageIcon, Edit2, Save, X, ShoppingBag, ToggleLeft, ToggleRight, FileText, CheckCircle as CheckCircleIcon, Clock, AlertCircle, Mail, Users, Check, X as XIcon, Calendar, Info, LayoutDashboard, DollarSign, Users as UsersIcon, Download, Printer, Search, Filter, ShieldCheck } from 'lucide-react';
 import { School, Camp, Product, Registration, User, SchoolRegistration } from '../types';
+import { exportSchoolRegistrationsToCsv, exportCampRegistrationsToCsv } from '../utils/exportCsv';
+import { AttendanceSheetModal } from './AttendanceSheetModal';
+import { InsuranceConfirmationModal } from './InsuranceConfirmationModal';
 
 const Admin: React.FC = () => {
   const { users, addUser, updateUser, deleteUser, schools, schoolRegistrations, attendance, excuses, updateAttendance } = useData();
@@ -110,10 +113,10 @@ const Admin: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12">
+    <div className="min-h-screen bg-gray-50 py-6 sm:py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Správa obsahu</h1>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Správa obsahu</h1>
           <button 
             onClick={handleLogout}
             className="flex items-center text-gray-600 hover:text-red-600 transition-colors text-sm font-medium"
@@ -124,7 +127,7 @@ const Admin: React.FC = () => {
         </div>
 
         {/* Tabs */}
-        <div className="flex flex-wrap gap-2 mb-8 bg-white p-2 rounded-xl shadow-sm inline-flex">
+        <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-6 sm:mb-8 bg-white p-1.5 sm:p-2 rounded-xl shadow-sm w-full">
           {(currentUser?.role === 'admin' || currentUser?.role === undefined) && (
             <>
               <button
@@ -883,6 +886,10 @@ const RegistrationManager: React.FC = () => {
   const { registrations, camps, updateRegistration } = useData();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [adminNote, setAdminNote] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [campFilter, setCampFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [insuranceReg, setInsuranceReg] = useState<Registration | null>(null);
 
   const handleUpdateStatus = (id: string, status: Registration['status']) => {
     updateRegistration(id, { status });
@@ -892,6 +899,27 @@ const RegistrationManager: React.FC = () => {
     updateRegistration(id, { adminNote });
     setEditingId(null);
     setAdminNote('');
+  };
+
+  const filteredRegistrations = useMemo(() => {
+    return registrations.filter(reg => {
+      const camp = camps.find(c => c.id === reg.campId);
+      const matchesSearch = 
+        reg.childName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        reg.parentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        reg.parentEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        reg.parentPhone.includes(searchTerm) ||
+        (camp?.title || '').toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesCamp = campFilter === 'ALL' || reg.campId === campFilter;
+      const matchesStatus = statusFilter === 'ALL' || reg.status === statusFilter;
+
+      return matchesSearch && matchesCamp && matchesStatus;
+    });
+  }, [registrations, camps, searchTerm, campFilter, statusFilter]);
+
+  const handleExportCsv = () => {
+    exportCampRegistrationsToCsv(filteredRegistrations, camps);
   };
 
   const getStatusBadge = (status: Registration['status']) => {
@@ -911,9 +939,52 @@ const RegistrationManager: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Správa přihlášek</h2>
-        <div className="text-sm text-gray-500">Celkem: {registrations.length}</div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Správa přihlášek (Letní tábory)</h2>
+          <p className="text-sm text-gray-500">Zobrazeno {filteredRegistrations.length} z {registrations.length} přihlášek</p>
+        </div>
+        <button
+          onClick={handleExportCsv}
+          className="bg-brand-blue hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-xl text-sm transition-colors flex items-center shadow-sm self-start sm:self-auto"
+        >
+          <Download size={16} className="mr-2" /> Export do Excelu (CSV)
+        </button>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Hledat dítě, rodiče, telefon..."
+            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-blue outline-none"
+          />
+        </div>
+        <select
+          value={campFilter}
+          onChange={(e) => setCampFilter(e.target.value)}
+          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-blue outline-none bg-white"
+        >
+          <option value="ALL">Všechny tábory</option>
+          {camps.map(c => (
+            <option key={c.id} value={c.id}>{c.title}</option>
+          ))}
+        </select>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-blue outline-none bg-white"
+        >
+          <option value="ALL">Všechny stavy</option>
+          <option value="approved">Schváleno</option>
+          <option value="pending_payment">Čeká na platbu</option>
+          <option value="pending_approval">Čeká na schválení</option>
+          <option value="action_required">Vyžadována akce</option>
+        </select>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -929,12 +1000,12 @@ const RegistrationManager: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {registrations.length === 0 ? (
+              {filteredRegistrations.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-gray-500 italic">Zatím žádné přihlášky.</td>
+                  <td colSpan={5} className="px-6 py-12 text-center text-gray-500 italic">Nebyly nalezeny žádné přihlášky odpovídající filtrům.</td>
                 </tr>
               ) : (
-                registrations.map((reg) => {
+                filteredRegistrations.map((reg) => {
                   const camp = camps.find(c => c.id === reg.campId);
                   return (
                     <tr key={reg.id} className="hover:bg-gray-50 transition-colors">
@@ -942,6 +1013,9 @@ const RegistrationManager: React.FC = () => {
                         <div className="font-bold text-gray-900">{reg.childName}</div>
                         <div className="text-xs text-gray-500">{reg.childBirthDate}</div>
                         <div className="text-xs font-medium text-brand-blue mt-1">{camp?.title}</div>
+                        {camp?.variableSymbol && (
+                          <div className="text-[11px] text-gray-500 font-mono mt-0.5">VS: {camp.variableSymbol}</div>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm font-medium text-gray-900">{reg.parentName}</div>
@@ -979,7 +1053,7 @@ const RegistrationManager: React.FC = () => {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-2">
-                          <div className="flex gap-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <button 
                               onClick={() => handleUpdateStatus(reg.id, 'approved')}
                               className="p-1.5 bg-green-100 text-green-600 rounded hover:bg-green-200 transition-colors"
@@ -1000,9 +1074,16 @@ const RegistrationManager: React.FC = () => {
                                 setAdminNote(reg.adminNote || '');
                               }}
                               className="p-1.5 bg-blue-100 text-brand-blue rounded hover:bg-blue-200 transition-colors"
-                              title="Zpráva pro rodiče (zobrazí se v portálu)"
+                              title="Zpráva pro rodiče"
                             >
                               <Edit2 size={16} />
+                            </button>
+                            <button
+                              onClick={() => setInsuranceReg(reg)}
+                              className="p-1.5 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 transition-colors"
+                              title="Vystavit potvrzení pro pojišťovnu / FKSP"
+                            >
+                              <ShieldCheck size={16} />
                             </button>
                           </div>
                           
@@ -1049,6 +1130,27 @@ const RegistrationManager: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Insurance Modal */}
+      {insuranceReg && (
+        <InsuranceConfirmationModal
+          data={{
+            childName: insuranceReg.childName,
+            childBirthDate: insuranceReg.childBirthDate,
+            parentName: insuranceReg.parentName,
+            parentPhone: insuranceReg.parentPhone,
+            parentEmail: insuranceReg.parentEmail,
+            activityTitle: `Letní tábor: ${camps.find(c => c.id === insuranceReg.campId)?.title || 'Olymp Dance'}`,
+            activityType: 'tabor',
+            location: camps.find(c => c.id === insuranceReg.campId)?.location || 'Olomouc',
+            periodOrDate: camps.find(c => c.id === insuranceReg.campId)?.date || 'Léto 2026',
+            price: camps.find(c => c.id === insuranceReg.campId)?.price || '0 Kč',
+            variableSymbol: camps.find(c => c.id === insuranceReg.campId)?.variableSymbol,
+            paymentStatus: insuranceReg.status
+          }}
+          onClose={() => setInsuranceReg(null)}
+        />
+      )}
     </div>
   );
 };
@@ -1144,6 +1246,7 @@ const AttendanceManager: React.FC<{ currentUser: User | null }> = ({ currentUser
   const { schools, schoolRegistrations, attendance, updateAttendance, excuses } = useData();
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [expandedInfo, setExpandedInfo] = useState<string | null>(null);
+  const [showPrintSheet, setShowPrintSheet] = useState(false);
 
   if (!currentUser || currentUser.role !== 'trainer' || !currentUser.schoolId) {
     return <div>Nemáte přiřazenou žádnou školu.</div>;
@@ -1161,19 +1264,27 @@ const AttendanceManager: React.FC<{ currentUser: User | null }> = ({ currentUser
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-brand-blue text-white">
+      <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-brand-blue text-white">
         <div>
           <h2 className="text-xl font-bold">{school?.name}</h2>
-          <p className="text-blue-200 text-sm">{school?.day} {school?.time}</p>
+          <p className="text-blue-200 text-sm">{school?.day} {school?.time} ({school?.city})</p>
         </div>
-        <div className="flex items-center space-x-2">
-          <Calendar size={18} />
-          <input 
-            type="date" 
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="px-3 py-1 rounded bg-white/20 border-none outline-none text-white font-bold"
-          />
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => setShowPrintSheet(true)}
+            className="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition-colors flex items-center shadow-sm"
+          >
+            <Printer size={15} className="mr-1.5" /> Tisk listiny (PDF)
+          </button>
+          <div className="flex items-center space-x-2 bg-white/20 px-3 py-1 rounded-xl">
+            <Calendar size={16} />
+            <input 
+              type="date" 
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="bg-transparent border-none outline-none text-white font-bold text-xs"
+            />
+          </div>
         </div>
       </div>
 
@@ -1200,6 +1311,11 @@ const AttendanceManager: React.FC<{ currentUser: User | null }> = ({ currentUser
                           <Info size={16} />
                         </button>
                       </div>
+                      {student.afterSchoolClub && (
+                        <span className="inline-block mt-1 text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-bold">
+                          Školní družina
+                        </span>
+                      )}
                       {excuse && (
                         <p className="text-xs text-red-600 font-bold mt-1">
                           Omluvenka: {excuse.reason}
@@ -1234,6 +1350,14 @@ const AttendanceManager: React.FC<{ currentUser: User | null }> = ({ currentUser
           </div>
         )}
       </div>
+
+      {showPrintSheet && school && (
+        <AttendanceSheetModal
+          school={school}
+          registrations={students}
+          onClose={() => setShowPrintSheet(false)}
+        />
+      )}
     </div>
   );
 };
@@ -1245,6 +1369,11 @@ const SchoolRegistrationManager: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [adminNote, setAdminNote] = useState('');
   const [showHistoryFor, setShowHistoryFor] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [schoolFilter, setSchoolFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [selectedSchoolForSheet, setSelectedSchoolForSheet] = useState<School | null>(null);
+  const [insuranceReg, setInsuranceReg] = useState<SchoolRegistration | null>(null);
 
   const handleUpdateStatus = (id: string, status: SchoolRegistration['status']) => {
     updateSchoolRegistration(id, { status });
@@ -1254,6 +1383,28 @@ const SchoolRegistrationManager: React.FC = () => {
     updateSchoolRegistration(id, { adminNote });
     setEditingId(null);
     setAdminNote('');
+  };
+
+  const filteredRegistrations = useMemo(() => {
+    return schoolRegistrations.filter(reg => {
+      const school = schools.find(s => s.id === reg.schoolId);
+      const matchesSearch = 
+        reg.childName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        reg.parentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        reg.parentEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        reg.parentPhone.includes(searchTerm) ||
+        (school?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (school?.city || '').toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesSchool = schoolFilter === 'ALL' || reg.schoolId === schoolFilter;
+      const matchesStatus = statusFilter === 'ALL' || reg.status === statusFilter;
+
+      return matchesSearch && matchesSchool && matchesStatus;
+    });
+  }, [schoolRegistrations, schools, searchTerm, schoolFilter, statusFilter]);
+
+  const handleExportCsv = () => {
+    exportSchoolRegistrationsToCsv(filteredRegistrations, schools);
   };
 
   const getStatusBadge = (status: SchoolRegistration['status']) => {
@@ -1275,9 +1426,66 @@ const SchoolRegistrationManager: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Správa přihlášek (Kroužky)</h2>
-        <div className="text-sm text-gray-500">Celkem: {schoolRegistrations.length}</div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Správa přihlášek (Kroužky)</h2>
+          <p className="text-sm text-gray-500">Zobrazeno {filteredRegistrations.length} z {schoolRegistrations.length} přihlášek</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {schoolFilter !== 'ALL' && (
+            <button
+              onClick={() => {
+                const s = schools.find(item => item.id === schoolFilter);
+                if (s) setSelectedSchoolForSheet(s);
+              }}
+              className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-4 py-2 rounded-xl text-sm transition-colors flex items-center shadow-sm"
+            >
+              <Printer size={16} className="mr-2" /> Prezenční listina
+            </button>
+          )}
+          <button
+            onClick={handleExportCsv}
+            className="bg-brand-blue hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-xl text-sm transition-colors flex items-center shadow-sm"
+          >
+            <Download size={16} className="mr-2" /> Export do Excelu (CSV)
+          </button>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Hledat žáka, školu, město..."
+            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-blue outline-none"
+          />
+        </div>
+        <select
+          value={schoolFilter}
+          onChange={(e) => setSchoolFilter(e.target.value)}
+          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-blue outline-none bg-white"
+        >
+          <option value="ALL">Všechny školy a pobočky</option>
+          {schools.map(s => (
+            <option key={s.id} value={s.id}>{s.name} ({s.city})</option>
+          ))}
+        </select>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-blue outline-none bg-white"
+        >
+          <option value="ALL">Všechny stavy</option>
+          <option value="approved">Schváleno</option>
+          <option value="pending_payment">Čeká na platbu</option>
+          <option value="pending_approval">Čeká na schválení</option>
+          <option value="action_required">Vyžadována akce</option>
+          <option value="cancelled">Odhlášeno</option>
+        </select>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -1293,12 +1501,12 @@ const SchoolRegistrationManager: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {schoolRegistrations.length === 0 ? (
+              {filteredRegistrations.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-gray-500 italic">Zatím žádné přihlášky na kroužky.</td>
+                  <td colSpan={5} className="px-6 py-12 text-center text-gray-500 italic">Nebyly nalezeny žádné přihlášky na kroužky.</td>
                 </tr>
               ) : (
-                schoolRegistrations.map((reg) => {
+                filteredRegistrations.map((reg) => {
                   const school = schools.find(s => s.id === reg.schoolId);
                   const regExcuses = excuses.filter(e => e.registrationId === reg.id);
                   return (
@@ -1365,7 +1573,7 @@ const SchoolRegistrationManager: React.FC = () => {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-2">
-                          <div className="flex gap-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <button 
                               onClick={() => handleUpdateStatus(reg.id, 'approved')}
                               className="p-1.5 bg-green-100 text-green-600 rounded hover:bg-green-200 transition-colors"
@@ -1389,6 +1597,13 @@ const SchoolRegistrationManager: React.FC = () => {
                               title="Zpráva pro rodiče (zobrazí se v portálu)"
                             >
                               <Edit2 size={16} />
+                            </button>
+                            <button
+                              onClick={() => setInsuranceReg(reg)}
+                              className="p-1.5 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 transition-colors"
+                              title="Vystavit potvrzení pro pojišťovnu / FKSP"
+                            >
+                              <ShieldCheck size={16} />
                             </button>
                           </div>
                           
@@ -1435,6 +1650,35 @@ const SchoolRegistrationManager: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Sheet Modal */}
+      {selectedSchoolForSheet && (
+        <AttendanceSheetModal
+          school={selectedSchoolForSheet}
+          registrations={schoolRegistrations.filter(r => r.schoolId === selectedSchoolForSheet.id)}
+          onClose={() => setSelectedSchoolForSheet(null)}
+        />
+      )}
+
+      {/* Insurance Modal */}
+      {insuranceReg && (
+        <InsuranceConfirmationModal
+          data={{
+            childName: insuranceReg.childName,
+            childBirthDate: insuranceReg.childBirthDate,
+            parentName: insuranceReg.parentName,
+            parentPhone: insuranceReg.parentPhone,
+            parentEmail: insuranceReg.parentEmail,
+            activityTitle: `Taneční kroužek: ${schools.find(s => s.id === insuranceReg.schoolId)?.name || 'Kroužek'}`,
+            activityType: 'krouzek',
+            location: `${schools.find(s => s.id === insuranceReg.schoolId)?.name}, ${schools.find(s => s.id === insuranceReg.schoolId)?.city}`,
+            periodOrDate: 'Školní rok 2025/2026 (Pololetí)',
+            price: schools.find(s => s.id === insuranceReg.schoolId)?.price || '1 800 Kč',
+            paymentStatus: insuranceReg.status
+          }}
+          onClose={() => setInsuranceReg(null)}
+        />
+      )}
     </div>
   );
 };

@@ -1,3 +1,9 @@
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /webmaster
+Disallow: /portal
+Disallow: /portal-krouzky
+Disallow: /api/
+
 Sitemap: https://olympdance.cz/sitemap.xml

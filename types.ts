@@ -20,6 +20,7 @@ export interface Camp {
   price: string;
   description: string;
   image: string;
+  location?: string;
   externalUrl?: string;
   details?: string;
   variableSymbol?: string;
@@ -47,7 +48,10 @@ export interface SchoolRegistration {
   parentPhone: string;
   parentAddress: string;
   childName: string;
-  childBirthDate: string;
+  childSurname?: string;
+  childBirthDate?: string;
+  childRodneCislo?: string;
+  childClass?: string;
   childPhone?: string;
   afterSchoolClub?: boolean;
   status: RegistrationStatus;

@@ -9,49 +9,49 @@ const About: React.FC = () => {
   const aboutText = siteContent?.aboutText || defaultAboutText;
 
   return (
-    <section className="py-12 bg-white overflow-hidden min-h-screen">
+    <section className="py-8 sm:py-12 bg-white overflow-hidden min-h-screen">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Top Image Banner */}
         <RevealOnScroll>
-          <div className="relative rounded-2xl overflow-hidden shadow-xl mb-16 transform hover:scale-[1.01] transition-transform duration-700">
+          <div className="relative rounded-2xl overflow-hidden shadow-xl mb-8 sm:mb-16 transform hover:scale-[1.01] transition-transform duration-700">
              <img 
                src="https://static.wixstatic.com/media/93005c_4ab5a66bf36d4345a999b8a126bff477~mv2.jpg/v1/fill/w_1901,h_288,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/93005c_4ab5a66bf36d4345a999b8a126bff477~mv2.jpg" 
                alt="Taneční skupina Olymp Dance" 
-               className="w-full h-auto object-cover"
+               className="w-full h-48 sm:h-64 md:h-72 object-cover object-center"
              />
-             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex items-end">
-                <div className="p-8">
-                  <h2 className="text-white text-3xl md:text-4xl font-display font-bold">Jsme jeden tým</h2>
+             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent flex items-end">
+                <div className="p-5 sm:p-8">
+                  <h2 className="text-white text-2xl sm:text-3xl md:text-4xl font-display font-bold">Jsme jeden tým</h2>
                 </div>
              </div>
           </div>
         </RevealOnScroll>
 
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
+        <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 items-center">
           <RevealOnScroll className="h-full">
             <div>
-              <span className="text-brand-blue font-bold tracking-wider uppercase text-sm">O nás</span>
-              <h3 className="text-3xl md:text-4xl font-display font-bold text-gray-900 mt-2 mb-6">
+              <span className="text-brand-blue font-bold tracking-wider uppercase text-xs sm:text-sm">O nás</span>
+              <h3 className="text-2xl sm:text-3xl md:text-4xl font-display font-bold text-gray-900 mt-2 mb-4 sm:mb-6">
                 Více než jen taneční kroužek
               </h3>
-              <div className="space-y-6 text-gray-600 text-lg leading-relaxed" dangerouslySetInnerHTML={{ __html: aboutText.replace(/\n/g, '<br/>') }}>
+              <div className="space-y-4 sm:space-y-6 text-gray-600 text-base sm:text-lg leading-relaxed" dangerouslySetInnerHTML={{ __html: aboutText.replace(/\n/g, '<br/>') }}>
               </div>
               
-              <div className="mt-8 grid grid-cols-2 gap-4">
+              <div className="mt-6 sm:mt-8 grid grid-cols-2 gap-3 sm:gap-4">
                  <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-                    <h4 className="font-bold text-brand-blue text-xl mb-1">10+ let</h4>
-                    <p className="text-sm text-gray-600">Zkušeností s výukou</p>
+                    <h4 className="font-bold text-brand-blue text-lg sm:text-xl mb-1">10+ let</h4>
+                    <p className="text-xs sm:text-sm text-gray-600">Zkušeností s výukou</p>
                  </div>
                  <div className="bg-red-50 p-4 rounded-xl border border-red-100">
-                    <h4 className="font-bold text-brand-red text-xl mb-1">30+ škol</h4>
-                    <p className="text-sm text-gray-600">Kde působíme</p>
+                    <h4 className="font-bold text-brand-red text-lg sm:text-xl mb-1">30+ škol</h4>
+                    <p className="text-xs sm:text-sm text-gray-600">Kde působíme</p>
                  </div>
               </div>
             </div>
           </RevealOnScroll>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             {[
               { icon: Smile, title: "Radost z pohybu", text: "Tréninky vedené zábavnou formou přizpůsobenou věku dětí." },
               { icon: Users, title: "Skvělá parta", text: "Děti si najdou nové kamarády a učí se fungovat v kolektivu." },
@@ -59,12 +59,12 @@ const About: React.FC = () => {
               { icon: Heart, title: "Individuální přístup", text: "Každé dítě je pro nás jedinečné a podporujeme jeho talent." },
             ].map((item, idx) => (
               <RevealOnScroll key={idx} delay={idx * 100}>
-                <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100 hover:shadow-lg transition-shadow h-full">
-                  <div className="w-12 h-12 bg-brand-gray rounded-full flex items-center justify-center mb-4 text-brand-blue">
-                    <item.icon size={24} />
+                <div className="bg-white p-5 sm:p-6 rounded-xl shadow-md border border-gray-100 hover:shadow-lg transition-shadow h-full">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-brand-gray rounded-full flex items-center justify-center mb-3 sm:mb-4 text-brand-blue shrink-0">
+                    <item.icon size={22} className="sm:w-6 sm:h-6" />
                   </div>
-                  <h4 className="font-bold text-gray-900 mb-2">{item.title}</h4>
-                  <p className="text-sm text-gray-600">{item.text}</p>
+                  <h4 className="font-bold text-gray-900 mb-1.5 sm:mb-2 text-base sm:text-lg">{item.title}</h4>
+                  <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">{item.text}</p>
                 </div>
               </RevealOnScroll>
             ))}

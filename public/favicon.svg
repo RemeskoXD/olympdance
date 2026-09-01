@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#1e3a8a" />
+    </linearGradient>
+    <linearGradient id="redGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f87171" />
+      <stop offset="100%" stop-color="#d32f2f" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#000" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+  
+  <!-- Rounded Background Container -->
+  <rect width="512" height="512" rx="128" fill="#0f172a" />
+  
+  <!-- Dynamic Flame / Dancer Silhouette -->
+  <g filter="url(#shadow)" transform="translate(40, 20)">
+    <!-- Blue swoosh / body line -->
+    <path d="M160 380 C110 320 120 230 180 180 C210 155 240 160 220 210 C200 260 230 310 280 320 C340 332 370 280 380 230 C390 180 340 120 280 90 C340 110 410 180 390 270 C370 360 270 420 160 380 Z" fill="url(#blueGrad)" opacity="0.9" />
+    
+    <!-- Red Dynamic Flame / Wing -->
+    <path d="M230 80 C260 140 220 200 200 240 C190 260 180 290 190 320 C160 300 150 250 160 200 C170 150 210 100 230 80 Z" fill="url(#redGrad)" />
+    
+    <!-- Red Accent Top Swirl -->
+    <path d="M240 70 C280 110 290 170 250 220 C240 200 245 160 260 130 C270 110 260 90 240 70 Z" fill="#ef4444" />
+    
+    <!-- Golden Core Spark / Torch Star -->
+    <circle cx="235" cy="75" r="18" fill="#fbbf24" />
+  </g>
+  
+  <!-- Stylized O + Dance Lettering Emblem Outline -->
+  <circle cx="256" cy="256" r="216" fill="none" stroke="url(#blueGrad)" stroke-width="12" stroke-dasharray="240 40 80 40" stroke-linecap="round" opacity="0.6"/>
+</svg>

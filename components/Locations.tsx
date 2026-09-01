@@ -8,6 +8,8 @@ const Locations: React.FC = () => {
   const { schools } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [cityFilter, setCityFilter] = useState('Všechna města');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'elementary' | 'kindergarten'>('all');
+  const [dayFilter, setDayFilter] = useState('all');
   const [selectedSchool, setSelectedSchool] = useState<School | null>(null);
   const navigate = useNavigate();
 
@@ -23,7 +25,7 @@ const Locations: React.FC = () => {
     };
   }, [selectedSchool]);
 
-  // Extract unique cities for filter dropdown
+  // Extract unique cities for filter dropdown & chips
   const cities = useMemo(() => {
     const unique = new Set(schools.map(s => s.city));
     return ['Všechna města', ...Array.from(unique).sort()];
@@ -33,11 +35,26 @@ const Locations: React.FC = () => {
   const filteredSchools = useMemo(() => {
     return schools.filter(school => {
       const matchesSearch = school.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            school.city.toLowerCase().includes(searchTerm.toLowerCase());
+                            school.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            school.day.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCity = cityFilter === 'Všechna města' || school.city === cityFilter;
-      return matchesSearch && matchesCity;
+      const matchesType = typeFilter === 'all' || 
+                          (typeFilter === 'kindergarten' && school.isKindergarten) || 
+                          (typeFilter === 'elementary' && !school.isKindergarten);
+      const matchesDay = dayFilter === 'all' || school.day.toLowerCase() === dayFilter.toLowerCase();
+      
+      return matchesSearch && matchesCity && matchesType && matchesDay;
     });
-  }, [searchTerm, cityFilter, schools]);
+  }, [searchTerm, cityFilter, typeFilter, dayFilter, schools]);
+
+  const hasActiveFilters = searchTerm !== '' || cityFilter !== 'Všechna města' || typeFilter !== 'all' || dayFilter !== 'all';
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setCityFilter('Všechna města');
+    setTypeFilter('all');
+    setDayFilter('all');
+  };
 
   const openModal = (school: School) => {
     setSelectedSchool(school);
@@ -68,7 +85,7 @@ const Locations: React.FC = () => {
         </div>
 
         {/* Video Embed */}
-        <div className="max-w-4xl mx-auto mb-16 rounded-2xl overflow-hidden shadow-2xl bg-black">
+        <div className="max-w-4xl mx-auto mb-8 rounded-2xl overflow-hidden shadow-2xl bg-black">
           <div className="relative pb-[56.25%] h-0">
             <iframe 
               className="absolute top-0 left-0 w-full h-full"
@@ -79,6 +96,22 @@ const Locations: React.FC = () => {
               allowFullScreen
             ></iframe>
           </div>
+        </div>
+
+        {/* Action Button */}
+        <div className="text-center mb-16">
+          <button 
+            onClick={() => {
+              const element = document.getElementById('schools-list');
+              if (element) {
+                element.scrollIntoView({ behavior: 'smooth' });
+              }
+            }}
+            className="bg-brand-red text-white font-bold text-lg px-8 py-4 rounded-full shadow-lg hover:bg-red-700 hover:shadow-xl transition-all transform hover:-translate-y-1 inline-flex items-center"
+          >
+            Přihlásit do kroužku
+            <ArrowRight className="ml-2 w-5 h-5" />
+          </button>
         </div>
 
         {/* General Info Section */}
@@ -158,23 +191,31 @@ const Locations: React.FC = () => {
         </div>
 
         {/* Search and Filters */}
-        <div className="bg-white p-6 rounded-2xl shadow-lg mb-10 border border-gray-100 sticky top-24 z-30">
-          <div className="grid md:grid-cols-3 gap-4">
-            <div className="md:col-span-2 relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+        <div id="schools-list" className="bg-white p-4 sm:p-6 rounded-3xl shadow-xl mb-8 sm:mb-10 border border-gray-100 sticky top-16 sm:top-20 md:top-24 z-30 transition-all">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4">
+            <div className="sm:col-span-2 relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                 <Search className="h-5 w-5 text-gray-400" />
               </div>
               <input
                 type="text"
-                placeholder="Hledat školu (např. Hněvotín, Rožňavská...)"
-                className="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded-xl leading-5 bg-gray-50 placeholder-gray-500 focus:outline-none focus:bg-white focus:ring-2 focus:ring-brand-blue/50 focus:border-brand-blue transition duration-150 ease-in-out"
+                placeholder="Hledat školu, obec či lektora (např. Hněvotín, Rožňavská...)"
+                className="block w-full pl-11 pr-10 py-3 border border-gray-200 rounded-2xl leading-5 bg-gray-50 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition duration-150 ease-in-out text-sm sm:text-base"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
+              {searchTerm && (
+                <button 
+                  onClick={() => setSearchTerm('')}
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-gray-600"
+                >
+                  <X size={16} />
+                </button>
+              )}
             </div>
             <div className="relative">
                <select 
-                 className="block w-full pl-3 pr-10 py-3 border border-gray-200 rounded-xl leading-5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/50 focus:border-brand-blue"
+                 className="block w-full pl-4 pr-10 py-3 border border-gray-200 rounded-2xl leading-5 bg-gray-50 focus:outline-none focus:bg-white focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm sm:text-base font-medium cursor-pointer"
                  value={cityFilter}
                  onChange={(e) => setCityFilter(e.target.value)}
                >
@@ -182,6 +223,59 @@ const Locations: React.FC = () => {
                    <option key={city} value={city}>{city}</option>
                  ))}
                </select>
+            </div>
+          </div>
+
+          {/* Quick Filter Pills Row */}
+          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-3 border-t border-gray-100">
+            {/* Category / Type Filter */}
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mr-1 hidden sm:inline-block">Typ:</span>
+              <button
+                onClick={() => setTypeFilter('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+                  typeFilter === 'all'
+                    ? 'bg-brand-blue text-white shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Všechny školy
+              </button>
+              <button
+                onClick={() => setTypeFilter('elementary')}
+                className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+                  typeFilter === 'elementary'
+                    ? 'bg-brand-blue text-white shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Základní školy (ZŠ)
+              </button>
+              <button
+                onClick={() => setTypeFilter('kindergarten')}
+                className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+                  typeFilter === 'kindergarten'
+                    ? 'bg-brand-blue text-white shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Mateřské školy (MŠ)
+              </button>
+            </div>
+
+            {/* Results count & Clear button */}
+            <div className="flex items-center space-x-3 ml-auto text-xs sm:text-sm">
+              <span className="text-gray-500 font-medium">
+                Nalezeno: <strong className="text-brand-blue font-bold">{filteredSchools.length}</strong> z {schools.length}
+              </span>
+              {hasActiveFilters && (
+                <button
+                  onClick={resetFilters}
+                  className="text-brand-red font-bold hover:underline flex items-center gap-1"
+                >
+                  <X size={14} /> Vymazat filtry
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -198,12 +292,18 @@ const Locations: React.FC = () => {
             ))}
           </div>
         ) : (
-          <div className="text-center py-12">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
-              <Search className="w-8 h-8 text-gray-400" />
+          <div className="text-center py-16 bg-white rounded-3xl border border-gray-100 shadow-sm">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-50 text-brand-red mb-4">
+              <Search className="w-8 h-8" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900">Nenašli jsme žádnou školu</h3>
-            <p className="text-gray-500">Zkuste upravit hledání nebo vybrat jiné město.</p>
+            <h3 className="text-lg font-bold text-gray-900 mb-1">Nenašli jsme žádný odpovídající kroužek</h3>
+            <p className="text-gray-500 text-sm mb-4">Zkuste upravit hledaný výraz nebo vybrat jiné město či kategorii.</p>
+            <button
+              onClick={resetFilters}
+              className="bg-brand-blue text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors inline-flex items-center shadow-md"
+            >
+              Zobrazit všechny školy
+            </button>
           </div>
         )}
       </div>
@@ -221,53 +321,55 @@ const Locations: React.FC = () => {
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh]">
             
             {/* Header */}
-            <div className="bg-brand-blue p-6 md:p-8 text-white relative">
+            <div className="bg-brand-blue p-5 sm:p-6 md:p-8 text-white relative">
               <button 
                 onClick={closeModal}
                 className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors text-white"
               >
-                <X size={24} />
+                <X size={20} />
               </button>
-              <h3 className="text-2xl md:text-3xl font-bold font-display pr-10">{selectedSchool.name}</h3>
-              <div className="flex items-center mt-2 text-blue-100">
-                <MapPin size={18} className="mr-2" />
-                {selectedSchool.city}
-                <span className="ml-3 bg-white/20 px-2 py-0.5 rounded text-sm font-bold">
+              <h3 className="text-xl sm:text-2xl md:text-3xl font-bold font-display pr-8 sm:pr-10">{selectedSchool.name}</h3>
+              <div className="flex flex-wrap items-center gap-2 mt-2 text-blue-100">
+                <span className="flex items-center">
+                  <MapPin size={16} className="mr-1 sm:mr-2 shrink-0" />
+                  {selectedSchool.city}
+                </span>
+                <span className="bg-white/20 px-2 py-0.5 rounded text-xs sm:text-sm font-bold">
                   {selectedSchool.isKindergarten ? 'Mateřská škola' : 'Základní škola'}
                 </span>
               </div>
             </div>
 
             {/* Scrollable Content */}
-            <div className="p-6 md:p-8 overflow-y-auto">
+            <div className="p-5 sm:p-6 md:p-8 overflow-y-auto">
               
               {/* Specific Details Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex items-start">
-                   <div className="bg-white p-2 rounded-lg shadow-sm mr-4 text-brand-red">
-                      <Calendar size={24} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6 sm:mb-8">
+                <div className="bg-gray-50 p-3 sm:p-4 rounded-xl border border-gray-100 flex items-start">
+                   <div className="bg-white p-2 rounded-lg shadow-sm mr-3 sm:mr-4 text-brand-red shrink-0">
+                      <Calendar size={20} className="sm:w-6 sm:h-6" />
                    </div>
                    <div>
-                      <p className="text-sm text-gray-500 uppercase font-bold tracking-wider">Kdy</p>
-                      <p className="font-bold text-gray-900 text-lg">{formatDay(selectedSchool.day)}</p>
+                      <p className="text-xs sm:text-sm text-gray-500 uppercase font-bold tracking-wider">Kdy</p>
+                      <p className="font-bold text-gray-900 text-base sm:text-lg">{formatDay(selectedSchool.day)}</p>
                    </div>
                 </div>
-                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex items-start">
-                   <div className="bg-white p-2 rounded-lg shadow-sm mr-4 text-brand-blue">
-                      <Clock size={24} />
+                <div className="bg-gray-50 p-3 sm:p-4 rounded-xl border border-gray-100 flex items-start">
+                   <div className="bg-white p-2 rounded-lg shadow-sm mr-3 sm:mr-4 text-brand-blue shrink-0">
+                      <Clock size={20} className="sm:w-6 sm:h-6" />
                    </div>
                    <div>
-                      <p className="text-sm text-gray-500 uppercase font-bold tracking-wider">Čas</p>
-                      <p className="font-bold text-gray-900 text-lg">{selectedSchool.time}</p>
+                      <p className="text-xs sm:text-sm text-gray-500 uppercase font-bold tracking-wider">Čas</p>
+                      <p className="font-bold text-gray-900 text-base sm:text-lg">{selectedSchool.time}</p>
                    </div>
                 </div>
-                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex items-start md:col-span-2">
-                   <div className="bg-white p-2 rounded-lg shadow-sm mr-4 text-green-600">
-                      <Banknote size={24} />
+                <div className="bg-gray-50 p-3 sm:p-4 rounded-xl border border-gray-100 flex items-start sm:col-span-2">
+                   <div className="bg-white p-2 rounded-lg shadow-sm mr-3 sm:mr-4 text-green-600 shrink-0">
+                      <Banknote size={20} className="sm:w-6 sm:h-6" />
                    </div>
                    <div>
-                      <p className="text-sm text-gray-500 uppercase font-bold tracking-wider">Cena</p>
-                      <p className="font-bold text-gray-900 text-lg">{selectedSchool.price}</p>
+                      <p className="text-xs sm:text-sm text-gray-500 uppercase font-bold tracking-wider">Cena</p>
+                      <p className="font-bold text-gray-900 text-base sm:text-lg">{selectedSchool.price}</p>
                    </div>
                 </div>
               </div>
