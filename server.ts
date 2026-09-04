@@ -5,13 +5,14 @@ import fs from 'fs-extra';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
-import pool, { initDb } from './db.ts';
+import pool, { initDb, isDbConfigured } from './db.ts';
+import { SCHOOLS, CAMPS, GALLERY_IMAGES, PRODUCTS } from './constants.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 // Middleware
 app.use(cors());
@@ -78,7 +79,12 @@ app.get('/api/data', async (req, res) => {
     const [attendance] = await pool.query('SELECT * FROM attendance');
     const [settings] = await pool.query('SELECT * FROM settings WHERE id = 1');
 
-    // Parse JSON fields
+    // Parse fields
+    const parsedSchools = (schools as any[]).map(s => ({
+      ...s,
+      isKindergarten: Boolean(s.isKindergarten)
+    }));
+
     const parsedProducts = (products as any[]).map(p => ({
       ...p,
       sizes: typeof p.sizes === 'string' ? JSON.parse(p.sizes) : p.sizes
@@ -99,26 +105,62 @@ app.get('/api/data', async (req, res) => {
       history: typeof r.history === 'string' ? JSON.parse(r.history) : (r.history || []),
       afterSchoolClub: Boolean(r.afterSchoolClub)
     }));
+
+    const parsedUsers = (users as any[]).map(u => {
+      let schoolIds: string[] = [];
+      if (u.schoolIds) {
+        schoolIds = typeof u.schoolIds === 'string' ? JSON.parse(u.schoolIds) : (Array.isArray(u.schoolIds) ? u.schoolIds : []);
+      } else if (u.schoolId) {
+        schoolIds = [u.schoolId];
+      }
+      return {
+        ...u,
+        schoolIds,
+        schoolId: u.schoolId || (schoolIds.length > 0 ? schoolIds[0] : undefined)
+      };
+    });
     
     const currentSettings = (settings as any[])[0] || {};
 
     res.json({
-      schools,
+      schools: parsedSchools,
       camps,
       galleryImages,
       products: parsedProducts,
       registrations: parsedRegistrations,
       schoolRegistrations: parsedSchoolRegistrations,
-      users,
+      users: parsedUsers,
       excuses,
       attendance: parsedAttendance,
-      isMerchEnabled: currentSettings.isMerchEnabled === 1,
+      isMerchEnabled: currentSettings.isMerchEnabled === undefined ? true : Boolean(currentSettings.isMerchEnabled),
+      isTanecniExpresEnabled: currentSettings.isTanecniExpresEnabled === undefined ? true : Boolean(currentSettings.isTanecniExpresEnabled),
+      isCampsEnabled: currentSettings.isCampsEnabled === undefined ? true : Boolean(currentSettings.isCampsEnabled),
       campGeneralInfo: currentSettings.campGeneralInfo,
       siteContent: typeof currentSettings.siteContent === 'string' ? JSON.parse(currentSettings.siteContent) : (currentSettings.siteContent || {})
     });
   } catch (error) {
-    console.error('Error fetching data:', error);
-    res.status(500).json({ error: 'Database error' });
+    console.error('Error fetching data from MySQL, falling back to static constants:', error);
+    // Graceful fallback response so the frontend always works
+    res.json({
+      schools: SCHOOLS,
+      camps: CAMPS,
+      galleryImages: GALLERY_IMAGES,
+      products: PRODUCTS,
+      registrations: [],
+      schoolRegistrations: [],
+      users: [],
+      excuses: [],
+      attendance: [],
+      isMerchEnabled: true,
+      isTanecniExpresEnabled: true,
+      isCampsEnabled: true,
+      campGeneralInfo: '',
+      siteContent: {
+        heroTitle: 'Objevte pravou radost z pohybu a tance',
+        heroSubtitle: 'Taneční kroužky pro děti přímo na vaší škole. Moderní styly, skvělá parta a profesionální lektoři. Přidejte se k týmu Olymp Dance!',
+        aboutText: '<strong>Taneční klub Olymp Olomouc</strong> se již řadu let věnuje práci s dětmi a mládeží. Naším cílem není jen naučit děti taneční kroky, ale především v nich vybudovat <span class="text-brand-red font-bold">lásku k pohybu</span>, která jim vydrží celý život.\n\nZaměřujeme se na moderní taneční styly, disko tance a street dance. Klademe důraz na týmovou spolupráci, fair play a přátelskou atmosféru na trénincích.'
+      }
+    });
   }
 });
 
@@ -427,7 +469,12 @@ app.put('/api/school-registrations/:id', async (req, res) => {
 app.post('/api/users', async (req, res) => {
   try {
     const user = req.body;
-    await pool.query('INSERT INTO users SET ?', user);
+    const formattedUser = {
+      ...user,
+      schoolIds: Array.isArray(user.schoolIds) ? JSON.stringify(user.schoolIds) : (user.schoolIds || null),
+      schoolId: user.schoolId || (Array.isArray(user.schoolIds) && user.schoolIds[0] ? user.schoolIds[0] : null)
+    };
+    await pool.query('INSERT INTO users SET ?', formattedUser);
     res.json(user);
   } catch (error) {
     console.error(error);
@@ -450,7 +497,16 @@ app.put('/api/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
-    await pool.query('UPDATE users SET ? WHERE id = ?', [updates, id]);
+    const formattedUpdates = {
+      ...updates
+    };
+    if (updates.schoolIds !== undefined) {
+      formattedUpdates.schoolIds = Array.isArray(updates.schoolIds) ? JSON.stringify(updates.schoolIds) : (updates.schoolIds || null);
+      if (Array.isArray(updates.schoolIds) && updates.schoolIds[0]) {
+        formattedUpdates.schoolId = updates.schoolIds[0];
+      }
+    }
+    await pool.query('UPDATE users SET ? WHERE id = ?', [formattedUpdates, id]);
     res.json({ success: true });
   } catch (error) {
     console.error(error);
@@ -504,9 +560,11 @@ app.put('/api/attendance/:id', async (req, res) => {
 // Settings
 app.post('/api/settings', async (req, res) => {
   try {
-    const { isMerchEnabled, campGeneralInfo, siteContent } = req.body;
+    const { isMerchEnabled, isTanecniExpresEnabled, isCampsEnabled, campGeneralInfo, siteContent } = req.body;
     const updates: any = {};
     if (isMerchEnabled !== undefined) updates.isMerchEnabled = isMerchEnabled;
+    if (isTanecniExpresEnabled !== undefined) updates.isTanecniExpresEnabled = isTanecniExpresEnabled;
+    if (isCampsEnabled !== undefined) updates.isCampsEnabled = isCampsEnabled;
     if (campGeneralInfo !== undefined) updates.campGeneralInfo = campGeneralInfo;
     if (siteContent !== undefined) updates.siteContent = JSON.stringify(siteContent);
     

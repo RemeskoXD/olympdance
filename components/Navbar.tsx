@@ -9,7 +9,7 @@ const Navbar: React.FC = () => {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const { isMerchEnabled } = useData();
+  const { isMerchEnabled, isTanecniExpresEnabled, isCampsEnabled } = useData();
 
   // Close dropdown and mobile menu when route changes
   useEffect(() => {
@@ -31,8 +31,8 @@ const Navbar: React.FC = () => {
   const navLinks = [
     { path: '/', label: 'Domů', icon: Home },
     { path: '/tanecnikrouzky', label: 'Taneční Kroužky', icon: Music },
-    { path: '/tanecni-expres', label: 'Taneční Expres', icon: Sparkles },
-    { path: '/letnicampy', label: 'Letní Campy', icon: Sun },
+    ...(isTanecniExpresEnabled ? [{ path: '/tanecni-expres', label: 'Taneční Expres', icon: Sparkles }] : []),
+    ...(isCampsEnabled ? [{ path: '/letnicampy', label: 'Letní Campy', icon: Sun }] : []),
     { path: '/galerie', label: 'Galerie', icon: ImageIcon },
     { path: '/o-nas', label: 'O nás', icon: Users },
     { path: '/kontakt', label: 'Kontakt', icon: Phone },
@@ -89,7 +89,7 @@ const Navbar: React.FC = () => {
                 <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50 animate-fadeIn">
                   <NavLink 
                     to="/portal-krouzky" 
-                    className="block px-5 py-4 hover:bg-blue-50 hover:text-brand-blue border-b border-gray-100 transition-colors text-left"
+                    className={`block px-5 py-4 hover:bg-blue-50 hover:text-brand-blue ${isCampsEnabled ? 'border-b border-gray-100' : ''} transition-colors text-left`}
                     onClick={() => setIsDropdownOpen(false)}
                   >
                     <span className="font-bold text-base text-gray-900 block flex items-center gap-2">
@@ -98,17 +98,19 @@ const Navbar: React.FC = () => {
                     </span>
                     <span className="text-xs text-gray-500 block mt-0.5">Omluvenky a klientský přístup</span>
                   </NavLink>
-                  <NavLink 
-                    to="/portal" 
-                    className="block px-5 py-4 hover:bg-red-50 hover:text-brand-red transition-colors text-left"
-                    onClick={() => setIsDropdownOpen(false)}
-                  >
-                    <span className="font-bold text-base text-gray-900 block flex items-center gap-2">
-                      <Sun size={18} className="text-brand-red" />
-                      Portál Tábory
-                    </span>
-                    <span className="text-xs text-gray-500 block mt-0.5">Správa přihlášek na tábory</span>
-                  </NavLink>
+                  {isCampsEnabled && (
+                    <NavLink 
+                      to="/portal" 
+                      className="block px-5 py-4 hover:bg-red-50 hover:text-brand-red transition-colors text-left"
+                      onClick={() => setIsDropdownOpen(false)}
+                    >
+                      <span className="font-bold text-base text-gray-900 block flex items-center gap-2">
+                        <Sun size={18} className="text-brand-red" />
+                        Portál Tábory
+                      </span>
+                      <span className="text-xs text-gray-500 block mt-0.5">Správa přihlášek na tábory</span>
+                    </NavLink>
+                  )}
                 </div>
               )}
             </div>
@@ -158,7 +160,7 @@ const Navbar: React.FC = () => {
               <div className="px-2 pb-1 text-xs font-bold text-gray-400 uppercase tracking-wider">
                 Klientský portál &amp; Přihlášení
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className={`grid ${isCampsEnabled ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
                 <NavLink
                   to="/portal-krouzky"
                   onClick={handleMobileClick}
@@ -167,14 +169,16 @@ const Navbar: React.FC = () => {
                   <Music size={20} className="mb-1 text-brand-blue" />
                   <span>Kroužky portál</span>
                 </NavLink>
-                <NavLink
-                  to="/portal"
-                  onClick={handleMobileClick}
-                  className="flex flex-col items-center justify-center p-3 rounded-xl bg-red-50 hover:bg-red-100 text-brand-red font-bold text-sm transition-colors border border-red-100 text-center"
-                >
-                  <Sun size={20} className="mb-1 text-brand-red" />
-                  <span>Tábory portál</span>
-                </NavLink>
+                {isCampsEnabled && (
+                  <NavLink
+                    to="/portal"
+                    onClick={handleMobileClick}
+                    className="flex flex-col items-center justify-center p-3 rounded-xl bg-red-50 hover:bg-red-100 text-brand-red font-bold text-sm transition-colors border border-red-100 text-center"
+                  >
+                    <Sun size={20} className="mb-1 text-brand-red" />
+                    <span>Tábory portál</span>
+                  </NavLink>
+                )}
               </div>
             </div>
           </div>

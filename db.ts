@@ -1,46 +1,71 @@
 import mysql from 'mysql2/promise';
 import { SCHOOLS, CAMPS, GALLERY_IMAGES, PRODUCTS } from './constants.ts';
 
-const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-});
+function getPoolConfig() {
+  const connectionUrl = 
+    process.env.DATABASE_URL || 
+    process.env.DB_URL || 
+    process.env.MYSQL_URL || 
+    process.env.CLEARDB_DATABASE_URL || 
+    process.env.JAWSDB_URL;
+
+  if (connectionUrl) {
+    try {
+      const parsed = new URL(connectionUrl);
+      console.log(`Configuring MySQL connection from URL: host=${parsed.hostname}, user=${parsed.username}, db=${parsed.pathname.replace(/^\//, '')}`);
+      return {
+        host: parsed.hostname,
+        port: parsed.port ? parseInt(parsed.port, 10) : 3306,
+        user: decodeURIComponent(parsed.username || ''),
+        password: decodeURIComponent(parsed.password || ''),
+        database: parsed.pathname ? decodeURIComponent(parsed.pathname.replace(/^\//, '')) : 'RemeskoDEV_olymp',
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0,
+        connectTimeout: 10000,
+        enableKeepAlive: true,
+        keepAliveInitialDelay: 10000,
+        ssl: connectionUrl.includes('ssl=true') ? { rejectUnauthorized: false } : undefined
+      };
+    } catch (err) {
+      console.error('Failed to parse database connection URL, falling back to separate environment variables:', err);
+    }
+  }
+
+  return {
+    host: process.env.DB_HOST || 'databaze1.itnahodinu.cz',
+    user: process.env.DB_USER || 'RemeskoDEV_olymp',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'RemeskoDEV_olymp',
+    port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 3306,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    connectTimeout: 10000,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 10000
+  };
+}
+
+const pool = mysql.createPool(getPoolConfig());
+
+export const isDbConfigured = () => {
+  return Boolean(
+    process.env.DATABASE_URL ||
+    process.env.DB_URL ||
+    process.env.MYSQL_URL ||
+    (process.env.DB_HOST && process.env.DB_USER && process.env.DB_NAME)
+  );
+};
 
 export const initDb = async () => {
-  const connection = await pool.getConnection();
+  let connection: any = null;
   try {
-    console.log('Initializing database...');
+    console.log('Connecting to database...');
+    connection = await pool.getConnection();
+    console.log('Database connected successfully. Ensuring tables and 1:1 data synchronization...');
 
-    // Check if we need to migrate/reset tables due to schema changes
-    // We check for a column that should exist in the new schema but likely doesn't in the old one
-    let needReset = false;
-    try {
-      await connection.query('SELECT isKindergarten FROM schools LIMIT 1');
-      await connection.query('SELECT details FROM camps LIMIT 1');
-    } catch (err) {
-      console.log('Schema mismatch detected (missing columns), resetting tables...');
-      needReset = true;
-    }
-
-    if (needReset) {
-      await connection.query('DROP TABLE IF EXISTS schools');
-      await connection.query('DROP TABLE IF EXISTS camps');
-      await connection.query('DROP TABLE IF EXISTS gallery_images');
-      await connection.query('DROP TABLE IF EXISTS products');
-      // We don't drop registrations to be safe, but if schema changed there too, we might need to.
-      // For now, let's assume registrations is fine or we'll alter it if needed.
-      // Actually, let's drop registrations too since it's a dev environment and "no data" was reported.
-      await connection.query('DROP TABLE IF EXISTS registrations');
-      await connection.query('DROP TABLE IF EXISTS settings');
-    }
-
-    // Create tables with CORRECT schema matching types.ts and constants.ts
-
+    // 1. Schools table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS schools (
         id VARCHAR(255) PRIMARY KEY,
@@ -50,9 +75,13 @@ export const initDb = async () => {
         time VARCHAR(255) NOT NULL,
         price VARCHAR(255) NOT NULL,
         isKindergarten BOOLEAN DEFAULT FALSE
-      )
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+    try {
+      await connection.query('ALTER TABLE schools ADD COLUMN isKindergarten BOOLEAN DEFAULT FALSE');
+    } catch (e) {}
 
+    // 2. Camps table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS camps (
         id VARCHAR(255) PRIMARY KEY,
@@ -60,31 +89,44 @@ export const initDb = async () => {
         date VARCHAR(255) NOT NULL,
         price VARCHAR(255) NOT NULL,
         description TEXT,
-        image VARCHAR(255),
-        externalUrl VARCHAR(255),
+        image VARCHAR(500),
+        location VARCHAR(255),
+        externalUrl VARCHAR(500),
         details TEXT,
         variableSymbol VARCHAR(255)
-      )
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+    try {
+      await connection.query('ALTER TABLE camps ADD COLUMN location VARCHAR(255)');
+    } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE camps ADD COLUMN details TEXT');
+    } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE camps ADD COLUMN variableSymbol VARCHAR(255)');
+    } catch (e) {}
 
+    // 3. Gallery images table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS gallery_images (
         id VARCHAR(255) PRIMARY KEY,
-        url VARCHAR(255) NOT NULL,
+        url VARCHAR(500) NOT NULL,
         caption VARCHAR(255)
-      )
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    // 4. Products table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS products (
         id VARCHAR(255) PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         price VARCHAR(255) NOT NULL,
         description TEXT,
-        image VARCHAR(255)
-      )
+        image VARCHAR(500)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    // 5. Camp Registrations table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS registrations (
         id VARCHAR(255) PRIMARY KEY,
@@ -99,52 +141,57 @@ export const initDb = async () => {
         documents JSON,
         password VARCHAR(255),
         adminNote TEXT
-      )
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    // 6. School / Courses Registrations table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS school_registrations (
         id VARCHAR(255) PRIMARY KEY,
         schoolId VARCHAR(255) NOT NULL,
         childName VARCHAR(255) NOT NULL,
-        childBirthDate VARCHAR(255) NOT NULL,
+        childSurname VARCHAR(255),
+        childBirthDate VARCHAR(255),
+        childRodneCislo VARCHAR(255),
+        childClass VARCHAR(255),
+        childPhone VARCHAR(255),
         parentName VARCHAR(255) NOT NULL,
         parentEmail VARCHAR(255) NOT NULL,
         parentPhone VARCHAR(255) NOT NULL,
-        parentAddress VARCHAR(255) NOT NULL,
-        childPhone VARCHAR(255),
+        parentAddress VARCHAR(255) NOT NULL DEFAULT "",
+        afterSchoolClub BOOLEAN DEFAULT FALSE,
         status VARCHAR(255) NOT NULL,
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
         password VARCHAR(255),
         adminNote TEXT,
-        paidUntil DATETIME
-      )
+        paidUntil DATETIME,
+        history JSON
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
     try {
-      await connection.query('ALTER TABLE school_registrations ADD COLUMN parentAddress VARCHAR(255) NOT NULL DEFAULT ""');
-    } catch (e) {
-      // Column might already exist
-    }
-    
+      await connection.query('ALTER TABLE school_registrations ADD COLUMN childSurname VARCHAR(255)');
+    } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE school_registrations ADD COLUMN childRodneCislo VARCHAR(255)');
+    } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE school_registrations ADD COLUMN childClass VARCHAR(255)');
+    } catch (e) {}
     try {
       await connection.query('ALTER TABLE school_registrations ADD COLUMN childPhone VARCHAR(255)');
-    } catch (e) {
-      // Column might already exist
-    }
-
+    } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE school_registrations ADD COLUMN parentAddress VARCHAR(255) NOT NULL DEFAULT ""');
+    } catch (e) {}
     try {
       await connection.query('ALTER TABLE school_registrations ADD COLUMN afterSchoolClub BOOLEAN DEFAULT FALSE');
-    } catch (e) {
-      // Column might already exist
-    }
-
+    } catch (e) {}
     try {
       await connection.query('ALTER TABLE school_registrations ADD COLUMN history JSON');
-    } catch (e) {
-      // Column might already exist
-    }
+    } catch (e) {}
 
+    // 7. Users table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS users (
         id VARCHAR(255) PRIMARY KEY,
@@ -152,10 +199,16 @@ export const initDb = async () => {
         password VARCHAR(255) NOT NULL,
         role VARCHAR(50) NOT NULL,
         schoolId VARCHAR(255),
+        schoolIds JSON,
         name VARCHAR(255) NOT NULL
-      )
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    try {
+      await connection.query('ALTER TABLE users ADD COLUMN schoolIds JSON');
+    } catch (e) {}
+
+    // 8. Excuses table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS excuses (
         id VARCHAR(255) PRIMARY KEY,
@@ -164,125 +217,174 @@ export const initDb = async () => {
         date VARCHAR(255) NOT NULL,
         reason TEXT,
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    // 9. Attendance table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS attendance (
         id VARCHAR(255) PRIMARY KEY,
         schoolId VARCHAR(255) NOT NULL,
         date VARCHAR(255) NOT NULL,
         records JSON
-      )
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    // 10. Settings table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS settings (
         id INT PRIMARY KEY DEFAULT 1,
         isMerchEnabled BOOLEAN DEFAULT TRUE,
-        campGeneralInfo TEXT
-      )
+        isTanecniExpresEnabled BOOLEAN DEFAULT TRUE,
+        isCampsEnabled BOOLEAN DEFAULT TRUE,
+        campGeneralInfo TEXT,
+        siteContent JSON
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
-
+    try {
+      await connection.query('ALTER TABLE settings ADD COLUMN isTanecniExpresEnabled BOOLEAN DEFAULT TRUE');
+    } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE settings ADD COLUMN isCampsEnabled BOOLEAN DEFAULT TRUE');
+    } catch (e) {}
     try {
       await connection.query('ALTER TABLE settings ADD COLUMN siteContent JSON');
-    } catch (e) {
-      // Column might already exist
-    }
+    } catch (e) {}
 
-    // Seed data
-    
-    // Schools
-    const [schoolsRows] = await connection.query('SELECT COUNT(*) as count FROM schools');
-    console.log('Schools count:', (schoolsRows as any)[0].count);
-    if ((schoolsRows as any)[0].count === 0) {
-      console.log('Seeding schools...');
-      for (const school of SCHOOLS) {
-        // Ensure object matches schema
-        const sqlSchool = {
-            id: school.id,
-            name: school.name,
-            city: school.city,
-            day: school.day,
-            time: school.time,
-            price: school.price,
-            isKindergarten: school.isKindergarten || false
-        };
-        await connection.query('INSERT INTO schools SET ?', sqlSchool);
-      }
-    }
+    // ==========================================
+    // 1:1 Synchronization of Static Data to MySQL
+    // ==========================================
 
-    // Camps
-    const [campsRows] = await connection.query('SELECT COUNT(*) as count FROM camps');
-    if ((campsRows as any)[0].count === 0) {
-      console.log('Seeding camps...');
-      for (const camp of CAMPS) {
-        const sqlCamp = {
-            id: camp.id,
-            title: camp.title,
-            date: camp.date,
-            price: camp.price,
-            description: camp.description,
-            image: camp.image,
-            externalUrl: camp.externalUrl || null,
-            details: camp.details || null,
-            variableSymbol: camp.variableSymbol || null
-        };
-        await connection.query('INSERT INTO camps SET ?', sqlCamp);
-      }
+    // Schools (1:1 sync)
+    for (const school of SCHOOLS) {
+      await connection.query(`
+        INSERT INTO schools (id, name, city, day, time, price, isKindergarten) 
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE 
+          name = VALUES(name),
+          city = VALUES(city),
+          day = VALUES(day),
+          time = VALUES(time),
+          price = VALUES(price),
+          isKindergarten = VALUES(isKindergarten)
+      `, [
+        school.id,
+        school.name,
+        school.city,
+        school.day,
+        school.time,
+        school.price,
+        Boolean(school.isKindergarten)
+      ]);
     }
+    console.log(`1:1 Synced ${SCHOOLS.length} schools into database.`);
 
-    // Gallery
-    const [galleryRows] = await connection.query('SELECT COUNT(*) as count FROM gallery_images');
-    if ((galleryRows as any)[0].count === 0) {
-      console.log('Seeding gallery...');
-      for (const img of GALLERY_IMAGES) {
-        const sqlImg = {
-            id: img.id,
-            url: img.url,
-            caption: img.caption || null
-        };
-        await connection.query('INSERT INTO gallery_images SET ?', sqlImg);
-      }
+    // Camps (1:1 sync)
+    for (const camp of CAMPS) {
+      await connection.query(`
+        INSERT INTO camps (id, title, date, price, description, image, location, externalUrl, details, variableSymbol) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE 
+          title = VALUES(title),
+          date = VALUES(date),
+          price = VALUES(price),
+          description = VALUES(description),
+          image = VALUES(image),
+          location = VALUES(location),
+          externalUrl = VALUES(externalUrl),
+          details = VALUES(details),
+          variableSymbol = VALUES(variableSymbol)
+      `, [
+        camp.id,
+        camp.title,
+        camp.date,
+        camp.price,
+        camp.description || '',
+        camp.image || '',
+        camp.location || null,
+        camp.externalUrl || null,
+        camp.details || null,
+        camp.variableSymbol || null
+      ]);
     }
+    console.log(`1:1 Synced ${CAMPS.length} camps into database.`);
 
-    // Products
-    const [productsRows] = await connection.query('SELECT COUNT(*) as count FROM products');
-    if ((productsRows as any)[0].count === 0) {
-      console.log('Seeding products...');
-      for (const product of PRODUCTS) {
-        const sqlProduct = {
-            id: product.id,
-            name: product.name,
-            price: product.price,
-            description: product.description,
-            image: product.image
-        };
-        await connection.query('INSERT INTO products SET ?', sqlProduct);
-      }
+    // Gallery (1:1 sync)
+    for (const img of GALLERY_IMAGES) {
+      await connection.query(`
+        INSERT INTO gallery_images (id, url, caption) 
+        VALUES (?, ?, ?)
+        ON DUPLICATE KEY UPDATE 
+          url = VALUES(url),
+          caption = VALUES(caption)
+      `, [
+        img.id,
+        img.url,
+        img.caption || null
+      ]);
     }
+    console.log(`1:1 Synced ${GALLERY_IMAGES.length} gallery images into database.`);
 
-    // Settings
-    const [settingsRows] = await connection.query('SELECT COUNT(*) as count FROM settings');
+    // Products (1:1 sync)
+    for (const product of PRODUCTS) {
+      await connection.query(`
+        INSERT INTO products (id, name, price, description, image) 
+        VALUES (?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE 
+          name = VALUES(name),
+          price = VALUES(price),
+          description = VALUES(description),
+          image = VALUES(image)
+      `, [
+        product.id,
+        product.name,
+        product.price,
+        product.description || '',
+        product.image || ''
+      ]);
+    }
+    console.log(`1:1 Synced ${PRODUCTS.length} products into database.`);
+
+    // Settings (Ensure default row id=1 exists)
+    const [settingsRows] = await connection.query('SELECT COUNT(*) as count FROM settings WHERE id = 1');
     if ((settingsRows as any)[0].count === 0) {
-      console.log('Seeding settings...');
-      await connection.query('INSERT INTO settings (id, isMerchEnabled, campGeneralInfo) VALUES (1, TRUE, ?)', [
+      await connection.query(`
+        INSERT INTO settings (id, isMerchEnabled, campGeneralInfo, siteContent) 
+        VALUES (1, TRUE, ?, ?)
+      `, [
         `## Důležité informace
 - **Pojišťovna:** Na všechny naše tábory lze čerpat příspěvek od zdravotní pojišťovny.
 - **Bez mobilů:** Naše pobytové tábory jsou bez mobilních telefonů, aby si děti užily čas s kamarády naplno.
-- **Strava:** Zajišťujeme vyváženou stravu a pitný režim po celý den.`
+- **Strava:** Zajišťujeme vyváženou stravu a pitný režim po celý den.`,
+        JSON.stringify({
+          heroTitle: 'Objevte pravou radost z pohybu a tance',
+          heroSubtitle: 'Taneční kroužky pro děti přímo na vaší škole. Moderní styly, skvělá parta a profesionální lektoři. Přidejte se k týmu Olymp Dance!',
+          aboutText: '<strong>Taneční klub Olymp Olomouc</strong> se již řadu let věnuje práci s dětmi a mládeží. Naším cílem není jen naučit děti taneční kroky, ale především v nich vybudovat <span class="text-brand-red font-bold">lásku k pohybu</span>, která jim vydrží celý život.\n\nZaměřujeme se na moderní taneční styly, disko tance a street dance. Klademe důraz na týmovou spolupráci, fair play a přátelskou atmosféru na trénincích.'
+        })
       ]);
+      console.log('Created initial settings record in database.');
     }
 
-    // Fix for specific camps to remove externalUrl as requested
-    await connection.query("UPDATE camps SET externalUrl = NULL WHERE id IN ('c1', 'c4')");
+    // Users (Ensure default admin exists)
+    const [usersRows] = await connection.query('SELECT COUNT(*) as count FROM users');
+    if ((usersRows as any)[0].count === 0) {
+      await connection.query(`
+        INSERT INTO users (id, username, password, role, name) 
+        VALUES (?, ?, ?, ?, ?)
+      `, ['u_admin', 'admin', 'admin123', 'admin', 'Hlavní administrátor']);
+      console.log('Created default admin account (admin / admin123).');
+    }
 
-    console.log('Database initialization complete.');
+    console.log('MySQL Database 1:1 synchronization complete.');
 
   } catch (error) {
-    console.error('Database initialization failed:', error);
+    console.warn('Database initialization warning (will run with fallback if DB is unreachable):', error);
   } finally {
-    connection.release();
+    if (connection) {
+      try {
+        connection.release();
+      } catch (e) {}
+    }
   }
 };
 

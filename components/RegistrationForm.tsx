@@ -5,6 +5,7 @@ import { Camp } from '../types';
 import { ChevronRight, ChevronLeft, Upload, CheckCircle, CreditCard, User, Mail, Phone, Calendar as CalendarIcon } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { BANK_INFO } from '../constants';
+import { formatCampDate, formatCampVariableSymbol } from '../utils/schoolYear';
 
 const RegistrationForm: React.FC = () => {
   const { campId } = useParams<{ campId: string }>();
@@ -86,7 +87,8 @@ const RegistrationForm: React.FC = () => {
 
   // Generate QR code data (SPAY)
   const amount = parseFloat(camp.price.replace(/\s/g, '').replace('Kč', ''));
-  const qrData = `SPD*1.0*ACC:${BANK_INFO.iban}*AM:${amount}*CC:CZK*MSG:${formData.childName} ${formData.childBirthDate}*VS:${camp.variableSymbol || ''}`;
+  const activeVariableSymbol = formatCampVariableSymbol(camp.variableSymbol);
+  const qrData = `SPD*1.0*ACC:${BANK_INFO.iban}*AM:${amount}*CC:CZK*MSG:${formData.childName} ${formData.childBirthDate}*VS:${activeVariableSymbol || ''}`;
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">

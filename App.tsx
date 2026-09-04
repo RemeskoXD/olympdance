@@ -26,12 +26,24 @@ import { CONTACT_INFO } from './constants';
 
 // Component to handle scroll restoration and dynamic SEO
 const PageHandler = () => {
-  const { pathname } = useLocation();
+  const { pathname, hash } = useLocation();
 
   useEffect(() => {
-    // Scroll to top on route change
-    window.scrollTo(0, 0);
-  }, [pathname]);
+    if (hash) {
+      setTimeout(() => {
+        const id = hash.replace('#', '');
+        const element = document.getElementById(id);
+        if (element) {
+          const yOffset = -90;
+          const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+          window.scrollTo({ top: y, behavior: 'smooth' });
+        }
+      }, 100);
+    } else {
+      // Scroll to top on route change without hash
+      window.scrollTo(0, 0);
+    }
+  }, [pathname, hash]);
 
   const baseTitle = 'Olymp Dance Olomouc';
   const baseUrl = 'https://olympdance.cz';

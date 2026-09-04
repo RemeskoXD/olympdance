@@ -32,7 +32,7 @@ const Hero: React.FC = () => {
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center mb-10 sm:mb-12">
-          <Link to="/tanecnikrouzky" className="w-full sm:w-auto px-8 py-4 bg-brand-blue text-white rounded-xl font-bold text-base sm:text-lg hover:bg-blue-800 transition-all shadow-lg hover:shadow-brand-blue/30 flex items-center justify-center transform hover:-translate-y-1">
+          <Link to="/tanecnikrouzky#vyhledavac-skol" className="w-full sm:w-auto px-8 py-4 bg-brand-blue text-white rounded-xl font-bold text-base sm:text-lg hover:bg-blue-800 transition-all shadow-lg hover:shadow-brand-blue/30 flex items-center justify-center transform hover:-translate-y-1">
             Najít kroužek
             <ArrowRight className="ml-2 w-5 h-5" />
           </Link>

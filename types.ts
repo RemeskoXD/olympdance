@@ -69,7 +69,8 @@ export interface User {
   username: string;
   password?: string;
   role: 'admin' | 'trainer';
-  schoolId?: string; // For trainers
+  schoolId?: string; // For trainers (single / backward compatibility)
+  schoolIds?: string[]; // Multiple assigned schools for trainers
   name: string;
 }
 

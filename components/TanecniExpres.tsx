@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { Sparkles, Calendar, Users, Music, CheckCircle, Mail, Phone, MapPin, CheckCircle2 } from 'lucide-react';
+import { Sparkles, Calendar, Users, Music, CheckCircle, Mail, Phone, MapPin, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 
 const TanecniExpres: React.FC = () => {
-  const { uploadFile } = useData();
+  const navigate = useNavigate();
+  const { uploadFile, isTanecniExpresEnabled } = useData();
   const [formData, setFormData] = useState({
     name: '',
     surname: '',
@@ -15,6 +17,30 @@ const TanecniExpres: React.FC = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+
+  if (!isTanecniExpresEnabled) {
+    return (
+      <section className="py-16 sm:py-24 bg-gray-50 min-h-screen flex items-center justify-center">
+        <div className="max-w-xl mx-auto px-4 text-center">
+          <div className="w-16 h-16 sm:w-20 sm:h-20 bg-blue-100 text-brand-blue rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm">
+            <Sparkles size={36} />
+          </div>
+          <h2 className="text-2xl sm:text-3xl font-bold font-display text-gray-900 mb-3">
+            Taneční Expres
+          </h2>
+          <p className="text-gray-600 text-base sm:text-lg mb-8 leading-relaxed">
+            Program Taneční Expres je v tuto chvíli pozastaven. V případě zájmu nás neváhejte kontaktovat.
+          </p>
+          <button
+            onClick={() => navigate('/')}
+            className="inline-flex items-center bg-brand-blue hover:bg-blue-800 text-white font-bold px-6 py-3 rounded-full transition-all shadow-md"
+          >
+            <ArrowLeft size={18} className="mr-2" /> Zpět na hlavní stránku
+          </button>
+        </div>
+      </section>
+    );
+  }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;

@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useData } from '../context/DataContext';
-import { Trash2, Plus, School as SchoolIcon, Tent, LogOut, Lock, Image as ImageIcon, Edit2, Save, X, ShoppingBag, ToggleLeft, ToggleRight, FileText, CheckCircle as CheckCircleIcon, Clock, AlertCircle, Mail, Users, Check, X as XIcon, Calendar, Info, LayoutDashboard, DollarSign, Users as UsersIcon, Download, Printer, Search, Filter, ShieldCheck } from 'lucide-react';
+import { 
+  Trash2, Plus, School as SchoolIcon, Tent, LogOut, Lock, Image as ImageIcon, Edit2, Save, X, 
+  ShoppingBag, ToggleLeft, ToggleRight, FileText, CheckCircle as CheckCircleIcon, Clock, 
+  AlertCircle, Mail, Users, Check, X as XIcon, Calendar, Info, LayoutDashboard, DollarSign, 
+  Users as UsersIcon, Download, Printer, Search, Filter, ShieldCheck, ArrowLeft, ArrowRight, 
+  UserCheck, CheckSquare, Square, ChevronRight, Sparkles, MapPin, Building2, Phone, RotateCcw 
+} from 'lucide-react';
 import { School, Camp, Product, Registration, User, SchoolRegistration } from '../types';
 import { exportSchoolRegistrationsToCsv, exportCampRegistrationsToCsv } from '../utils/exportCsv';
 import { AttendanceSheetModal } from './AttendanceSheetModal';
@@ -253,7 +259,18 @@ const Admin: React.FC = () => {
 // --- Sub-components for better organization ---
 
 const DashboardManager: React.FC = () => {
-  const { schoolRegistrations, registrations, schools, camps } = useData();
+  const { 
+    schoolRegistrations, 
+    registrations, 
+    schools, 
+    camps, 
+    isTanecniExpresEnabled, 
+    toggleTanecniExpres, 
+    isCampsEnabled, 
+    toggleCamps, 
+    isMerchEnabled, 
+    toggleMerch 
+  } = useData();
 
   // Calculate stats
   const totalSchoolKids = schoolRegistrations.filter(r => r.status !== 'cancelled').length;
@@ -353,6 +370,81 @@ const DashboardManager: React.FC = () => {
           <div>
             <p className="text-sm text-gray-500 font-medium">Aktivní školy/tábory</p>
             <p className="text-2xl font-bold text-gray-900">{schools.length + camps.length}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Subpage Toggles */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+        <h3 className="font-bold text-lg text-gray-900 mb-4 pb-2 border-b">Aktivace a viditelnost podstránek</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          {/* Taneční expres toggle */}
+          <div className="flex flex-col justify-between p-4 rounded-xl border border-gray-100 bg-gray-50/60">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-bold text-gray-900">Taneční Expres</span>
+                <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${isTanecniExpresEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
+                  {isTanecniExpresEnabled ? 'Zapnuto' : 'Vypnuto'}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 mb-4">Zobrazuje položku Taneční Expres v navigaci a umožňuje přístup na stránku.</p>
+            </div>
+            <button
+              onClick={() => toggleTanecniExpres(!isTanecniExpresEnabled)}
+              className={`w-full py-2 px-3 rounded-lg font-bold text-sm flex items-center justify-center transition-all ${
+                isTanecniExpresEnabled 
+                  ? 'bg-red-50 text-brand-red hover:bg-red-100' 
+                  : 'bg-green-600 text-white hover:bg-green-700'
+              }`}
+            >
+              {isTanecniExpresEnabled ? 'Vypnout podstránku' : 'Zapnout podstránku'}
+            </button>
+          </div>
+
+          {/* Letní tábory toggle */}
+          <div className="flex flex-col justify-between p-4 rounded-xl border border-gray-100 bg-gray-50/60">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-bold text-gray-900">Letní Campy / Tábory</span>
+                <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${isCampsEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
+                  {isCampsEnabled ? 'Zapnuto' : 'Vypnuto'}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 mb-4">Zobrazuje Letní tábory v menu a na hlavní stránce, spravuje registrace.</p>
+            </div>
+            <button
+              onClick={() => toggleCamps(!isCampsEnabled)}
+              className={`w-full py-2 px-3 rounded-lg font-bold text-sm flex items-center justify-center transition-all ${
+                isCampsEnabled 
+                  ? 'bg-red-50 text-brand-red hover:bg-red-100' 
+                  : 'bg-green-600 text-white hover:bg-green-700'
+              }`}
+            >
+              {isCampsEnabled ? 'Vypnout podstránku' : 'Zapnout podstránku'}
+            </button>
+          </div>
+
+          {/* E-shop toggle */}
+          <div className="flex flex-col justify-between p-4 rounded-xl border border-gray-100 bg-gray-50/60">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-bold text-gray-900">E-shop / Merch</span>
+                <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${isMerchEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
+                  {isMerchEnabled ? 'Zapnuto' : 'Vypnuto'}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 mb-4">Zobrazuje odkaz na Merch v patičce a navigačním menu.</p>
+            </div>
+            <button
+              onClick={() => toggleMerch(!isMerchEnabled)}
+              className={`w-full py-2 px-3 rounded-lg font-bold text-sm flex items-center justify-center transition-all ${
+                isMerchEnabled 
+                  ? 'bg-red-50 text-brand-red hover:bg-red-100' 
+                  : 'bg-green-600 text-white hover:bg-green-700'
+              }`}
+            >
+              {isMerchEnabled ? 'Vypnout e-shop' : 'Zapnout e-shop'}
+            </button>
           </div>
         </div>
       </div>
@@ -539,7 +631,7 @@ const SchoolManager: React.FC = () => {
 };
 
 const CampManager: React.FC = () => {
-    const { camps, addCamp, updateCamp, deleteCamp, campGeneralInfo, updateCampGeneralInfo } = useData();
+    const { camps, addCamp, updateCamp, deleteCamp, campGeneralInfo, updateCampGeneralInfo, isCampsEnabled, toggleCamps } = useData();
     const [isEditing, setIsEditing] = useState<string | null>(null);
     const [formData, setFormData] = useState({ title: '', date: '', price: '', description: '', image: 'https://images.unsplash.com/photo-1547153760-18fc86324498?auto=format&fit=crop&q=80&w=800', externalUrl: '', details: '' });
     const [generalInfo, setGeneralInfo] = useState(campGeneralInfo);
@@ -587,6 +679,21 @@ const CampManager: React.FC = () => {
   
     return (
       <div className="space-y-8">
+        {/* Visibility Toggle */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center">
+           <div>
+               <h3 className="text-lg font-bold text-gray-900">Viditelnost podstránky Letní tábory</h3>
+               <p className="text-gray-500 text-sm">Pokud vypnete, odkaz zmizí z menu a na stránce táborů se zobrazí informace o ukončeném přihlašování.</p>
+           </div>
+           <button 
+             onClick={() => toggleCamps(!isCampsEnabled)}
+             className={`flex items-center px-4 py-2 rounded-full font-bold transition-all ${isCampsEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}
+           >
+               {isCampsEnabled ? <ToggleRight size={40} className="mr-2" /> : <ToggleLeft size={40} className="mr-2" />}
+               {isCampsEnabled ? 'Aktivní' : 'Vypnuto'}
+           </button>
+        </div>
+
         {/* General Info Editor */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
             <h3 className="text-lg font-bold text-gray-900 mb-4">Obecné informace na stránce Tábory</h3>
@@ -1156,87 +1263,382 @@ const RegistrationManager: React.FC = () => {
 };
 
 const UserManager: React.FC = () => {
-  const { users, addUser, deleteUser, schools } = useData();
+  const { users, addUser, updateUser, deleteUser, schools } = useData();
   const [isAdding, setIsAdding] = useState(false);
-  const [formData, setFormData] = useState({ username: '', password: '', role: 'trainer' as 'admin' | 'trainer', name: '', schoolId: '' });
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [schoolSearchTerm, setSchoolSearchTerm] = useState('');
+  const [formData, setFormData] = useState({ 
+    username: '', 
+    password: '', 
+    role: 'trainer' as 'admin' | 'trainer', 
+    name: '', 
+    schoolIds: [] as string[] 
+  });
+
+  const handleStartAdd = () => {
+    setEditingUserId(null);
+    setFormData({ username: '', password: '', role: 'trainer', name: '', schoolIds: [] });
+    setSchoolSearchTerm('');
+    setIsAdding(true);
+  };
+
+  const handleStartEdit = (user: User) => {
+    setEditingUserId(user.id);
+    let assignedIds: string[] = [];
+    if (user.schoolIds && user.schoolIds.length > 0) {
+      assignedIds = [...user.schoolIds];
+    } else if (user.schoolId) {
+      assignedIds = [user.schoolId];
+    }
+    setFormData({
+      username: user.username,
+      password: user.password || '',
+      role: user.role,
+      name: user.name,
+      schoolIds: assignedIds
+    });
+    setSchoolSearchTerm('');
+    setIsAdding(true);
+  };
+
+  const handleCancel = () => {
+    setIsAdding(false);
+    setEditingUserId(null);
+    setFormData({ username: '', password: '', role: 'trainer', name: '', schoolIds: [] });
+    setSchoolSearchTerm('');
+  };
+
+  const handleToggleSchool = (schoolId: string) => {
+    setFormData(prev => {
+      const exists = prev.schoolIds.includes(schoolId);
+      if (exists) {
+        return { ...prev, schoolIds: prev.schoolIds.filter(id => id !== schoolId) };
+      } else {
+        return { ...prev, schoolIds: [...prev.schoolIds, schoolId] };
+      }
+    });
+  };
+
+  const handleSelectAllFilteredSchools = (filteredIds: string[]) => {
+    setFormData(prev => {
+      const combined = Array.from(new Set([...prev.schoolIds, ...filteredIds]));
+      return { ...prev, schoolIds: combined };
+    });
+  };
+
+  const handleDeselectAllSchools = () => {
+    setFormData(prev => ({ ...prev, schoolIds: [] }));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    addUser(formData);
-    setFormData({ username: '', password: '', role: 'trainer', name: '', schoolId: '' });
-    setIsAdding(false);
+    if (formData.role === 'trainer' && formData.schoolIds.length === 0) {
+      if (!confirm('Trenérovi nebyla přiřazena žádná škola. Chcete přesto pokračovat?')) {
+        return;
+      }
+    }
+
+    const payload = {
+      username: formData.username,
+      password: formData.password,
+      role: formData.role,
+      name: formData.name,
+      schoolIds: formData.role === 'trainer' ? formData.schoolIds : [],
+      schoolId: formData.role === 'trainer' && formData.schoolIds.length > 0 ? formData.schoolIds[0] : ''
+    };
+
+    if (editingUserId) {
+      updateUser(editingUserId, payload);
+    } else {
+      addUser(payload);
+    }
+
+    handleCancel();
   };
+
+  const filteredSchoolsForPicker = useMemo(() => {
+    return schools.filter(s => 
+      s.name.toLowerCase().includes(schoolSearchTerm.toLowerCase()) ||
+      s.city.toLowerCase().includes(schoolSearchTerm.toLowerCase()) ||
+      s.day.toLowerCase().includes(schoolSearchTerm.toLowerCase())
+    );
+  }, [schools, schoolSearchTerm]);
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-        <h2 className="text-xl font-bold text-gray-900">Správa uživatelů</h2>
-        <button 
-          onClick={() => setIsAdding(!isAdding)}
-          className="bg-brand-blue text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors flex items-center"
-        >
-          {isAdding ? <X size={16} className="mr-2" /> : <Plus size={16} className="mr-2" />}
-          {isAdding ? 'Zrušit' : 'Přidat uživatele'}
-        </button>
+      <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">Správa uživatelů a trenérů</h2>
+          <p className="text-sm text-gray-500">Vytvářejte účty pro trenéry a přiřazujte jim jednu nebo více škol</p>
+        </div>
+        {!isAdding && (
+          <button 
+            onClick={handleStartAdd}
+            className="bg-brand-blue text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors flex items-center shadow-sm"
+          >
+            <Plus size={16} className="mr-2" /> Přidat nového uživatele
+          </button>
+        )}
       </div>
 
       {isAdding && (
-        <div className="p-6 bg-gray-50 border-b border-gray-100">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <input type="text" placeholder="Jméno (např. Jan Novák)" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="px-4 py-2 border border-gray-300 rounded-lg outline-none" required />
-              <input type="text" placeholder="Přihlašovací jméno" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} className="px-4 py-2 border border-gray-300 rounded-lg outline-none" required />
-              <input type="text" placeholder="Heslo" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="px-4 py-2 border border-gray-300 rounded-lg outline-none" required />
-              <select value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as any})} className="px-4 py-2 border border-gray-300 rounded-lg outline-none">
-                <option value="trainer">Trenér/ka</option>
-                <option value="admin">Administrátor</option>
-              </select>
-              {formData.role === 'trainer' && (
-                <select value={formData.schoolId} onChange={e => setFormData({...formData, schoolId: e.target.value})} className="px-4 py-2 border border-gray-300 rounded-lg outline-none" required>
-                  <option value="">Vyberte školu...</option>
-                  {schools.map(s => <option key={s.id} value={s.id}>{s.name} ({s.day})</option>)}
+        <div className="p-6 bg-gray-50/80 border-b border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-gray-900 flex items-center">
+              {editingUserId ? <Edit2 size={18} className="mr-2 text-brand-blue" /> : <Plus size={18} className="mr-2 text-brand-blue" />}
+              {editingUserId ? 'Upravit uživatele' : 'Přidat nového uživatele'}
+            </h3>
+            <button 
+              onClick={handleCancel}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Jméno a příjmení</label>
+                <input 
+                  type="text" 
+                  placeholder="např. Jan Novák" 
+                  value={formData.name} 
+                  onChange={e => setFormData({...formData, name: e.target.value})} 
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-brand-blue text-sm" 
+                  required 
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Přihlašovací jméno (login)</label>
+                <input 
+                  type="text" 
+                  placeholder="např. novak" 
+                  value={formData.username} 
+                  onChange={e => setFormData({...formData, username: e.target.value})} 
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-brand-blue text-sm" 
+                  required 
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Heslo</label>
+                <input 
+                  type="text" 
+                  placeholder="Zadejte heslo" 
+                  value={formData.password} 
+                  onChange={e => setFormData({...formData, password: e.target.value})} 
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-brand-blue text-sm font-mono" 
+                  required 
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Role uživatele</label>
+                <select 
+                  value={formData.role} 
+                  onChange={e => setFormData({...formData, role: e.target.value as any})} 
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-brand-blue text-sm font-medium"
+                >
+                  <option value="trainer">Trenér / Trenérka (Docházka)</option>
+                  <option value="admin">Administrátor (Plný přístup)</option>
                 </select>
-              )}
+              </div>
             </div>
-            <button type="submit" className="bg-brand-red text-white px-6 py-2 rounded-lg font-bold">Uložit uživatele</button>
+
+            {/* School Multi-selection for Trainers */}
+            {formData.role === 'trainer' && (
+              <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm space-y-3">
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 pb-2 border-b border-gray-100">
+                  <div>
+                    <span className="font-bold text-gray-900 text-sm flex items-center">
+                      <SchoolIcon size={16} className="mr-1.5 text-brand-blue" />
+                      Přiřadit školy trenérovi ({formData.schoolIds.length} vybráno)
+                    </span>
+                    <p className="text-xs text-gray-500">Trenér po přihlášení uvidí přehled svých škol a může mezi nimi jednoduše přepínat.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectAllFilteredSchools(filteredSchoolsForPicker.map(s => s.id))}
+                      className="text-xs bg-blue-50 text-brand-blue font-bold px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors"
+                    >
+                      Vybrat zobrazené
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDeselectAllSchools}
+                      className="text-xs bg-gray-100 text-gray-600 font-bold px-3 py-1.5 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      Odznačit vše
+                    </button>
+                  </div>
+                </div>
+
+                {/* Filter in schools picker */}
+                <div className="relative">
+                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Vyhledat školu podle názvu, města nebo dne..."
+                    value={schoolSearchTerm}
+                    onChange={e => setSchoolSearchTerm(e.target.value)}
+                    className="w-full pl-9 pr-3 py-1.5 text-xs border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-blue"
+                  />
+                </div>
+
+                {/* Schools Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-72 overflow-y-auto pr-1">
+                  {filteredSchoolsForPicker.map(s => {
+                    const isSelected = formData.schoolIds.includes(s.id);
+                    return (
+                      <div
+                        key={s.id}
+                        onClick={() => handleToggleSchool(s.id)}
+                        className={`p-3 rounded-xl border transition-all cursor-pointer flex items-start space-x-3 select-none ${
+                          isSelected 
+                            ? 'bg-blue-50/70 border-brand-blue text-gray-900 shadow-xs' 
+                            : 'bg-gray-50/60 border-gray-200 text-gray-700 hover:bg-gray-100/80'
+                        }`}
+                      >
+                        <div className="pt-0.5">
+                          {isSelected ? (
+                            <CheckSquare size={18} className="text-brand-blue" />
+                          ) : (
+                            <Square size={18} className="text-gray-400" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="font-bold text-xs truncate block">{s.name}</span>
+                            {s.isKindergarten && (
+                              <span className="text-[9px] bg-amber-100 text-amber-700 font-bold px-1.5 py-0.2 rounded shrink-0">MŠ</span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-gray-500 mt-0.5 flex items-center">
+                            <Clock size={11} className="mr-1 inline" /> {s.day} {s.time}
+                          </p>
+                          <p className="text-[10px] text-gray-400 mt-0.5">{s.city}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 pt-2">
+              <button 
+                type="submit" 
+                className="bg-brand-red hover:bg-red-700 text-white px-6 py-2.5 rounded-xl font-bold text-sm transition-colors shadow-sm flex items-center"
+              >
+                <Save size={16} className="mr-2" />
+                {editingUserId ? 'Uložit změny' : 'Vytvořit uživatele'}
+              </button>
+              <button 
+                type="button" 
+                onClick={handleCancel}
+                className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2.5 rounded-xl font-bold text-sm transition-colors"
+              >
+                Zrušit
+              </button>
+            </div>
           </form>
         </div>
       )}
 
       <div className="p-6">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="border-b border-gray-100">
-              <th className="py-3 font-bold text-gray-500 text-sm">Jméno</th>
-              <th className="py-3 font-bold text-gray-500 text-sm">Login</th>
-              <th className="py-3 font-bold text-gray-500 text-sm">Heslo</th>
-              <th className="py-3 font-bold text-gray-500 text-sm">Role</th>
-              <th className="py-3 font-bold text-gray-500 text-sm">Přiřazená škola</th>
-              <th className="py-3 font-bold text-gray-500 text-sm">Akce</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map(user => {
-              const school = schools.find(s => s.id === user.schoolId);
-              return (
-                <tr key={user.id} className="border-b border-gray-50 hover:bg-gray-50">
-                  <td className="py-3 font-medium">{user.name}</td>
-                  <td className="py-3 text-gray-500">{user.username}</td>
-                  <td className="py-3 text-gray-500 font-mono text-xs">{user.password}</td>
-                  <td className="py-3">
-                    <span className={`px-2 py-1 rounded text-xs font-bold ${user.role === 'admin' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
-                      {user.role === 'admin' ? 'Administrátor' : 'Trenér/ka'}
-                    </span>
-                  </td>
-                  <td className="py-3 text-gray-500">{school ? school.name : '-'}</td>
-                  <td className="py-3">
-                    <button onClick={() => deleteUser(user.id)} className="text-gray-400 hover:text-brand-red"><Trash2 size={18} /></button>
-                  </td>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50/50">
+                <th className="py-3 px-4 font-bold text-gray-500 text-xs uppercase">Jméno</th>
+                <th className="py-3 px-4 font-bold text-gray-500 text-xs uppercase">Login</th>
+                <th className="py-3 px-4 font-bold text-gray-500 text-xs uppercase">Heslo</th>
+                <th className="py-3 px-4 font-bold text-gray-500 text-xs uppercase">Role</th>
+                <th className="py-3 px-4 font-bold text-gray-500 text-xs uppercase">Přiřazené školy</th>
+                <th className="py-3 px-4 font-bold text-gray-500 text-xs uppercase text-right">Akce</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-gray-400 text-sm">Žádní uživatelé. Klikněte na tlačítko výše pro přidání.</td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              ) : (
+                users.map(user => {
+                  let userSchoolIds: string[] = [];
+                  if (user.schoolIds && user.schoolIds.length > 0) {
+                    userSchoolIds = user.schoolIds;
+                  } else if (user.schoolId) {
+                    userSchoolIds = [user.schoolId];
+                  }
+                  const userSchools = schools.filter(s => userSchoolIds.includes(s.id));
+
+                  return (
+                    <tr key={user.id} className="border-b border-gray-50 hover:bg-gray-50/80 transition-colors">
+                      <td className="py-3.5 px-4 font-bold text-gray-900 text-sm">{user.name}</td>
+                      <td className="py-3.5 px-4 text-gray-600 text-sm font-medium">{user.username}</td>
+                      <td className="py-3.5 px-4 text-gray-500 font-mono text-xs">{user.password || '••••••••'}</td>
+                      <td className="py-3.5 px-4">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold inline-flex items-center ${
+                          user.role === 'admin' 
+                            ? 'bg-red-100 text-red-700' 
+                            : 'bg-blue-100 text-blue-700'
+                        }`}>
+                          {user.role === 'admin' ? 'Administrátor' : 'Trenér/ka'}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-sm">
+                        {user.role === 'admin' ? (
+                          <span className="text-gray-400 text-xs italic">Všechny pravomoci (Admin)</span>
+                        ) : userSchools.length === 0 ? (
+                          <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded text-xs font-bold">Žádná škola nepřiřazena</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1 max-w-md">
+                            <span className="bg-brand-blue/10 text-brand-blue font-bold px-2 py-0.5 rounded text-xs">
+                              {userSchools.length} {userSchools.length === 1 ? 'škola' : userSchools.length < 5 ? 'školy' : 'škol'}
+                            </span>
+                            {userSchools.slice(0, 3).map(s => (
+                              <span key={s.id} className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded text-xs truncate max-w-[150px]" title={`${s.name} (${s.day})`}>
+                                {s.name}
+                              </span>
+                            ))}
+                            {userSchools.length > 3 && (
+                              <span className="text-xs text-gray-500 font-medium self-center">
+                                +{userSchools.length - 3} dalších
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4 text-right">
+                        <div className="flex items-center justify-end space-x-2">
+                          <button 
+                            onClick={() => handleStartEdit(user)} 
+                            className="p-1.5 text-gray-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Upravit uživatele a školy"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          <button 
+                            onClick={() => {
+                              if (confirm(`Opravdu chcete smazat uživatele ${user.name}?`)) {
+                                deleteUser(user.id);
+                              }
+                            }} 
+                            className="p-1.5 text-gray-400 hover:text-brand-red hover:bg-red-50 rounded-lg transition-colors"
+                            title="Smazat uživatele"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -1244,116 +1646,493 @@ const UserManager: React.FC = () => {
 
 const AttendanceManager: React.FC<{ currentUser: User | null }> = ({ currentUser }) => {
   const { schools, schoolRegistrations, attendance, updateAttendance, excuses } = useData();
+  const [selectedSchoolId, setSelectedSchoolId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [expandedInfo, setExpandedInfo] = useState<string | null>(null);
   const [showPrintSheet, setShowPrintSheet] = useState(false);
+  const [studentSearchTerm, setStudentSearchTerm] = useState('');
 
-  if (!currentUser || currentUser.role !== 'trainer' || !currentUser.schoolId) {
-    return <div>Nemáte přiřazenou žádnou školu.</div>;
-  }
+  // Extract all assigned schools for this trainer
+  const assignedSchools = useMemo(() => {
+    if (!currentUser) return [];
+    if (currentUser.role === 'admin') return schools; // Admins can view all schools
 
-  const school = schools.find(s => s.id === currentUser.schoolId);
-  const students = schoolRegistrations.filter(r => r.schoolId === currentUser.schoolId);
-  const currentAttendance = attendance.find(a => a.schoolId === currentUser.schoolId && a.date === selectedDate);
+    let assignedIds: string[] = [];
+    if (currentUser.schoolIds && currentUser.schoolIds.length > 0) {
+      assignedIds = currentUser.schoolIds;
+    } else if (currentUser.schoolId) {
+      assignedIds = [currentUser.schoolId];
+    }
+    return schools.filter(s => assignedIds.includes(s.id));
+  }, [currentUser, schools]);
+
+  // Active selected school object
+  const activeSchool = useMemo(() => {
+    if (!selectedSchoolId) return null;
+    return schools.find(s => s.id === selectedSchoolId) || null;
+  }, [selectedSchoolId, schools]);
+
+  const students = useMemo(() => {
+    if (!selectedSchoolId) return [];
+    return schoolRegistrations.filter(r => r.schoolId === selectedSchoolId && r.status !== 'cancelled');
+  }, [schoolRegistrations, selectedSchoolId]);
+
+  const filteredStudents = useMemo(() => {
+    if (!studentSearchTerm.trim()) return students;
+    return students.filter(s => 
+      s.childName.toLowerCase().includes(studentSearchTerm.toLowerCase()) ||
+      (s.childSurname && s.childSurname.toLowerCase().includes(studentSearchTerm.toLowerCase())) ||
+      s.parentName.toLowerCase().includes(studentSearchTerm.toLowerCase())
+    );
+  }, [students, studentSearchTerm]);
+
+  const currentAttendance = useMemo(() => {
+    if (!selectedSchoolId) return null;
+    return attendance.find(a => a.schoolId === selectedSchoolId && a.date === selectedDate);
+  }, [attendance, selectedSchoolId, selectedDate]);
+
   const records = currentAttendance?.records || {};
 
   const handleToggle = (studentId: string, isPresent: boolean) => {
+    if (!selectedSchoolId) return;
     const newRecords = { ...records, [studentId]: isPresent };
-    updateAttendance(currentUser.schoolId!, selectedDate, newRecords);
+    updateAttendance(selectedSchoolId, selectedDate, newRecords);
   };
 
-  return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-brand-blue text-white">
-        <div>
-          <h2 className="text-xl font-bold">{school?.name}</h2>
-          <p className="text-blue-200 text-sm">{school?.day} {school?.time} ({school?.city})</p>
+  const handleMarkAllPresent = () => {
+    if (!selectedSchoolId) return;
+    const newRecords: Record<string, boolean> = { ...records };
+    students.forEach(s => {
+      newRecords[s.id] = true;
+    });
+    updateAttendance(selectedSchoolId, selectedDate, newRecords);
+  };
+
+  const handleResetAttendance = () => {
+    if (!selectedSchoolId) return;
+    if (confirm('Opravdu chcete vyresetovat záznamy docházky pro tento den?')) {
+      updateAttendance(selectedSchoolId, selectedDate, {});
+    }
+  };
+
+  // If no schools assigned at all
+  if (assignedSchools.length === 0) {
+    return (
+      <div className="bg-white p-12 rounded-2xl shadow-sm border border-gray-100 text-center max-w-lg mx-auto">
+        <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-4">
+          <AlertCircle size={32} />
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={() => setShowPrintSheet(true)}
-            className="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition-colors flex items-center shadow-sm"
-          >
-            <Printer size={15} className="mr-1.5" /> Tisk listiny (PDF)
-          </button>
-          <div className="flex items-center space-x-2 bg-white/20 px-3 py-1 rounded-xl">
-            <Calendar size={16} />
-            <input 
-              type="date" 
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-transparent border-none outline-none text-white font-bold text-xs"
-            />
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Zatím nemáte přiřazenou žádnou školu</h2>
+        <p className="text-gray-500 text-sm mb-6">
+          Administrátor vám zatím nepřiřadil žádné taneční kroužky. Požádejte prosím vedení klubu o přiřazení vašich škol.
+        </p>
+      </div>
+    );
+  }
+
+  // --- SCREEN 1: SCHOOL SELECTION SCREEN (HUB) ---
+  if (!selectedSchoolId || !activeSchool) {
+    return (
+      <div className="space-y-6">
+        {/* Welcome Banner */}
+        <div className="bg-gradient-to-r from-brand-blue to-blue-900 rounded-2xl p-6 sm:p-8 text-white shadow-md relative overflow-hidden">
+          <div className="relative z-10">
+            <span className="inline-flex items-center px-3 py-1 rounded-full bg-white/20 text-xs font-bold text-blue-100 mb-3 backdrop-blur-xs">
+              <Sparkles size={14} className="mr-1.5" /> Portál trenéra Olymp Dance
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-black">
+              Vítejte, {currentUser?.name}!
+            </h2>
+            <p className="text-blue-100 text-sm sm:text-base mt-1 max-w-2xl">
+              Máte přiřazeno celkem <strong>{assignedSchools.length} {assignedSchools.length === 1 ? 'školu / kroužek' : assignedSchools.length < 5 ? 'školy / kroužky' : 'škol / kroužků'}</strong>. Vyberte školu, pro kterou chcete spravovat docházku žáků.
+            </p>
+          </div>
+          <div className="absolute right-0 bottom-0 translate-x-8 translate-y-8 opacity-10 pointer-events-none">
+            <SchoolIcon size={240} />
           </div>
         </div>
-      </div>
 
-      <div className="p-6">
-        {students.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">V této škole nejsou žádní přihlášení žáci.</p>
-        ) : (
-          <div className="space-y-4">
-            {students.map(student => {
-              const isPresent = records[student.id];
-              const excuse = excuses.find(e => e.registrationId === student.id && e.date === selectedDate);
+        {/* School Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {assignedSchools.map(school => {
+            const enrolledStudents = schoolRegistrations.filter(r => r.schoolId === school.id && r.status !== 'cancelled');
+            const todayStr = new Date().toISOString().split('T')[0];
+            const todayExcuses = excuses.filter(e => e.schoolId === school.id && e.date === todayStr);
 
-              return (
-                <div key={student.id} className="flex flex-col p-4 border border-gray-100 rounded-xl hover:bg-gray-50">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <h3 className="font-bold text-gray-900">{student.childName}</h3>
-                        <button 
-                          onClick={() => setExpandedInfo(expandedInfo === student.id ? null : student.id)}
-                          className="text-gray-400 hover:text-brand-blue transition-colors"
-                          title="Informace o rodičích"
-                        >
-                          <Info size={16} />
-                        </button>
-                      </div>
-                      {student.afterSchoolClub && (
-                        <span className="inline-block mt-1 text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-bold">
-                          Školní družina
-                        </span>
-                      )}
-                      {excuse && (
-                        <p className="text-xs text-red-600 font-bold mt-1">
-                          Omluvenka: {excuse.reason}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex space-x-2">
-                      <button 
-                        onClick={() => handleToggle(student.id, true)}
-                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isPresent === true ? 'bg-green-500 text-white shadow-md' : 'bg-gray-100 text-gray-400 hover:bg-green-100 hover:text-green-600'}`}
-                      >
-                        <Check size={20} />
-                      </button>
-                      <button 
-                        onClick={() => handleToggle(student.id, false)}
-                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isPresent === false ? 'bg-red-500 text-white shadow-md' : 'bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-red-600'}`}
-                      >
-                        <XIcon size={20} />
-                      </button>
-                    </div>
+            return (
+              <div 
+                key={school.id}
+                onClick={() => setSelectedSchoolId(school.id)}
+                className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md hover:border-brand-blue/50 transition-all cursor-pointer flex flex-col justify-between group relative overflow-hidden"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-blue-50 text-brand-blue flex items-center">
+                      <MapPin size={12} className="mr-1" /> {school.city}
+                    </span>
+                    {school.isKindergarten && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                        Mateřská škola
+                      </span>
+                    )}
                   </div>
-                  {expandedInfo === student.id && (
-                    <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg text-sm space-y-1">
-                      <p><span className="font-bold">Rodič:</span> {student.parentName}</p>
-                      <p><span className="font-bold">Telefon:</span> <a href={`tel:${student.parentPhone}`} className="text-brand-blue hover:underline">{student.parentPhone}</a></p>
-                      <p><span className="font-bold">Email:</span> <a href={`mailto:${student.parentEmail}`} className="text-brand-blue hover:underline">{student.parentEmail}</a></p>
+
+                  <h3 className="font-bold text-lg text-gray-900 group-hover:text-brand-blue transition-colors">
+                    {school.name}
+                  </h3>
+
+                  <div className="space-y-1.5 text-xs text-gray-600">
+                    <p className="flex items-center font-medium text-gray-800">
+                      <Calendar size={14} className="mr-2 text-brand-red shrink-0" />
+                      {school.day} &bull; {school.time}
+                    </p>
+                    <p className="flex items-center text-gray-500">
+                      <UsersIcon size={14} className="mr-2 text-gray-400 shrink-0" />
+                      <strong>{enrolledStudents.length}</strong> {enrolledStudents.length === 1 ? 'přihlášené dítě' : enrolledStudents.length < 5 ? 'přihlášené děti' : 'přihlášených dětí'}
+                    </p>
+                  </div>
+
+                  {todayExcuses.length > 0 && (
+                    <div className="p-2 bg-red-50 border border-red-100 rounded-xl text-xs text-red-700 font-bold flex items-center">
+                      <AlertCircle size={14} className="mr-1.5 shrink-0" />
+                      {todayExcuses.length} {todayExcuses.length === 1 ? 'omluvenka na dnešek' : 'omluvenky na dnešek'}
                     </div>
                   )}
                 </div>
-              );
-            })}
+
+                <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between">
+                  <span className="text-xs font-bold text-brand-blue flex items-center group-hover:translate-x-1 transition-transform">
+                    Otevřít docházku <ArrowRight size={14} className="ml-1" />
+                  </span>
+                  <div className="w-8 h-8 rounded-full bg-gray-100 group-hover:bg-brand-blue group-hover:text-white text-gray-500 flex items-center justify-center transition-colors">
+                    <ChevronRight size={16} />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // --- SCREEN 2: ACTIVE SCHOOL ATTENDANCE VIEW ---
+  // Count stats
+  const presentCount = students.filter(s => records[s.id] === true).length;
+  const absentCount = students.filter(s => records[s.id] === false).length;
+  const unmarkedCount = students.filter(s => records[s.id] === undefined).length;
+  const excusedCount = students.filter(s => {
+    return excuses.some(e => e.registrationId === s.id && e.date === selectedDate);
+  }).length;
+
+  return (
+    <div className="space-y-6">
+      {/* TOP NAVIGATION & SCHOOL SWITCHER BAR */}
+      <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => setSelectedSchoolId(null)}
+            className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center transition-colors shadow-xs"
+            title="Zpět na přehled všech mých škol"
+          >
+            <ArrowLeft size={16} className="mr-1.5 text-brand-blue" />
+            Všechny mé školy
+          </button>
+          
+          {/* Direct switcher dropdown */}
+          <div className="flex items-center space-x-2">
+            <span className="text-xs font-bold text-gray-400 hidden md:inline">Přepnout školu:</span>
+            <select
+              value={selectedSchoolId}
+              onChange={(e) => setSelectedSchoolId(e.target.value)}
+              className="bg-blue-50 border border-blue-200 text-brand-blue font-bold text-xs py-2 px-3 rounded-xl outline-none focus:ring-2 focus:ring-brand-blue cursor-pointer max-w-[220px] sm:max-w-xs truncate"
+            >
+              {assignedSchools.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.name} ({s.day} {s.time})
+                </option>
+              ))}
+            </select>
           </div>
-        )}
+        </div>
+
+        <div className="flex items-center gap-2 self-end sm:self-auto">
+          <button
+            onClick={() => setShowPrintSheet(true)}
+            className="px-3.5 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold transition-colors flex items-center border border-purple-200 shadow-xs"
+          >
+            <Printer size={15} className="mr-1.5" /> Tisk listiny (PDF)
+          </button>
+        </div>
       </div>
 
-      {showPrintSheet && school && (
+      {/* ACTIVE SCHOOL MAIN ATTENDANCE CARD */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        {/* Header with School Details and Date picker */}
+        <div className="p-6 bg-gradient-to-r from-brand-blue to-blue-900 text-white flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <div className="flex items-center space-x-2 mb-1">
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-white/20 font-bold backdrop-blur-xs">
+                {activeSchool.city}
+              </span>
+              {activeSchool.isKindergarten && (
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-400 text-amber-950 font-bold">
+                  Mateřská škola
+                </span>
+              )}
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black">{activeSchool.name}</h2>
+            <p className="text-blue-100 text-sm font-medium mt-0.5 flex items-center">
+              <Clock size={14} className="mr-1.5" />
+              {activeSchool.day} {activeSchool.time} &bull; Cena: {activeSchool.price}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 bg-white/10 p-2 rounded-2xl backdrop-blur-xs border border-white/20">
+            <button
+              onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])}
+              className={`text-xs px-3 py-1.5 rounded-xl font-bold transition-colors ${
+                selectedDate === new Date().toISOString().split('T')[0]
+                  ? 'bg-white text-brand-blue shadow-xs'
+                  : 'text-white/80 hover:bg-white/20'
+              }`}
+            >
+              Dnes
+            </button>
+            <div className="flex items-center space-x-2 bg-white/20 px-3 py-1.5 rounded-xl">
+              <Calendar size={15} className="text-white" />
+              <input 
+                type="date" 
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="bg-transparent border-none outline-none text-white font-bold text-xs"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Stats & Quick Action Bar */}
+        <div className="p-4 sm:p-5 bg-gray-50 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          {/* Stats Pills */}
+          <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
+            <span className="bg-white border border-gray-200 px-3 py-1.5 rounded-xl text-gray-700 shadow-xs">
+              Celkem: <strong>{students.length}</strong>
+            </span>
+            <span className="bg-green-100 border border-green-200 text-green-800 px-3 py-1.5 rounded-xl flex items-center shadow-xs">
+              <Check size={13} className="mr-1" /> Přítomno: <strong>{presentCount}</strong>
+            </span>
+            <span className="bg-red-100 border border-red-200 text-red-800 px-3 py-1.5 rounded-xl flex items-center shadow-xs">
+              <XIcon size={13} className="mr-1" /> Nepřítomno: <strong>{absentCount}</strong>
+            </span>
+            {excusedCount > 0 && (
+              <span className="bg-amber-100 border border-amber-200 text-amber-800 px-3 py-1.5 rounded-xl shadow-xs">
+                Omluveno: <strong>{excusedCount}</strong>
+              </span>
+            )}
+            {unmarkedCount > 0 && (
+              <span className="bg-gray-200 text-gray-600 px-3 py-1.5 rounded-xl">
+                Neoznačeno: <strong>{unmarkedCount}</strong>
+              </span>
+            )}
+          </div>
+
+          {/* Quick Mark Buttons */}
+          <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end">
+            <button
+              onClick={handleMarkAllPresent}
+              className="text-xs bg-green-600 hover:bg-green-700 text-white font-bold px-3.5 py-1.5 rounded-xl transition-colors flex items-center shadow-xs"
+            >
+              <Check size={14} className="mr-1" /> Všichni přítomni
+            </button>
+            <button
+              onClick={handleResetAttendance}
+              className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-600 font-bold px-2.5 py-1.5 rounded-xl transition-colors flex items-center"
+              title="Vynulovat docházku pro tento den"
+            >
+              <RotateCcw size={13} className="mr-1" /> Reset
+            </button>
+          </div>
+        </div>
+
+        {/* Search input for students */}
+        {students.length > 5 && (
+          <div className="px-6 pt-4">
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Hledat žáka podle jména nebo příjmení..."
+                value={studentSearchTerm}
+                onChange={e => setStudentSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-xs border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-blue"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Students List */}
+        <div className="p-6">
+          {students.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <Users size={40} className="mx-auto mb-2 text-gray-300" />
+              <p className="font-bold">V této škole zatím nejsou žádní přihlášení žáci.</p>
+            </div>
+          ) : filteredStudents.length === 0 ? (
+            <p className="text-center py-8 text-gray-400 text-sm">Hledanému výrazu neodpovídá žádný žák.</p>
+          ) : (
+            <div className="space-y-3">
+              {filteredStudents.map(student => {
+                const isPresent = records[student.id];
+                const excuse = excuses.find(e => e.registrationId === student.id && e.date === selectedDate);
+
+                return (
+                  <div 
+                    key={student.id} 
+                    className={`flex flex-col p-4 border rounded-2xl transition-all ${
+                      isPresent === true
+                        ? 'bg-green-50/40 border-green-200'
+                        : isPresent === false
+                        ? 'bg-red-50/40 border-red-200'
+                        : 'bg-white border-gray-100 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-2">
+                          <h3 className="font-bold text-gray-900 text-base">
+                            {student.childName} {student.childSurname || ''}
+                          </h3>
+                          <button 
+                            onClick={() => setExpandedInfo(expandedInfo === student.id ? null : student.id)}
+                            className={`p-1 rounded-lg transition-colors ${expandedInfo === student.id ? 'bg-blue-100 text-brand-blue' : 'text-gray-400 hover:text-brand-blue hover:bg-gray-100'}`}
+                            title="Kontakt na rodiče"
+                          >
+                            <Info size={16} />
+                          </button>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                          {student.childClass && (
+                            <span className="text-[10px] bg-gray-100 text-gray-700 px-2 py-0.5 rounded font-bold">
+                              Třída: {student.childClass}
+                            </span>
+                          )}
+                          {student.afterSchoolClub && (
+                            <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-bold">
+                              Školní družina
+                            </span>
+                          )}
+                          {student.childPhone && (
+                            <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-medium">
+                              Tel. dítěte: {student.childPhone}
+                            </span>
+                          )}
+                        </div>
+
+                        {excuse && (
+                          <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 font-medium">
+                            <span className="font-bold text-amber-800">Omluvenka od rodiče:</span> {excuse.reason}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Presence toggle buttons */}
+                      <div className="flex items-center space-x-2 shrink-0">
+                        <button 
+                          onClick={() => handleToggle(student.id, true)}
+                          className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold transition-all ${
+                            isPresent === true 
+                              ? 'bg-green-500 text-white shadow-md scale-105' 
+                              : 'bg-gray-100 text-gray-400 hover:bg-green-100 hover:text-green-600'
+                          }`}
+                          title="Označit jako přítomen"
+                        >
+                          <Check size={24} />
+                        </button>
+                        <button 
+                          onClick={() => handleToggle(student.id, false)}
+                          className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold transition-all ${
+                            isPresent === false 
+                              ? 'bg-red-500 text-white shadow-md scale-105' 
+                              : 'bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-red-600'
+                          }`}
+                          title="Označit jako nepřítomen"
+                        >
+                          <XIcon size={24} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Expandable parent contact drawer */}
+                    {expandedInfo === student.id && (
+                      <div className="mt-3 p-3.5 bg-blue-50/80 border border-blue-100 rounded-xl text-xs space-y-1.5 animate-fadeIn">
+                        <div className="flex justify-between items-center pb-1 border-b border-blue-100">
+                          <span className="font-bold text-blue-900">Kontaktní údaje rodiče</span>
+                          <span className="text-gray-500 text-[10px]">Přihlášeno: {new Date(student.createdAt).toLocaleDateString('cs-CZ')}</span>
+                        </div>
+                        <p><span className="font-bold text-gray-700">Jméno rodiče:</span> {student.parentName}</p>
+                        <p className="flex items-center">
+                          <span className="font-bold text-gray-700 mr-1.5">Telefon:</span>
+                          <a href={`tel:${student.parentPhone}`} className="text-brand-blue font-bold hover:underline flex items-center">
+                            <Phone size={12} className="mr-1" /> {student.parentPhone}
+                          </a>
+                        </p>
+                        <p className="flex items-center">
+                          <span className="font-bold text-gray-700 mr-1.5">E-mail:</span>
+                          <a href={`mailto:${student.parentEmail}`} className="text-brand-blue hover:underline flex items-center">
+                            <Mail size={12} className="mr-1" /> {student.parentEmail}
+                          </a>
+                        </p>
+                        {student.parentAddress && (
+                          <p><span className="font-bold text-gray-700">Adresa:</span> {student.parentAddress}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* BOTTOM SWITCHER BAR (DOLE) */}
+      <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div>
+          <span className="font-bold text-gray-900 text-sm block">Rychlý přechod na další školu</span>
+          <span className="text-xs text-gray-500">Můžete se kdykoliv vrátit na přehled všech škol nebo přepnout přímo.</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setSelectedSchoolId(null)}
+            className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold transition-colors flex items-center"
+          >
+            <ArrowLeft size={14} className="mr-1.5 text-brand-blue" />
+            Zpět na výběr mých škol
+          </button>
+          {assignedSchools
+            .filter(s => s.id !== selectedSchoolId)
+            .slice(0, 3)
+            .map(s => (
+              <button
+                key={s.id}
+                onClick={() => {
+                  setSelectedSchoolId(s.id);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="px-3 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-brand-blue text-xs font-bold transition-colors truncate max-w-[180px]"
+                title={`Přejít na ${s.name}`}
+              >
+                {s.name}
+              </button>
+            ))}
+        </div>
+      </div>
+
+      {/* Modal for Printing Attendance Sheet */}
+      {showPrintSheet && activeSchool && (
         <AttendanceSheetModal
-          school={school}
+          school={activeSchool}
           registrations={students}
           onClose={() => setShowPrintSheet(false)}
         />

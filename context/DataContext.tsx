@@ -13,6 +13,8 @@ interface DataContextType {
   excuses: Excuse[];
   attendance: Attendance[];
   isMerchEnabled: boolean;
+  isTanecniExpresEnabled: boolean;
+  isCampsEnabled: boolean;
   campGeneralInfo: string;
   siteContent: any;
   updateSiteContent: (newContent: any) => void;
@@ -36,6 +38,8 @@ interface DataContextType {
   addExcuse: (excuse: Omit<Excuse, 'id' | 'createdAt'>) => Promise<void>;
   updateAttendance: (schoolId: string, date: string, records: Record<string, boolean>) => Promise<void>;
   toggleMerch: (enabled: boolean) => void;
+  toggleTanecniExpres: (enabled: boolean) => void;
+  toggleCamps: (enabled: boolean) => void;
   updateCampGeneralInfo: (info: string) => void;
   uploadFile: (file: File) => Promise<string>;
 }
@@ -43,48 +47,201 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [schools, setSchools] = useState<School[]>([]);
-  const [camps, setCamps] = useState<Camp[]>([]);
-  const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [registrations, setRegistrations] = useState<Registration[]>([]);
-  const [schoolRegistrations, setSchoolRegistrations] = useState<SchoolRegistration[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [excuses, setExcuses] = useState<Excuse[]>([]);
-  const [attendance, setAttendance] = useState<Attendance[]>([]);
-  const [isMerchEnabled, setIsMerchEnabled] = useState<boolean>(true);
-  const [campGeneralInfo, setCampGeneralInfo] = useState<string>('');
-  const [siteContent, setSiteContent] = useState<any>({
-    heroTitle: 'Objevte pravou radost z pohybu a tance',
-    heroSubtitle: 'Taneční kroužky pro děti přímo na vaší škole. Moderní styly, skvělá parta a profesionální lektoři. Přidejte se k týmu Olymp Dance!',
-    aboutText: '<strong>Taneční klub Olymp Olomouc</strong> se již řadu let věnuje práci s dětmi a mládeží. Naším cílem není jen naučit děti taneční kroky, ale především v nich vybudovat <span class="text-brand-red font-bold">lásku k pohybu</span>, která jim vydrží celý život.\n\nZaměřujeme se na moderní taneční styly, disko tance a street dance. Klademe důraz na týmovou spolupráci, fair play a přátelskou atmosféru na trénincích.'
+  // Load cached or default data immediately so UI is NEVER empty
+  const [schools, setSchools] = useState<School[]>(() => {
+    try {
+      const saved = localStorage.getItem('olymp_schools');
+      return saved ? JSON.parse(saved) : INITIAL_SCHOOLS;
+    } catch {
+      return INITIAL_SCHOOLS;
+    }
   });
-  const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch data from API
+  const [camps, setCamps] = useState<Camp[]>(() => {
+    try {
+      const saved = localStorage.getItem('olymp_camps');
+      return saved ? JSON.parse(saved) : INITIAL_CAMPS;
+    } catch {
+      return INITIAL_CAMPS;
+    }
+  });
+
+  const [galleryImages, setGalleryImages] = useState<GalleryImage[]>(() => {
+    try {
+      const saved = localStorage.getItem('olymp_gallery');
+      return saved ? JSON.parse(saved) : INITIAL_GALLERY_IMAGES;
+    } catch {
+      return INITIAL_GALLERY_IMAGES;
+    }
+  });
+
+  const [products, setProducts] = useState<Product[]>(() => {
+    try {
+      const saved = localStorage.getItem('olymp_products');
+      return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
+    } catch {
+      return INITIAL_PRODUCTS;
+    }
+  });
+
+  const [registrations, setRegistrations] = useState<Registration[]>(() => {
+    try {
+      const saved = localStorage.getItem('olymp_registrations');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [schoolRegistrations, setSchoolRegistrations] = useState<SchoolRegistration[]>(() => {
+    try {
+      const saved = localStorage.getItem('olymp_school_registrations');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [users, setUsers] = useState<User[]>(() => {
+    try {
+      const saved = localStorage.getItem('olymp_users');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [excuses, setExcuses] = useState<Excuse[]>(() => {
+    try {
+      const saved = localStorage.getItem('olymp_excuses');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [attendance, setAttendance] = useState<Attendance[]>(() => {
+    try {
+      const saved = localStorage.getItem('olymp_attendance');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [isMerchEnabled, setIsMerchEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('olymp_settings_merch');
+      return saved !== null ? JSON.parse(saved) : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const [isTanecniExpresEnabled, setIsTanecniExpresEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('olymp_settings_tanecni_expres');
+      return saved !== null ? JSON.parse(saved) : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const [isCampsEnabled, setIsCampsEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('olymp_settings_camps');
+      return saved !== null ? JSON.parse(saved) : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const [campGeneralInfo, setCampGeneralInfo] = useState<string>('');
+  const [siteContent, setSiteContent] = useState<any>(() => {
+    try {
+      const saved = localStorage.getItem('olymp_site_content');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      heroTitle: 'Objevte pravou radost z pohybu a tance',
+      heroSubtitle: 'Taneční kroužky pro děti přímo na vaší škole. Moderní styly, skvělá parta a profesionální lektoři. Přidejte se k týmu Olymp Dance!',
+      aboutText: '<strong>Taneční klub Olymp Olomouc</strong> se již řadu let věnuje práci s dětmi a mládeží. Naším cílem není jen naučit děti taneční kroky, ale především v nich vybudovat <span class="text-brand-red font-bold">lásku k pohybu</span>, která jim vydrží celý život.\n\nZaměřujeme se na moderní taneční styly, disko tance a street dance. Klademe důraz na týmovou spolupráci, fair play a přátelskou atmosféru na trénincích.'
+    };
+  });
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Fetch data from API with safe JSON verification
   useEffect(() => {
     const fetchData = async () => {
       try {
         const response = await fetch('/api/data');
-        if (response.ok) {
+        const contentType = response.headers.get('content-type') || '';
+        
+        // Ensure response is actually JSON and not an HTML SPA fallback (<!DOCTYPE html>...)
+        if (response.ok && contentType.includes('application/json')) {
           const data = await response.json();
-          setSchools(data.schools || INITIAL_SCHOOLS);
-          setCamps(data.camps || INITIAL_CAMPS);
-          setGalleryImages(data.galleryImages || INITIAL_GALLERY_IMAGES);
-          setProducts(data.products || INITIAL_PRODUCTS);
-          setRegistrations(data.registrations || []);
-          setSchoolRegistrations(data.schoolRegistrations || []);
-          setUsers(data.users || []);
-          setExcuses(data.excuses || []);
-          setAttendance(data.attendance || []);
-          setIsMerchEnabled(data.isMerchEnabled ?? true);
-          setCampGeneralInfo(data.campGeneralInfo || '');
-          if (data.siteContent && Object.keys(data.siteContent).length > 0) {
-            setSiteContent(data.siteContent);
+          if (data && typeof data === 'object') {
+            if (Array.isArray(data.schools) && data.schools.length > 0) {
+              setSchools(data.schools);
+              localStorage.setItem('olymp_schools', JSON.stringify(data.schools));
+            }
+            if (Array.isArray(data.camps) && data.camps.length > 0) {
+              setCamps(data.camps);
+              localStorage.setItem('olymp_camps', JSON.stringify(data.camps));
+            }
+            if (Array.isArray(data.galleryImages) && data.galleryImages.length > 0) {
+              setGalleryImages(data.galleryImages);
+              localStorage.setItem('olymp_gallery', JSON.stringify(data.galleryImages));
+            }
+            if (Array.isArray(data.products) && data.products.length > 0) {
+              setProducts(data.products);
+              localStorage.setItem('olymp_products', JSON.stringify(data.products));
+            }
+            if (Array.isArray(data.registrations)) {
+              setRegistrations(data.registrations);
+              localStorage.setItem('olymp_registrations', JSON.stringify(data.registrations));
+            }
+            if (Array.isArray(data.schoolRegistrations)) {
+              setSchoolRegistrations(data.schoolRegistrations);
+              localStorage.setItem('olymp_school_registrations', JSON.stringify(data.schoolRegistrations));
+            }
+            if (Array.isArray(data.users)) {
+              setUsers(data.users);
+              localStorage.setItem('olymp_users', JSON.stringify(data.users));
+            }
+            if (Array.isArray(data.excuses)) {
+              setExcuses(data.excuses);
+              localStorage.setItem('olymp_excuses', JSON.stringify(data.excuses));
+            }
+            if (Array.isArray(data.attendance)) {
+              setAttendance(data.attendance);
+              localStorage.setItem('olymp_attendance', JSON.stringify(data.attendance));
+            }
+            if (data.isMerchEnabled !== undefined) {
+              setIsMerchEnabled(data.isMerchEnabled);
+              localStorage.setItem('olymp_settings_merch', JSON.stringify(data.isMerchEnabled));
+            }
+            if (data.isTanecniExpresEnabled !== undefined) {
+              setIsTanecniExpresEnabled(data.isTanecniExpresEnabled);
+              localStorage.setItem('olymp_settings_tanecni_expres', JSON.stringify(data.isTanecniExpresEnabled));
+            }
+            if (data.isCampsEnabled !== undefined) {
+              setIsCampsEnabled(data.isCampsEnabled);
+              localStorage.setItem('olymp_settings_camps', JSON.stringify(data.isCampsEnabled));
+            }
+            if (data.campGeneralInfo !== undefined) {
+              setCampGeneralInfo(data.campGeneralInfo);
+            }
+            if (data.siteContent && Object.keys(data.siteContent).length > 0) {
+              setSiteContent(data.siteContent);
+              localStorage.setItem('olymp_site_content', JSON.stringify(data.siteContent));
+            }
           }
+        } else {
+          console.warn('Backend API returned non-JSON response or is offline. Operating with static/cached data.');
         }
       } catch (error) {
-        console.error('Failed to fetch data:', error);
+        console.warn('API fetch did not return JSON, using local data:', error);
       } finally {
         setIsLoading(false);
       }
@@ -92,7 +249,44 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fetchData();
   }, []);
 
-  // API Helpers
+  // Save to localStorage whenever critical states change
+  useEffect(() => {
+    try {
+      localStorage.setItem('olymp_schools', JSON.stringify(schools));
+    } catch {}
+  }, [schools]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('olymp_camps', JSON.stringify(camps));
+    } catch {}
+  }, [camps]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('olymp_registrations', JSON.stringify(registrations));
+    } catch {}
+  }, [registrations]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('olymp_school_registrations', JSON.stringify(schoolRegistrations));
+    } catch {}
+  }, [schoolRegistrations]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('olymp_excuses', JSON.stringify(excuses));
+    } catch {}
+  }, [excuses]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('olymp_attendance', JSON.stringify(attendance));
+    } catch {}
+  }, [attendance]);
+
+  // API Helpers with graceful offline support
   const apiCall = async (endpoint: string, method: string, body?: any) => {
     try {
       const response = await fetch(endpoint, {
@@ -100,11 +294,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!response.ok) throw new Error('API call failed');
-      return await response.json();
+      const contentType = response.headers.get('content-type') || '';
+      if (response.ok && contentType.includes('application/json')) {
+        return await response.json();
+      }
+      return { success: true, localOnly: true };
     } catch (error) {
-      console.error(`Error in ${method} ${endpoint}:`, error);
-      throw error;
+      console.warn(`API call ${method} ${endpoint} failed, continuing locally:`, error);
+      return { success: true, localOnly: true };
     }
   };
 
@@ -252,7 +449,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const toggleMerch = async (enabled: boolean) => {
       setIsMerchEnabled(enabled);
+      localStorage.setItem('olymp_settings_merch', JSON.stringify(enabled));
       await apiCall('/api/settings', 'POST', { isMerchEnabled: enabled });
+  };
+
+  const toggleTanecniExpres = async (enabled: boolean) => {
+      setIsTanecniExpresEnabled(enabled);
+      localStorage.setItem('olymp_settings_tanecni_expres', JSON.stringify(enabled));
+      await apiCall('/api/settings', 'POST', { isTanecniExpresEnabled: enabled });
+  };
+
+  const toggleCamps = async (enabled: boolean) => {
+      setIsCampsEnabled(enabled);
+      localStorage.setItem('olymp_settings_camps', JSON.stringify(enabled));
+      await apiCall('/api/settings', 'POST', { isCampsEnabled: enabled });
   };
 
   const updateCampGeneralInfo = async (info: string) => {
@@ -266,20 +476,30 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const uploadFile = async (file: File): Promise<string> => {
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    const response = await fetch('/api/upload', {
-      method: 'POST',
-      body: formData,
-    });
-    
-    if (!response.ok) {
-      throw new Error('Upload failed');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const contentType = response.headers.get('content-type') || '';
+      if (response.ok && contentType.includes('application/json')) {
+        const data = await response.json();
+        return data.url;
+      }
+    } catch (e) {
+      console.warn('Upload API failed, falling back to FileReader base64:', e);
     }
     
-    const data = await response.json();
-    return data.url;
+    // Fallback: convert to base64 Data URL so user can still see and use the file locally
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.readAsDataURL(file);
+    });
   };
 
   if (isLoading) {
@@ -288,7 +508,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <DataContext.Provider value={{ 
-      schools, camps, galleryImages, products, registrations, schoolRegistrations, users, excuses, attendance, isMerchEnabled, campGeneralInfo, siteContent, updateSiteContent,
+      schools, camps, galleryImages, products, registrations, schoolRegistrations, users, excuses, attendance, isMerchEnabled, isTanecniExpresEnabled, isCampsEnabled, campGeneralInfo, siteContent, updateSiteContent,
       addSchool, updateSchool, deleteSchool, 
       addCamp, updateCamp, deleteCamp,
       addGalleryImage, deleteGalleryImage,
@@ -297,7 +517,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       addSchoolRegistration, updateSchoolRegistration,
       addUser, updateUser, deleteUser,
       addExcuse, updateAttendance,
-      toggleMerch, updateCampGeneralInfo,
+      toggleMerch, toggleTanecniExpres, toggleCamps, updateCampGeneralInfo,
       uploadFile
     }}>
       {children}

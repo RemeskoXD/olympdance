@@ -5,7 +5,7 @@ import { CONTACT_INFO } from '../constants';
 import { useData } from '../context/DataContext';
 
 const Footer: React.FC = () => {
-  const { isMerchEnabled } = useData();
+  const { isMerchEnabled, isTanecniExpresEnabled, isCampsEnabled } = useData();
   const currentVersion = document.querySelector('meta[name="app-version"]')?.getAttribute('content') || 'v1.0';
 
   const handleForceReload = () => {
@@ -48,7 +48,12 @@ const Footer: React.FC = () => {
             <h4 className="text-white font-bold mb-3 sm:mb-4 uppercase tracking-wider text-xs sm:text-sm">Rychlé odkazy</h4>
             <ul className="space-y-1 sm:space-y-2 text-xs sm:text-sm">
               <li><Link to="/tanecnikrouzky" className="hover:text-brand-red transition-colors block py-1 sm:py-1.5">Taneční kroužky</Link></li>
-              <li><Link to="/letnicampy" className="hover:text-brand-red transition-colors block py-1 sm:py-1.5">Letní tábory</Link></li>
+              {isTanecniExpresEnabled && (
+                <li><Link to="/tanecni-expres" className="hover:text-brand-red transition-colors block py-1 sm:py-1.5">Taneční Expres</Link></li>
+              )}
+              {isCampsEnabled && (
+                <li><Link to="/letnicampy" className="hover:text-brand-red transition-colors block py-1 sm:py-1.5">Letní tábory</Link></li>
+              )}
               <li><Link to="/galerie" className="hover:text-brand-red transition-colors block py-1 sm:py-1.5">Galerie</Link></li>
               <li><Link to="/o-nas" className="hover:text-brand-red transition-colors block py-1 sm:py-1.5">O nás</Link></li>
               <li><Link to="/kontakt" className="hover:text-brand-red transition-colors block py-1 sm:py-1.5">Kontakt</Link></li>

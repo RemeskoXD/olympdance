@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=olymp_user
+      - DB_PASSWORD=olymp_password
+      - DB_NAME=olympdance
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
+    depends_on:
+      - mysql
+    volumes:
+      - uploads_data:/app/uploads
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      - MYSQL_ROOT_PASSWORD=olymp_root_password
+      - MYSQL_DATABASE=olympdance
+      - MYSQL_USER=olymp_user
+      - MYSQL_PASSWORD=olymp_password
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  uploads_data:

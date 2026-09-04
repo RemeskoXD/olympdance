@@ -1,6 +1,7 @@
 /**
- * Utility functions for automatic school year calculations.
+ * Utility functions for automatic school year and camp season calculations.
  * In the Czech Republic, the school year changes every year on September 1st (1. 9.).
+ * Summer camp season switches to the upcoming year every year on August 28th (28. 8.).
  */
 
 export interface SchoolYearInfo {
@@ -61,3 +62,43 @@ export function getHeroEnrollmentText(date?: Date): string {
   }
   return `Nábor nových členů na školní rok ${info.full}`;
 }
+
+/**
+ * Returns the active summer camp season year.
+ * Every year on or after August 28th, the season transitions to the next year's summer camp.
+ * E.g.
+ * - On or after August 28, 2026 -> 2027
+ * - On or after August 28, 2027 -> 2028
+ */
+export function getCampSeasonYear(currentDate: Date = new Date()): number {
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth(); // 0-indexed: 0 = Jan, 7 = Aug, 8 = Sep
+  const day = currentDate.getDate();
+
+  // If on or after August 28th
+  if (month > 7 || (month === 7 && day >= 28)) {
+    return year + 1;
+  }
+  return year;
+}
+
+/**
+ * Format a camp date string dynamically so that any hardcoded year matches the active season year.
+ * e.g. "13.7. - 17.7. 2026" -> "13.7. - 17.7. 2027" (when active season year is 2027)
+ */
+export function formatCampDate(dateStr: string, currentDate?: Date): string {
+  if (!dateStr) return '';
+  const targetYear = getCampSeasonYear(currentDate);
+  // Replace any 4-digit 202x or 203x with the target season year
+  return dateStr.replace(/20[2-3]\d/g, String(targetYear));
+}
+
+/**
+ * Formats a variable symbol for camps to reflect the active season year (e.g. 2027001).
+ */
+export function formatCampVariableSymbol(vs?: string, currentDate?: Date): string {
+  if (!vs) return '';
+  const targetYear = getCampSeasonYear(currentDate);
+  return vs.replace(/^20[2-3]\d/, String(targetYear));
+}
+

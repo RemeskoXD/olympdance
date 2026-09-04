@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Search, MapPin, Calendar, Clock, Banknote, X, CheckCircle2, Shirt, Info, ArrowRight, Sparkles } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { School } from '../types';
 
@@ -12,6 +12,26 @@ const Locations: React.FC = () => {
   const [dayFilter, setDayFilter] = useState('all');
   const [selectedSchool, setSelectedSchool] = useState<School | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-scroll directly to the school search filter if requested
+  useEffect(() => {
+    if (location.hash === '#vyhledavac-skol' || location.hash === '#schools-list') {
+      const timer = setTimeout(() => {
+        const element = document.getElementById('vyhledavac-skol') || document.getElementById('schools-list');
+        if (element) {
+          const yOffset = -90; // offset for sticky navbar
+          const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+          window.scrollTo({ top: y, behavior: 'smooth' });
+          if (searchInputRef.current) {
+            searchInputRef.current.focus();
+          }
+        }
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [location.hash, location.key]);
 
   // Prevent body scroll when modal is open
   useEffect(() => {
@@ -70,6 +90,18 @@ const Locations: React.FC = () => {
     }
   };
 
+  const scrollToSearch = () => {
+    const element = document.getElementById('vyhledavac-skol') || document.getElementById('schools-list');
+    if (element) {
+      const yOffset = -90;
+      const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: y, behavior: 'smooth' });
+      if (searchInputRef.current) {
+        searchInputRef.current.focus();
+      }
+    }
+  };
+
   return (
     <section className="py-12 bg-gray-50 min-h-screen">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -78,44 +110,24 @@ const Locations: React.FC = () => {
           <h2 className="text-3xl md:text-4xl font-display font-bold text-gray-900 mt-2 mb-4">
             Taneční kroužky na školách
           </h2>
-          <p className="text-gray-600 max-w-2xl mx-auto mb-10">
+          <p className="text-gray-600 max-w-2xl mx-auto mb-6">
             Působíme na mnoha základních a mateřských školách v Olomouci a okolí. 
             Najděte tu nejbližší a přidejte se k nám.
           </p>
-        </div>
 
-        {/* Video Embed */}
-        <div className="max-w-4xl mx-auto mb-8 rounded-2xl overflow-hidden shadow-2xl bg-black">
-          <div className="relative pb-[56.25%] h-0">
-            <iframe 
-              className="absolute top-0 left-0 w-full h-full"
-              src="https://www.youtube.com/embed/wBi25-mTMrc" 
-              title="Olymp Dance - Taneční SHOW základních škol 3. ročník" 
-              frameBorder="0" 
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-              allowFullScreen
-            ></iframe>
+          <div className="flex justify-center mb-10">
+            <button 
+              onClick={scrollToSearch}
+              className="bg-brand-red text-white font-bold text-base sm:text-lg px-8 py-3.5 rounded-full shadow-lg hover:bg-red-700 hover:shadow-xl transition-all transform hover:-translate-y-1 inline-flex items-center"
+            >
+              Vyhledat moji školu
+              <ArrowRight className="ml-2 w-5 h-5" />
+            </button>
           </div>
         </div>
 
-        {/* Action Button */}
-        <div className="text-center mb-16">
-          <button 
-            onClick={() => {
-              const element = document.getElementById('schools-list');
-              if (element) {
-                element.scrollIntoView({ behavior: 'smooth' });
-              }
-            }}
-            className="bg-brand-red text-white font-bold text-lg px-8 py-4 rounded-full shadow-lg hover:bg-red-700 hover:shadow-xl transition-all transform hover:-translate-y-1 inline-flex items-center"
-          >
-            Přihlásit do kroužku
-            <ArrowRight className="ml-2 w-5 h-5" />
-          </button>
-        </div>
-
         {/* General Info Section */}
-        <div className="mb-16">
+        <div className="mb-12">
           <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
             <div className="grid lg:grid-cols-2">
               <div className="p-8 lg:p-10">
@@ -182,8 +194,13 @@ const Locations: React.FC = () => {
                     </ul>
                  </div>
                  <div className="mt-8 text-center">
-                    <p className="text-brand-blue font-bold mb-2">Vyberte si školu níže 👇</p>
-                    <p className="text-sm text-gray-500">Kliknutím na kartu školy zobrazíte detailní informace.</p>
+                    <button 
+                      onClick={scrollToSearch}
+                      className="text-brand-blue font-bold hover:underline inline-flex items-center text-base"
+                    >
+                      Přejít rovnou na vyhledávač škol 👇
+                    </button>
+                    <p className="text-xs text-gray-500 mt-1">Zadejte vaši školu nebo obec níže.</p>
                  </div>
               </div>
             </div>
@@ -191,40 +208,43 @@ const Locations: React.FC = () => {
         </div>
 
         {/* Search and Filters */}
-        <div id="schools-list" className="bg-white p-4 sm:p-6 rounded-3xl shadow-xl mb-8 sm:mb-10 border border-gray-100 sticky top-16 sm:top-20 md:top-24 z-30 transition-all">
+        <div id="vyhledavac-skol" className="scroll-mt-28 bg-white p-4 sm:p-6 rounded-3xl shadow-xl mb-8 sm:mb-10 border border-gray-100 sticky top-16 sm:top-20 md:top-24 z-30 transition-all">
+          <div id="schools-list" className="sr-only"></div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4">
-            <div className="sm:col-span-2 relative">
-              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-gray-400" />
+              <div className="sm:col-span-2 relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <Search className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  ref={searchInputRef}
+                  id="school-search-input"
+                  type="text"
+                  placeholder="Hledat školu, obec či den (např. Hněvotín, Rožňavská, Pondělí...)"
+                  className="block w-full pl-11 pr-10 py-3 border border-gray-200 rounded-2xl leading-5 bg-gray-50 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition duration-150 ease-in-out text-sm sm:text-base"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                {searchTerm && (
+                  <button 
+                    onClick={() => setSearchTerm('')}
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-gray-600"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
               </div>
-              <input
-                type="text"
-                placeholder="Hledat školu, obec či lektora (např. Hněvotín, Rožňavská...)"
-                className="block w-full pl-11 pr-10 py-3 border border-gray-200 rounded-2xl leading-5 bg-gray-50 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition duration-150 ease-in-out text-sm sm:text-base"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              {searchTerm && (
-                <button 
-                  onClick={() => setSearchTerm('')}
-                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-gray-600"
-                >
-                  <X size={16} />
-                </button>
-              )}
+              <div className="relative">
+                 <select 
+                   className="block w-full pl-4 pr-10 py-3 border border-gray-200 rounded-2xl leading-5 bg-gray-50 focus:outline-none focus:bg-white focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm sm:text-base font-medium cursor-pointer"
+                   value={cityFilter}
+                   onChange={(e) => setCityFilter(e.target.value)}
+                 >
+                   {cities.map(city => (
+                     <option key={city} value={city}>{city}</option>
+                   ))}
+                 </select>
+              </div>
             </div>
-            <div className="relative">
-               <select 
-                 className="block w-full pl-4 pr-10 py-3 border border-gray-200 rounded-2xl leading-5 bg-gray-50 focus:outline-none focus:bg-white focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm sm:text-base font-medium cursor-pointer"
-                 value={cityFilter}
-                 onChange={(e) => setCityFilter(e.target.value)}
-               >
-                 {cities.map(city => (
-                   <option key={city} value={city}>{city}</option>
-                 ))}
-               </select>
-            </div>
-          </div>
 
           {/* Quick Filter Pills Row */}
           <div className="flex flex-wrap items-center justify-between gap-2.5 pt-3 border-t border-gray-100">

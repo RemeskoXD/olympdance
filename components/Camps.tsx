@@ -1,14 +1,39 @@
 import React, { useState } from 'react';
-import { Calendar, CheckCircle, Info, X, ExternalLink } from 'lucide-react';
+import { Calendar, CheckCircle, Info, X, ExternalLink, ArrowLeft, Sun } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import ReactMarkdown from 'react-markdown';
 import { Camp } from '../types';
+import { getCampSeasonYear, formatCampDate } from '../utils/schoolYear';
 
 const Camps: React.FC = () => {
   const navigate = useNavigate();
-  const { camps, campGeneralInfo } = useData();
+  const { camps, campGeneralInfo, isCampsEnabled } = useData();
   const [selectedCamp, setSelectedCamp] = useState<Camp | null>(null);
+
+  if (!isCampsEnabled) {
+    return (
+      <section className="py-16 sm:py-24 bg-gray-50 min-h-screen flex items-center justify-center">
+        <div className="max-w-xl mx-auto px-4 text-center">
+          <div className="w-16 h-16 sm:w-20 sm:h-20 bg-orange-100 text-orange-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm">
+            <Sun size={36} />
+          </div>
+          <h2 className="text-2xl sm:text-3xl font-bold font-display text-gray-900 mb-3">
+            Letní tábory {getCampSeasonYear()}
+          </h2>
+          <p className="text-gray-600 text-base sm:text-lg mb-8 leading-relaxed">
+            Přihlašování a nabídka na letní tábory je v tuto chvíli uzavřena. Připravujeme pro vás program na novou sezónu!
+          </p>
+          <button
+            onClick={() => navigate('/')}
+            className="inline-flex items-center bg-brand-blue hover:bg-blue-800 text-white font-bold px-6 py-3 rounded-full transition-all shadow-md"
+          >
+            <ArrowLeft size={18} className="mr-2" /> Zpět na hlavní stránku
+          </button>
+        </div>
+      </section>
+    );
+  }
 
   const handleRegister = (camp: Camp) => {
     if (camp.externalUrl) {
@@ -41,9 +66,11 @@ const Camps: React.FC = () => {
           />
           <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-transparent flex items-center">
             <div className="px-5 sm:px-8 md:px-12 py-6">
-              <span className="text-brand-red font-bold tracking-wider uppercase text-xs sm:text-sm bg-white/15 px-3 py-1 rounded-full backdrop-blur-md inline-block">Léto 2026</span>
+              <span className="text-brand-red font-bold tracking-wider uppercase text-xs sm:text-sm bg-white/15 px-3 py-1 rounded-full backdrop-blur-md inline-block">
+                Léto {getCampSeasonYear()}
+              </span>
               <h2 className="text-2xl sm:text-3xl md:text-5xl font-display font-bold text-white mt-3 sm:mt-4 mb-2">
-                Letní Taneční Campy
+                Letní Taneční Campy {getCampSeasonYear()}
               </h2>
               <p className="text-white/90 text-sm sm:text-base md:text-lg max-w-xl">
                 Nezapomenutelné zážitky, noví přátelé a spousta tance pro všechny věkové kategorie.
@@ -112,7 +139,7 @@ const Camps: React.FC = () => {
               <div className="p-5 flex-grow flex flex-col">
                 <div className="flex items-center text-sm font-medium text-brand-red mb-2">
                   <Calendar className="w-4 h-4 mr-2 shrink-0" />
-                  {camp.date}
+                  {formatCampDate(camp.date)}
                 </div>
                 
                 <h3 className="text-lg font-bold text-gray-900 mb-2 leading-tight">{camp.title}</h3>
@@ -154,7 +181,7 @@ const Camps: React.FC = () => {
                 <div className="relative h-44 sm:h-64">
                     <img src={selectedCamp.image} alt={selectedCamp.title} className="w-full h-full object-cover" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex flex-col justify-end p-4 sm:p-6">
-                        <span className="text-white/80 text-xs sm:text-sm font-bold uppercase tracking-wider mb-1">{selectedCamp.date}</span>
+                        <span className="text-white/80 text-xs sm:text-sm font-bold uppercase tracking-wider mb-1">{formatCampDate(selectedCamp.date)}</span>
                         <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-white leading-tight">{selectedCamp.title}</h2>
                     </div>
                 </div>

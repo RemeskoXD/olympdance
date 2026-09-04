@@ -3,7 +3,8 @@ import Hero from './Hero';
 import RevealOnScroll from './RevealOnScroll';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Music, Sun, Users, Star, Quote, Clock, Heart, Wallet, Trophy, HelpCircle } from 'lucide-react';
-import { getCurrentSchoolYear } from '../utils/schoolYear';
+import { getCurrentSchoolYear, getCampSeasonYear } from '../utils/schoolYear';
+import { useData } from '../context/DataContext';
 
 const TESTIMONIALS = [
   { 
@@ -88,6 +89,8 @@ const FAQS = [
 ];
 
 const Home: React.FC = () => {
+  const { isCampsEnabled } = useData();
+
   return (
     <>
       <Hero />
@@ -105,7 +108,7 @@ const Home: React.FC = () => {
             </div>
           </RevealOnScroll>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
+          <div className={`grid grid-cols-1 ${isCampsEnabled ? 'md:grid-cols-2' : 'max-w-3xl mx-auto'} gap-6 sm:gap-8`}>
             {/* Krouzky Card */}
             <RevealOnScroll delay={100}>
               <div className="group relative rounded-2xl overflow-hidden shadow-xl aspect-[4/3] md:aspect-[16/9] cursor-pointer">
@@ -123,7 +126,7 @@ const Home: React.FC = () => {
                   <p className="text-gray-200 mb-4 sm:mb-6 max-w-md text-xs sm:text-sm md:text-base hidden xs:block sm:block">
                     Pohodlně přímo ve vaší škole bez nutnosti dojíždění. Moderní styly, street dance, disko a skvělá parta.
                   </p>
-                  <Link to="/tanecnikrouzky" className="inline-flex items-center text-white font-bold hover:text-brand-lightBlue transition-colors group-hover:translate-x-2 duration-300 text-sm sm:text-base">
+                  <Link to="/tanecnikrouzky#vyhledavac-skol" className="inline-flex items-center text-white font-bold hover:text-brand-lightBlue transition-colors group-hover:translate-x-2 duration-300 text-sm sm:text-base">
                     Najít moji školu <ArrowRight className="ml-2 w-4 h-4 sm:w-5 sm:h-5" />
                   </Link>
                 </div>
@@ -131,28 +134,30 @@ const Home: React.FC = () => {
             </RevealOnScroll>
 
             {/* Camps Card */}
-            <RevealOnScroll delay={300}>
-              <div className="group relative rounded-2xl overflow-hidden shadow-xl aspect-[4/3] md:aspect-[16/9] cursor-pointer">
-                <img 
-                  src="https://static.wixstatic.com/media/93005c_573dc43953b84fde95242482a4c20b9c~mv2.jpg/v1/fill/w_1000,h_600,al_c,q_85/summer-camp.jpg" 
-                  alt="Letní tábory" 
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex flex-col justify-end p-5 sm:p-8 text-left">
-                  <div className="flex items-center text-orange-400 mb-2 sm:mb-3">
-                    <Sun className="w-4 h-4 sm:w-5 sm:h-5 mr-2 shrink-0" />
-                    <span className="uppercase tracking-wider text-[10px] sm:text-xs font-bold bg-white/10 px-2 py-0.5 sm:py-1 rounded backdrop-blur-md">Léto 2026</span>
+            {isCampsEnabled && (
+              <RevealOnScroll delay={300}>
+                <div className="group relative rounded-2xl overflow-hidden shadow-xl aspect-[4/3] md:aspect-[16/9] cursor-pointer">
+                  <img 
+                    src="https://static.wixstatic.com/media/93005c_573dc43953b84fde95242482a4c20b9c~mv2.jpg/v1/fill/w_1000,h_600,al_c,q_85/summer-camp.jpg" 
+                    alt="Letní tábory" 
+                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex flex-col justify-end p-5 sm:p-8 text-left">
+                    <div className="flex items-center text-orange-400 mb-2 sm:mb-3">
+                      <Sun className="w-4 h-4 sm:w-5 sm:h-5 mr-2 shrink-0" />
+                      <span className="uppercase tracking-wider text-[10px] sm:text-xs font-bold bg-white/10 px-2 py-0.5 sm:py-1 rounded backdrop-blur-md">Léto {getCampSeasonYear()}</span>
+                    </div>
+                    <h3 className="text-xl sm:text-2xl md:text-3xl font-bold text-white mb-2 sm:mb-3">Letní taneční tábory</h3>
+                    <p className="text-gray-200 mb-4 sm:mb-6 max-w-md text-xs sm:text-sm md:text-base hidden xs:block sm:block">
+                      Týden plný zážitků, her a tance v přírodě nebo ve městě. Příměstské i pobytové varianty pro všechny.
+                    </p>
+                    <Link to="/letnicampy" className="inline-flex items-center text-white font-bold hover:text-orange-400 transition-colors group-hover:translate-x-2 duration-300 text-sm sm:text-base">
+                      Vybrat turnus <ArrowRight className="ml-2 w-4 h-4 sm:w-5 sm:h-5" />
+                    </Link>
                   </div>
-                  <h3 className="text-xl sm:text-2xl md:text-3xl font-bold text-white mb-2 sm:mb-3">Letní taneční tábory</h3>
-                  <p className="text-gray-200 mb-4 sm:mb-6 max-w-md text-xs sm:text-sm md:text-base hidden xs:block sm:block">
-                    Týden plný zážitků, her a tance v přírodě nebo ve městě. Příměstské i pobytové varianty pro všechny.
-                  </p>
-                  <Link to="/letnicampy" className="inline-flex items-center text-white font-bold hover:text-orange-400 transition-colors group-hover:translate-x-2 duration-300 text-sm sm:text-base">
-                    Vybrat turnus <ArrowRight className="ml-2 w-4 h-4 sm:w-5 sm:h-5" />
-                  </Link>
                 </div>
-              </div>
-            </RevealOnScroll>
+              </RevealOnScroll>
+            )}
           </div>
         </div>
       </section>
