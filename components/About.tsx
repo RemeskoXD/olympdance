@@ -16,7 +16,7 @@ const About: React.FC = () => {
         <RevealOnScroll>
           <div className="relative rounded-2xl overflow-hidden shadow-xl mb-8 sm:mb-16 transform hover:scale-[1.01] transition-transform duration-700">
              <img 
-               src="https://static.wixstatic.com/media/93005c_4ab5a66bf36d4345a999b8a126bff477~mv2.jpg/v1/fill/w_1901,h_288,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/93005c_4ab5a66bf36d4345a999b8a126bff477~mv2.jpg" 
+               src="/images/dance-school.jpg" 
                alt="Taneční skupina Olymp Dance" 
                className="w-full h-48 sm:h-64 md:h-72 object-cover object-center"
              />

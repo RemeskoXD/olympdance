@@ -11,6 +11,32 @@ function getPoolConfig() {
 
   if (connectionUrl) {
     try {
+      // Regex match to safely handle passwords with special characters (#, @, !) in URL
+      const regex = /^mysql:\/\/(.*?):(.*?)@([^:/]+)(?::(\d+))?\/(.*?)(?:\?(.*))?$/;
+      const match = connectionUrl.match(regex);
+      if (match) {
+        const host = match[3];
+        const port = match[4] ? parseInt(match[4], 10) : 3306;
+        const user = decodeURIComponent(match[1]);
+        const password = decodeURIComponent(match[2]);
+        const database = match[5]?.split('?')[0] || 'RemeskoDEV_olymp';
+        console.log(`Configuring MySQL connection from URL (regex): host=${host}, user=${user}, db=${database}`);
+        return {
+          host,
+          port,
+          user,
+          password,
+          database,
+          waitForConnections: true,
+          connectionLimit: 10,
+          queueLimit: 0,
+          connectTimeout: 10000,
+          enableKeepAlive: true,
+          keepAliveInitialDelay: 10000,
+          ssl: connectionUrl.includes('ssl=true') ? { rejectUnauthorized: false } : undefined
+        };
+      }
+
       const parsed = new URL(connectionUrl);
       console.log(`Configuring MySQL connection from URL: host=${parsed.hostname}, user=${parsed.username}, db=${parsed.pathname.replace(/^\//, '')}`);
       return {
@@ -54,6 +80,7 @@ export const isDbConfigured = () => {
     process.env.DATABASE_URL ||
     process.env.DB_URL ||
     process.env.MYSQL_URL ||
+    process.env.DB_PASSWORD ||
     (process.env.DB_HOST && process.env.DB_USER && process.env.DB_NAME)
   );
 };
@@ -79,6 +106,9 @@ export const initDb = async () => {
     `);
     try {
       await connection.query('ALTER TABLE schools ADD COLUMN isKindergarten BOOLEAN DEFAULT FALSE');
+    } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE schools ADD COLUMN trainingDates TEXT');
     } catch (e) {}
 
     // 2. Camps table
@@ -250,23 +280,95 @@ export const initDb = async () => {
     try {
       await connection.query('ALTER TABLE settings ADD COLUMN siteContent JSON');
     } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE settings ADD COLUMN rbClientId VARCHAR(255)');
+    } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE settings ADD COLUMN rbClientSecret VARCHAR(255)');
+    } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE settings ADD COLUMN rbAccountNumber VARCHAR(100) DEFAULT "1806875329"');
+    } catch (e) {}
+    try {
+      await connection.query('UPDATE settings SET rbAccountNumber = "1806875329" WHERE rbAccountNumber = "287413002" OR rbAccountNumber IS NULL');
+    } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE settings ADD COLUMN rbCertPassword VARCHAR(255)');
+    } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE settings ADD COLUMN rbCertFilename VARCHAR(255)');
+    } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE settings ADD COLUMN rbLastSync DATETIME');
+    } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE settings ADD COLUMN rbSyncStatus TEXT');
+    } catch (e) {}
+
+    // 11. Password Resets table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS password_resets (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        email VARCHAR(255) NOT NULL,
+        code VARCHAR(10) NOT NULL,
+        expiresAt DATETIME NOT NULL,
+        used BOOLEAN DEFAULT FALSE,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_email_code (email, code)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // 12. Merch Orders table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS merch_orders (
+        id VARCHAR(255) PRIMARY KEY,
+        productId VARCHAR(255) NOT NULL,
+        productName VARCHAR(255) NOT NULL,
+        productPrice VARCHAR(255) NOT NULL,
+        size VARCHAR(50),
+        quantity INT DEFAULT 1,
+        totalPrice INT NOT NULL,
+        userId VARCHAR(255),
+        userName VARCHAR(255) NOT NULL,
+        userEmail VARCHAR(255) NOT NULL,
+        userPhone VARCHAR(255),
+        deliveryNote TEXT,
+        variableSymbol VARCHAR(50),
+        status VARCHAR(50) DEFAULT 'pending',
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // 13. Bank Payments Log table (Raiffeisenbank automated matching history)
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS bank_payments_log (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        transactionId VARCHAR(255) NOT NULL,
+        bookingDate VARCHAR(50),
+        amount DECIMAL(10,2) NOT NULL,
+        currency VARCHAR(10) DEFAULT 'CZK',
+        variableSymbol VARCHAR(50),
+        senderAccount VARCHAR(100),
+        senderName VARCHAR(255),
+        message TEXT,
+        matchedType VARCHAR(50) DEFAULT 'unmatched',
+        matchedId VARCHAR(255),
+        matchedName VARCHAR(255),
+        status VARCHAR(50) DEFAULT 'processed',
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_tx (transactionId)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
 
     // ==========================================
     // 1:1 Synchronization of Static Data to MySQL
     // ==========================================
 
-    // Schools (1:1 sync)
+    // Schools (Seed initial if empty or insert missing)
     for (const school of SCHOOLS) {
       await connection.query(`
-        INSERT INTO schools (id, name, city, day, time, price, isKindergarten) 
+        INSERT IGNORE INTO schools (id, name, city, day, time, price, isKindergarten) 
         VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE 
-          name = VALUES(name),
-          city = VALUES(city),
-          day = VALUES(day),
-          time = VALUES(time),
-          price = VALUES(price),
-          isKindergarten = VALUES(isKindergarten)
       `, [
         school.id,
         school.name,
@@ -277,23 +379,13 @@ export const initDb = async () => {
         Boolean(school.isKindergarten)
       ]);
     }
-    console.log(`1:1 Synced ${SCHOOLS.length} schools into database.`);
+    console.log(`Synced ${SCHOOLS.length} schools into database.`);
 
-    // Camps (1:1 sync)
+    // Camps (Seed initial if empty or insert missing)
     for (const camp of CAMPS) {
       await connection.query(`
-        INSERT INTO camps (id, title, date, price, description, image, location, externalUrl, details, variableSymbol) 
+        INSERT IGNORE INTO camps (id, title, date, price, description, image, location, externalUrl, details, variableSymbol) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE 
-          title = VALUES(title),
-          date = VALUES(date),
-          price = VALUES(price),
-          description = VALUES(description),
-          image = VALUES(image),
-          location = VALUES(location),
-          externalUrl = VALUES(externalUrl),
-          details = VALUES(details),
-          variableSymbol = VALUES(variableSymbol)
       `, [
         camp.id,
         camp.title,
@@ -307,34 +399,26 @@ export const initDb = async () => {
         camp.variableSymbol || null
       ]);
     }
-    console.log(`1:1 Synced ${CAMPS.length} camps into database.`);
+    console.log(`Synced ${CAMPS.length} camps into database.`);
 
-    // Gallery (1:1 sync)
+    // Gallery (Seed initial if empty or insert missing)
     for (const img of GALLERY_IMAGES) {
       await connection.query(`
-        INSERT INTO gallery_images (id, url, caption) 
+        INSERT IGNORE INTO gallery_images (id, url, caption) 
         VALUES (?, ?, ?)
-        ON DUPLICATE KEY UPDATE 
-          url = VALUES(url),
-          caption = VALUES(caption)
       `, [
         img.id,
         img.url,
         img.caption || null
       ]);
     }
-    console.log(`1:1 Synced ${GALLERY_IMAGES.length} gallery images into database.`);
+    console.log(`Synced ${GALLERY_IMAGES.length} gallery images into database.`);
 
-    // Products (1:1 sync)
+    // Products (Seed initial if empty or insert missing)
     for (const product of PRODUCTS) {
       await connection.query(`
-        INSERT INTO products (id, name, price, description, image) 
+        INSERT IGNORE INTO products (id, name, price, description, image) 
         VALUES (?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE 
-          name = VALUES(name),
-          price = VALUES(price),
-          description = VALUES(description),
-          image = VALUES(image)
       `, [
         product.id,
         product.name,
@@ -343,7 +427,7 @@ export const initDb = async () => {
         product.image || ''
       ]);
     }
-    console.log(`1:1 Synced ${PRODUCTS.length} products into database.`);
+    console.log(`Synced ${PRODUCTS.length} products into database.`);
 
     // Settings (Ensure default row id=1 exists)
     const [settingsRows] = await connection.query('SELECT COUNT(*) as count FROM settings WHERE id = 1');

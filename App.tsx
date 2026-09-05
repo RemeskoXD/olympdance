@@ -20,6 +20,7 @@ import SchoolRegistrationForm from './components/SchoolRegistrationForm';
 import TanecniExpres from './components/TanecniExpres';
 import VersionCheck from './components/VersionCheck';
 import { FloatingContact } from './components/FloatingContact';
+import { LegalPage } from './components/LegalPage';
 import { DataProvider } from './context/DataContext';
 
 import { CONTACT_INFO } from './constants';
@@ -69,7 +70,7 @@ const PageHandler = () => {
     "email": CONTACT_INFO.email,
     "address": {
       "@type": "PostalAddress",
-      "streetAddress": "Holečkova 10",
+      "streetAddress": "Jiráskova 381/25, Hodolany",
       "addressLocality": "Olomouc",
       "postalCode": "77900",
       "addressRegion": "Olomoucký kraj",
@@ -177,7 +178,7 @@ const PageHandler = () => {
       title = `Letní taneční tábory 2026 Olomouc & Prostějov | ${baseTitle}`;
       description = 'Nezapomenutelné letní tábory pro děti – příměstské tábory v Olomouci a Prostějově, pobytové tábory na Horské chatě Bílá v Beskydech. Tanec, hry, aquapark.';
       keywords = 'letní tábory 2026, příměstský tábor Olomouc, příměstský tábor Prostějov, pobytový tábor Beskydy, taneční tábor pro děti, letní camp Olymp Dance';
-      ogImage = 'https://static.wixstatic.com/media/93005c_5baa5ec580a946b0bbdc5c0b06ae0c8b~mv2.jpeg/v1/fill/w_1200,h_630,al_c,q_80/IMG_8522.jpeg';
+      ogImage = '/images/IMG_8522.jpg';
       jsonLdList = [
         {
           "@context": "https://schema.org",
@@ -259,7 +260,7 @@ const PageHandler = () => {
     case '/kontakt':
       title = `Kontakt a informace | ${baseTitle}`;
       description = `Máte dotaz k zápisu do kroužků nebo letních táborů? Napište nám na ${CONTACT_INFO.email} nebo zavolejte na ${CONTACT_INFO.phone}. Sídlíme v Olomouci.`;
-      keywords = 'kontakt Olymp Dance, telefon tanec Olomouc, email Olymp Dance, adresa taneční škola, IČO 68347286';
+      keywords = 'kontakt Olymp Dance, telefon tanec Olomouc, email Olymp Dance, adresa taneční škola Olomouc';
       jsonLdList = [
         {
           "@context": "https://schema.org",
@@ -322,6 +323,16 @@ const PageHandler = () => {
       robots = 'noindex, nofollow';
       break;
 
+    case '/gdpr':
+      title = `Zásady ochrany osobních údajů (GDPR) | ${baseTitle}`;
+      description = 'Zásady zpracování a ochrany osobních údajů v tanečním klubu Olymp Dance Olomouc.';
+      break;
+
+    case '/obchodni-podminky':
+      title = `Obchodní podmínky a provozní řád | ${baseTitle}`;
+      description = 'Všeobecné obchodní podmínky a provozní řád tanečního klubu Olymp Dance Olomouc.';
+      break;
+
     default:
       if (pathname.startsWith('/registrace')) {
         title = `Přihláška na tábor | ${baseTitle}`;
@@ -377,7 +388,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => (
   <div className="min-h-screen bg-white font-sans text-gray-900 selection:bg-brand-red selection:text-white flex flex-col">
     <Navbar />
     <VersionCheck />
-    <main className="flex-grow pt-16 sm:pt-20 md:pt-24">
+    <main className="flex-grow pt-16 sm:pt-20">
       {children}
     </main>
     <FloatingContact />
@@ -407,6 +418,8 @@ function App() {
               <Route path="/admin" element={<Admin />} />
               <Route path="/webmaster" element={<Webmaster />} />
               <Route path="/merch" element={<Merch />} />
+              <Route path="/gdpr" element={<LegalPage />} />
+              <Route path="/obchodni-podminky" element={<LegalPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Layout>

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { SCHOOLS as INITIAL_SCHOOLS, CAMPS as INITIAL_CAMPS, GALLERY_IMAGES as INITIAL_GALLERY_IMAGES, PRODUCTS as INITIAL_PRODUCTS } from '../constants';
-import { School, Camp, GalleryImage, Product, Registration, SchoolRegistration, User, Excuse, Attendance } from '../types';
+import { School, Camp, GalleryImage, Product, Registration, SchoolRegistration, User, Excuse, Attendance, MerchOrder } from '../types';
 
 interface DataContextType {
   schools: School[];
@@ -9,6 +9,7 @@ interface DataContextType {
   products: Product[];
   registrations: Registration[];
   schoolRegistrations: SchoolRegistration[];
+  merchOrders: MerchOrder[];
   users: User[];
   excuses: Excuse[];
   attendance: Attendance[];
@@ -27,21 +28,29 @@ interface DataContextType {
   addGalleryImage: (imageUrl: string) => void;
   deleteGalleryImage: (id: string) => void;
   addProduct: (product: Omit<Product, 'id'>) => void;
+  updateProduct: (id: string, updatedProduct: Partial<Product>) => void;
   deleteProduct: (id: string) => void;
   addRegistration: (registration: Omit<Registration, 'id' | 'createdAt' | 'status'>) => Promise<Registration>;
   updateRegistration: (id: string, updatedRegistration: Partial<Registration>) => void;
+  deleteRegistration: (id: string) => Promise<void>;
   addSchoolRegistration: (registration: Omit<SchoolRegistration, 'id' | 'createdAt' | 'status'>) => Promise<SchoolRegistration>;
   updateSchoolRegistration: (id: string, updatedRegistration: Partial<SchoolRegistration>) => void;
+  deleteSchoolRegistration: (id: string) => Promise<void>;
+  addMerchOrder: (order: Omit<MerchOrder, 'id' | 'createdAt' | 'status' | 'variableSymbol'>) => Promise<MerchOrder>;
+  updateMerchOrder: (id: string, updates: Partial<MerchOrder>) => Promise<void>;
+  deleteMerchOrder: (id: string) => Promise<void>;
   addUser: (user: Omit<User, 'id'>) => Promise<void>;
   updateUser: (id: string, updatedUser: Partial<User>) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
   addExcuse: (excuse: Omit<Excuse, 'id' | 'createdAt'>) => Promise<void>;
+  deleteExcuse: (id: string) => Promise<void>;
   updateAttendance: (schoolId: string, date: string, records: Record<string, boolean>) => Promise<void>;
   toggleMerch: (enabled: boolean) => void;
   toggleTanecniExpres: (enabled: boolean) => void;
   toggleCamps: (enabled: boolean) => void;
   updateCampGeneralInfo: (info: string) => void;
   uploadFile: (file: File) => Promise<string>;
+  refreshData: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -96,6 +105,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [schoolRegistrations, setSchoolRegistrations] = useState<SchoolRegistration[]>(() => {
     try {
       const saved = localStorage.getItem('olymp_school_registrations');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [merchOrders, setMerchOrders] = useState<MerchOrder[]>(() => {
+    try {
+      const saved = localStorage.getItem('olymp_merch_orders');
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
@@ -171,82 +189,95 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(false);
 
   // Fetch data from API with safe JSON verification
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const response = await fetch('/api/data');
-        const contentType = response.headers.get('content-type') || '';
-        
-        // Ensure response is actually JSON and not an HTML SPA fallback (<!DOCTYPE html>...)
-        if (response.ok && contentType.includes('application/json')) {
-          const data = await response.json();
-          if (data && typeof data === 'object') {
-            if (Array.isArray(data.schools) && data.schools.length > 0) {
-              setSchools(data.schools);
-              localStorage.setItem('olymp_schools', JSON.stringify(data.schools));
-            }
-            if (Array.isArray(data.camps) && data.camps.length > 0) {
-              setCamps(data.camps);
-              localStorage.setItem('olymp_camps', JSON.stringify(data.camps));
-            }
-            if (Array.isArray(data.galleryImages) && data.galleryImages.length > 0) {
-              setGalleryImages(data.galleryImages);
-              localStorage.setItem('olymp_gallery', JSON.stringify(data.galleryImages));
-            }
-            if (Array.isArray(data.products) && data.products.length > 0) {
-              setProducts(data.products);
-              localStorage.setItem('olymp_products', JSON.stringify(data.products));
-            }
-            if (Array.isArray(data.registrations)) {
-              setRegistrations(data.registrations);
-              localStorage.setItem('olymp_registrations', JSON.stringify(data.registrations));
-            }
-            if (Array.isArray(data.schoolRegistrations)) {
-              setSchoolRegistrations(data.schoolRegistrations);
-              localStorage.setItem('olymp_school_registrations', JSON.stringify(data.schoolRegistrations));
-            }
-            if (Array.isArray(data.users)) {
-              setUsers(data.users);
-              localStorage.setItem('olymp_users', JSON.stringify(data.users));
-            }
-            if (Array.isArray(data.excuses)) {
-              setExcuses(data.excuses);
-              localStorage.setItem('olymp_excuses', JSON.stringify(data.excuses));
-            }
-            if (Array.isArray(data.attendance)) {
-              setAttendance(data.attendance);
-              localStorage.setItem('olymp_attendance', JSON.stringify(data.attendance));
-            }
-            if (data.isMerchEnabled !== undefined) {
-              setIsMerchEnabled(data.isMerchEnabled);
-              localStorage.setItem('olymp_settings_merch', JSON.stringify(data.isMerchEnabled));
-            }
-            if (data.isTanecniExpresEnabled !== undefined) {
-              setIsTanecniExpresEnabled(data.isTanecniExpresEnabled);
-              localStorage.setItem('olymp_settings_tanecni_expres', JSON.stringify(data.isTanecniExpresEnabled));
-            }
-            if (data.isCampsEnabled !== undefined) {
-              setIsCampsEnabled(data.isCampsEnabled);
-              localStorage.setItem('olymp_settings_camps', JSON.stringify(data.isCampsEnabled));
-            }
-            if (data.campGeneralInfo !== undefined) {
-              setCampGeneralInfo(data.campGeneralInfo);
-            }
-            if (data.siteContent && Object.keys(data.siteContent).length > 0) {
-              setSiteContent(data.siteContent);
-              localStorage.setItem('olymp_site_content', JSON.stringify(data.siteContent));
-            }
+  const refreshData = async () => {
+    try {
+      const response = await fetch('/api/data');
+      const contentType = response.headers.get('content-type') || '';
+      
+      // Ensure response is actually JSON and not an HTML SPA fallback (<!DOCTYPE html>...)
+      if (response.ok && contentType.includes('application/json')) {
+        const data = await response.json();
+        if (data && typeof data === 'object') {
+          if (Array.isArray(data.schools) && data.schools.length > 0) {
+            setSchools(data.schools);
+            localStorage.setItem('olymp_schools', JSON.stringify(data.schools));
           }
-        } else {
-          console.warn('Backend API returned non-JSON response or is offline. Operating with static/cached data.');
+          if (Array.isArray(data.camps) && data.camps.length > 0) {
+            setCamps(data.camps);
+            localStorage.setItem('olymp_camps', JSON.stringify(data.camps));
+          }
+          if (Array.isArray(data.galleryImages) && data.galleryImages.length > 0) {
+            setGalleryImages(data.galleryImages);
+            localStorage.setItem('olymp_gallery', JSON.stringify(data.galleryImages));
+          }
+          if (Array.isArray(data.products) && data.products.length > 0) {
+            setProducts(data.products);
+            localStorage.setItem('olymp_products', JSON.stringify(data.products));
+          }
+          if (Array.isArray(data.registrations)) {
+            setRegistrations(data.registrations);
+            localStorage.setItem('olymp_registrations', JSON.stringify(data.registrations));
+          }
+          if (Array.isArray(data.schoolRegistrations)) {
+            setSchoolRegistrations(data.schoolRegistrations);
+            localStorage.setItem('olymp_school_registrations', JSON.stringify(data.schoolRegistrations));
+          }
+          if (Array.isArray(data.merchOrders)) {
+            setMerchOrders(data.merchOrders);
+            localStorage.setItem('olymp_merch_orders', JSON.stringify(data.merchOrders));
+          }
+          if (Array.isArray(data.users)) {
+            setUsers(data.users);
+            localStorage.setItem('olymp_users', JSON.stringify(data.users));
+          }
+          if (Array.isArray(data.excuses)) {
+            setExcuses(data.excuses);
+            localStorage.setItem('olymp_excuses', JSON.stringify(data.excuses));
+          }
+          if (Array.isArray(data.attendance)) {
+            setAttendance(data.attendance);
+            localStorage.setItem('olymp_attendance', JSON.stringify(data.attendance));
+          }
+          if (data.isMerchEnabled !== undefined) {
+            setIsMerchEnabled(data.isMerchEnabled);
+            localStorage.setItem('olymp_settings_merch', JSON.stringify(data.isMerchEnabled));
+          }
+          if (data.isTanecniExpresEnabled !== undefined) {
+            setIsTanecniExpresEnabled(data.isTanecniExpresEnabled);
+            localStorage.setItem('olymp_settings_tanecni_expres', JSON.stringify(data.isTanecniExpresEnabled));
+          }
+          if (data.isCampsEnabled !== undefined) {
+            setIsCampsEnabled(data.isCampsEnabled);
+            localStorage.setItem('olymp_settings_camps', JSON.stringify(data.isCampsEnabled));
+          }
+          if (data.campGeneralInfo !== undefined) {
+            setCampGeneralInfo(data.campGeneralInfo);
+          }
+          if (data.siteContent && Object.keys(data.siteContent).length > 0) {
+            setSiteContent(data.siteContent);
+            localStorage.setItem('olymp_site_content', JSON.stringify(data.siteContent));
+          }
         }
-      } catch (error) {
-        console.warn('API fetch did not return JSON, using local data:', error);
-      } finally {
-        setIsLoading(false);
+      } else {
+        console.warn('Backend API returned non-JSON response or is offline. Operating with static/cached data.');
       }
+    } catch (error) {
+      console.warn('API fetch did not return JSON, using local data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshData();
+    // Auto-sync with remote database every 30 seconds and when browser tab regains focus
+    const interval = setInterval(refreshData, 30000);
+    const onFocus = () => refreshData();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
     };
-    fetchData();
   }, []);
 
   // Save to localStorage whenever critical states change
@@ -357,15 +388,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await apiCall('/api/products', 'POST', newProduct);
   };
 
+  const updateProduct = async (id: string, updatedProduct: Partial<Product>) => {
+    setProducts(products.map(p => p.id === id ? { ...p, ...updatedProduct } : p));
+    await apiCall(`/api/products/${id}`, 'PUT', updatedProduct);
+  };
+
   const deleteProduct = async (id: string) => {
       setProducts(products.filter(p => p.id !== id));
       await apiCall(`/api/products/${id}`, 'DELETE');
   };
 
   const addRegistration = async (registration: Omit<Registration, 'id' | 'createdAt' | 'status'>) => {
+    const vs = (registration.variableSymbol || `262${Date.now().toString().slice(-6)}`).replace(/\D/g, '').slice(0, 10);
     const newRegistration: Registration = {
       ...registration,
       id: Date.now().toString(),
+      variableSymbol: vs,
       createdAt: new Date().toISOString(),
       status: 'pending_payment',
       password: Math.random().toString(36).slice(-8)
@@ -382,10 +420,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await apiCall(`/api/registrations/${id}`, 'PUT', updatedRegistration);
   };
 
+  const deleteRegistration = async (id: string) => {
+    setRegistrations(registrations.filter(r => r.id !== id));
+    await apiCall(`/api/registrations/${id}`, 'DELETE');
+  };
+
   const addSchoolRegistration = async (registration: Omit<SchoolRegistration, 'id' | 'createdAt' | 'status'>): Promise<SchoolRegistration> => {
+    const cleanRc = (registration.childRodneCislo || '').replace(/\D/g, '').slice(0, 10);
+    const vs = (registration.variableSymbol || (cleanRc && cleanRc.length >= 6 ? cleanRc : `261${Date.now().toString().slice(-6)}`)).replace(/\D/g, '').slice(0, 10);
     const newRegistration: SchoolRegistration = {
       ...registration,
       id: `sr${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      variableSymbol: vs,
       status: 'pending_payment',
       createdAt: new Date().toISOString(),
       password: registration.password || Math.random().toString(36).slice(-8)
@@ -400,6 +446,35 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateSchoolRegistration = async (id: string, updatedRegistration: Partial<SchoolRegistration>) => {
     setSchoolRegistrations(schoolRegistrations.map(r => r.id === id ? { ...r, ...updatedRegistration } : r));
     await apiCall(`/api/school-registrations/${id}`, 'PUT', updatedRegistration);
+  };
+
+  const deleteSchoolRegistration = async (id: string) => {
+    setSchoolRegistrations(schoolRegistrations.filter(r => r.id !== id));
+    await apiCall(`/api/school-registrations/${id}`, 'DELETE');
+  };
+
+  const addMerchOrder = async (orderData: Omit<MerchOrder, 'id' | 'createdAt' | 'status' | 'variableSymbol'>): Promise<MerchOrder> => {
+    const vs = `80${Date.now().toString().slice(-6)}`;
+    const newOrder: MerchOrder = {
+      ...orderData,
+      id: `order-${Date.now()}`,
+      variableSymbol: vs,
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    };
+    setMerchOrders(prev => [newOrder, ...prev]);
+    const res = await apiCall('/api/merch-orders', 'POST', newOrder);
+    return res || newOrder;
+  };
+
+  const updateMerchOrder = async (id: string, updates: Partial<MerchOrder>) => {
+    setMerchOrders(prev => prev.map(o => o.id === id ? { ...o, ...updates } : o));
+    await apiCall(`/api/merch-orders/${id}`, 'PUT', updates);
+  };
+
+  const deleteMerchOrder = async (id: string) => {
+    setMerchOrders(prev => prev.filter(o => o.id !== id));
+    await apiCall(`/api/merch-orders/${id}`, 'DELETE');
   };
 
   const addUser = async (user: Omit<User, 'id'>) => {
@@ -426,6 +501,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     setExcuses([...excuses, newExcuse]);
     await apiCall('/api/excuses', 'POST', newExcuse);
+  };
+
+  const deleteExcuse = async (id: string) => {
+    setExcuses(excuses.filter(e => e.id !== id));
+    await apiCall(`/api/excuses/${id}`, 'DELETE');
   };
 
   const updateAttendance = async (schoolId: string, date: string, records: Record<string, boolean>) => {
@@ -508,17 +588,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <DataContext.Provider value={{ 
-      schools, camps, galleryImages, products, registrations, schoolRegistrations, users, excuses, attendance, isMerchEnabled, isTanecniExpresEnabled, isCampsEnabled, campGeneralInfo, siteContent, updateSiteContent,
+      schools, camps, galleryImages, products, registrations, schoolRegistrations, merchOrders, users, excuses, attendance, isMerchEnabled, isTanecniExpresEnabled, isCampsEnabled, campGeneralInfo, siteContent, updateSiteContent,
       addSchool, updateSchool, deleteSchool, 
       addCamp, updateCamp, deleteCamp,
       addGalleryImage, deleteGalleryImage,
-      addProduct, deleteProduct, 
-      addRegistration, updateRegistration,
-      addSchoolRegistration, updateSchoolRegistration,
+      addProduct, updateProduct, deleteProduct, 
+      addRegistration, updateRegistration, deleteRegistration,
+      addSchoolRegistration, updateSchoolRegistration, deleteSchoolRegistration,
+      addMerchOrder, updateMerchOrder, deleteMerchOrder,
       addUser, updateUser, deleteUser,
-      addExcuse, updateAttendance,
+      addExcuse, deleteExcuse, updateAttendance,
       toggleMerch, toggleTanecniExpres, toggleCamps, updateCampGeneralInfo,
-      uploadFile
+      uploadFile, refreshData
     }}>
       {children}
     </DataContext.Provider>

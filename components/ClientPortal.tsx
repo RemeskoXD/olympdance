@@ -6,6 +6,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { BANK_INFO } from '../constants';
 import { useNavigate } from 'react-router-dom';
 import { InsuranceConfirmationModal } from './InsuranceConfirmationModal';
+import { ForgotPasswordModal } from './ForgotPasswordModal';
 
 const ClientPortal: React.FC = () => {
   const navigate = useNavigate();
@@ -16,6 +17,7 @@ const ClientPortal: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<Registration | null>(null);
   const [error, setError] = useState('');
   const [showInsuranceModal, setShowInsuranceModal] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   const copyToClipboard = (text: string, field: string) => {
@@ -106,12 +108,29 @@ const ClientPortal: React.FC = () => {
           
           <div className="mt-8 pt-6 border-t border-gray-100 text-center space-y-2">
             <p className="text-sm text-gray-500">
-              Zapomněli jste heslo? <button onClick={() => navigate('/kontakt')} className="text-brand-blue font-bold">Kontaktujte nás</button>
+              Zapomněli jste heslo?{' '}
+              <button
+                type="button"
+                onClick={() => setShowForgotPassword(true)}
+                className="text-brand-blue font-bold hover:underline"
+              >
+                Obnovit heslo
+              </button>
             </p>
             <p className="text-sm text-gray-500">
-              Nemáte ještě účet? <button onClick={() => navigate('/letnicampy')} className="text-brand-red font-bold">Vyberte si tábor</button>
+              Nemáte ještě účet? <button type="button" onClick={() => navigate('/letnicampy')} className="text-brand-red font-bold hover:underline">Vyberte si tábor</button>
             </p>
           </div>
+
+          <ForgotPasswordModal
+            isOpen={showForgotPassword}
+            onClose={() => setShowForgotPassword(false)}
+            initialEmail={email}
+            onPasswordResetSuccess={(resetEmail) => {
+              setEmail(resetEmail);
+              setError('');
+            }}
+          />
         </div>
       </div>
     );
@@ -270,7 +289,7 @@ const ClientPortal: React.FC = () => {
                             <div className="flex-1 w-full space-y-2.5 text-sm">
                               <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-gray-100">
                                 <div>
-                                  <span className="text-xs text-gray-400 block font-medium">Číslo účtu</span>
+                                  <span className="text-xs text-gray-400 block font-medium">Číslo účtu ({BANK_INFO.bankName})</span>
                                   <span className="font-bold text-gray-900">{BANK_INFO.account}</span>
                                 </div>
                                 <button
@@ -280,6 +299,21 @@ const ClientPortal: React.FC = () => {
                                 >
                                   {copiedField === 'acc' ? <Check size={14} className="text-green-600 mr-1" /> : <Copy size={14} className="mr-1" />}
                                   {copiedField === 'acc' ? 'Zkopírováno' : 'Kopírovat'}
+                                </button>
+                              </div>
+
+                              <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-gray-100">
+                                <div>
+                                  <span className="text-xs text-gray-400 block font-medium">IBAN / BIC</span>
+                                  <span className="font-mono text-xs font-bold text-gray-800">{BANK_INFO.ibanFormatted || BANK_INFO.iban} <span className="text-gray-400 font-normal">({BANK_INFO.bic})</span></span>
+                                </div>
+                                <button
+                                  onClick={() => copyToClipboard(BANK_INFO.iban, 'iban')}
+                                  className="text-xs font-bold text-brand-blue hover:text-blue-700 p-1.5 rounded-lg hover:bg-blue-50 transition-colors flex items-center"
+                                  title="Kopírovat IBAN"
+                                >
+                                  {copiedField === 'iban' ? <Check size={14} className="text-green-600 mr-1" /> : <Copy size={14} className="mr-1" />}
+                                  {copiedField === 'iban' ? 'Zkopírováno' : 'Kopírovat'}
                                 </button>
                               </div>
 

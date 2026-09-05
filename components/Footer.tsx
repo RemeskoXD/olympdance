@@ -1,5 +1,5 @@
 import React from 'react';
-import { Mail, Phone, MapPin, Lock, Send, RefreshCw } from 'lucide-react';
+import { Mail, Phone, MapPin, Lock, Send, RefreshCw, Building2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { CONTACT_INFO } from '../constants';
 import { useData } from '../context/DataContext';
@@ -13,7 +13,7 @@ const Footer: React.FC = () => {
   };
 
   return (
-    <footer className="bg-gray-900 text-gray-400 py-8 sm:py-12 border-t border-gray-800 relative overflow-hidden">
+    <footer className="bg-gray-900 text-gray-400 py-8 sm:py-12 border-t border-gray-800 relative overflow-hidden print:hidden">
       {/* Decorative background blur */}
       <div className="absolute top-0 left-1/4 w-64 h-64 bg-brand-blue/5 rounded-full blur-3xl pointer-events-none"></div>
 
@@ -26,7 +26,7 @@ const Footer: React.FC = () => {
                 <img 
                   src="https://web2.itnahodinu.cz/olympdance/logobile.webp" 
                   alt="Olymp Dance Logo" 
-                  className="h-12 sm:h-16 w-auto transition-transform group-hover:scale-105"
+                  className="h-24 sm:h-32 w-auto transition-transform group-hover:scale-105 drop-shadow-md"
                 />
                 <div className="flex flex-col justify-center items-start">
                    <span className="font-display font-extrabold text-base sm:text-lg leading-none tracking-wide text-white uppercase group-hover:text-brand-lightBlue transition-colors">
@@ -69,7 +69,17 @@ const Footer: React.FC = () => {
             <ul className="space-y-2.5 sm:space-y-3 text-xs sm:text-sm">
               <li className="flex items-start">
                 <MapPin size={16} className="mr-2 mt-0.5 shrink-0 text-brand-red" />
-                <span>{CONTACT_INFO.address}</span>
+                <div>
+                  <span className="block text-gray-300 font-medium">{CONTACT_INFO.registeredOffice}</span>
+                  <span className="block text-[11px] text-gray-500">Sídlo společnosti</span>
+                </div>
+              </li>
+              <li className="flex items-start">
+                <Building2 size={16} className="mr-2 mt-0.5 shrink-0 text-brand-lightBlue" />
+                <div>
+                  <span className="block text-gray-300 font-medium">{CONTACT_INFO.trainingLocation}</span>
+                  <span className="block text-[11px] text-gray-500">Kde nás najdete (Tréninkový sál)</span>
+                </div>
               </li>
               <li className="flex items-center">
                 <Phone size={16} className="mr-2 shrink-0 text-brand-red" />
@@ -100,14 +110,42 @@ const Footer: React.FC = () => {
 
         </div>
 
-        <div className="border-t border-gray-800 pt-6 sm:pt-8 flex flex-col md:flex-row justify-between items-center text-xs text-gray-600 gap-3 text-center md:text-left">
-          <p>© {new Date().getFullYear()} Taneční klub Olymp Olomouc, z. s. Všechna práva vyhrazena.</p>
-          <div className="flex flex-wrap justify-center space-x-4 items-center">
-             <span>IČO: {CONTACT_INFO.ico}</span>
-             <Link to="/admin" className="text-gray-700 hover:text-gray-500 transition-colors flex items-center" title="Administrace">
+        <div className="border-t border-gray-800 pt-6 sm:pt-8 flex flex-col lg:flex-row justify-between items-center text-xs text-gray-500 gap-4 text-center lg:text-left">
+          <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
+            <p>© {new Date().getFullYear()} Taneční klub Olymp Olomouc, z. s. Všechna práva vyhrazena.</p>
+            <span className="hidden sm:inline text-gray-700">•</span>
+            <a 
+              href="https://mescon.cz/" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-300 transition-colors group"
+              title="Vytvořili jsme web – MESCON"
+            >
+              <span className="text-gray-500 group-hover:text-gray-300 transition-colors">Vytvořili jsme web</span>
+              <img 
+                src="https://web2.itnahodinu.cz/mescon/images/logo.svg" 
+                alt="MESCON" 
+                className="h-7 w-auto max-h-7 max-w-[110px] object-contain opacity-75 group-hover:opacity-100 transition-opacity" 
+                referrerPolicy="no-referrer"
+              />
+            </a>
+          </div>
+
+          <div className="flex flex-wrap justify-center space-x-3 sm:space-x-4 items-center">
+             <Link to="/gdpr" className="text-gray-400 hover:text-white transition-colors">
+               GDPR
+             </Link>
+             <span className="text-gray-700">•</span>
+             <Link to="/obchodni-podminky" className="text-gray-400 hover:text-white transition-colors">
+               Obchodní podmínky
+             </Link>
+             <span className="text-gray-700">•</span>
+             <span className="text-gray-400">IČO: <strong className="font-mono text-gray-300 font-normal">{CONTACT_INFO.ico}</strong></span>
+             <span className="text-gray-700">•</span>
+             <Link to="/admin" className="text-gray-600 hover:text-gray-400 transition-colors flex items-center" title="Administrace">
                 <Lock size={12} className="mr-1" /> Admin
              </Link>
-             <button onClick={handleForceReload} className="text-gray-700 hover:text-brand-blue transition-colors flex items-center ml-2" title="Vynutit aktualizaci">
+             <button onClick={handleForceReload} className="text-gray-600 hover:text-brand-blue transition-colors flex items-center ml-1" title="Vynutit aktualizaci">
                 <RefreshCw size={10} className="mr-1" /> {currentVersion}
              </button>
           </div>

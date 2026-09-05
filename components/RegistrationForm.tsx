@@ -6,6 +6,7 @@ import { ChevronRight, ChevronLeft, Upload, CheckCircle, CreditCard, User, Mail,
 import { QRCodeSVG } from 'qrcode.react';
 import { BANK_INFO } from '../constants';
 import { formatCampDate, formatCampVariableSymbol } from '../utils/schoolYear';
+import { LegalModal, LegalDocType } from './LegalModal';
 
 const RegistrationForm: React.FC = () => {
   const { campId } = useParams<{ campId: string }>();
@@ -15,6 +16,7 @@ const RegistrationForm: React.FC = () => {
   const camp = camps.find(c => c.id === campId);
   
   const [step, setStep] = useState(1);
+  const [legalModal, setLegalModal] = useState<LegalDocType | null>(null);
   const [formData, setFormData] = useState({
     childName: '',
     childBirthDate: '',
@@ -88,7 +90,7 @@ const RegistrationForm: React.FC = () => {
   // Generate QR code data (SPAY)
   const amount = parseFloat(camp.price.replace(/\s/g, '').replace('Kč', ''));
   const activeVariableSymbol = formatCampVariableSymbol(camp.variableSymbol);
-  const qrData = `SPD*1.0*ACC:${BANK_INFO.iban}*AM:${amount}*CC:CZK*MSG:${formData.childName} ${formData.childBirthDate}*VS:${activeVariableSymbol || ''}`;
+  const qrData = `SPD*1.0*ACC:${BANK_INFO.iban}*AM:${amount}*CC:CZK*X-VS:${activeVariableSymbol || ''}*MSG:${formData.childName} ${formData.childBirthDate}`;
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -207,20 +209,35 @@ const RegistrationForm: React.FC = () => {
                       <input 
                         type="checkbox" 
                         required 
-                        className="mt-1 w-5 h-5 rounded border-gray-300 text-brand-blue focus:ring-brand-blue shrink-0"
+                        className="mt-1 w-5 h-5 rounded border-gray-300 text-brand-blue focus:ring-brand-blue shrink-0 cursor-pointer"
                       />
                       <span className="text-xs sm:text-sm text-gray-600">
-                        Souhlasím se zpracováním osobních údajů (GDPR) pro účely organizace tábora.
+                        Souhlasím se{' '}
+                        <button
+                          type="button"
+                          onClick={() => setLegalModal('gdpr')}
+                          className="text-brand-blue font-semibold hover:underline underline-offset-2 decoration-brand-blue/50 hover:decoration-brand-blue inline cursor-pointer"
+                        >
+                          zpracováním osobních údajů (GDPR)
+                        </button>{' '}
+                        pro účely organizace tábora.
                       </span>
                     </label>
                     <label className="flex items-start space-x-3 cursor-pointer">
                       <input 
                         type="checkbox" 
                         required 
-                        className="mt-1 w-5 h-5 rounded border-gray-300 text-brand-blue focus:ring-brand-blue shrink-0"
+                        className="mt-1 w-5 h-5 rounded border-gray-300 text-brand-blue focus:ring-brand-blue shrink-0 cursor-pointer"
                       />
                       <span className="text-xs sm:text-sm text-gray-600">
-                        Souhlasím s <a href="#" className="text-brand-blue hover:underline">obchodními podmínkami</a> a storno podmínkami.
+                        Souhlasím s{' '}
+                        <button
+                          type="button"
+                          onClick={() => setLegalModal('terms')}
+                          className="text-brand-blue font-semibold hover:underline underline-offset-2 decoration-brand-blue/50 hover:decoration-brand-blue inline cursor-pointer"
+                        >
+                          obchodními podmínkami a storno podmínkami
+                        </button>.
                       </span>
                     </label>
                   </div>
@@ -294,8 +311,12 @@ const RegistrationForm: React.FC = () => {
                         <CreditCard size={18} className="mr-2 text-brand-blue shrink-0" /> Platební údaje
                       </h4>
                       <div className="grid grid-cols-2 gap-y-2 text-xs sm:text-sm text-left">
-                        <span className="text-gray-500">Číslo účtu:</span>
+                        <span className="text-gray-500">Číslo účtu ({BANK_INFO.bankName}):</span>
                         <span className="font-bold">{BANK_INFO.account}</span>
+                        <span className="text-gray-500">IBAN:</span>
+                        <span className="font-mono text-xs font-bold break-all">{BANK_INFO.ibanFormatted || BANK_INFO.iban}</span>
+                        <span className="text-gray-500">BIC / SWIFT:</span>
+                        <span className="font-mono font-bold">{BANK_INFO.bic}</span>
                         <span className="text-gray-500">Částka:</span>
                         <span className="font-bold text-brand-red">{camp.price}</span>
                         <span className="text-gray-500">Variabilní symbol:</span>
@@ -366,6 +387,13 @@ const RegistrationForm: React.FC = () => {
           </form>
         </div>
       </div>
+
+      {/* Legal terms and GDPR modal */}
+      <LegalModal
+        isOpen={!!legalModal}
+        type={legalModal || 'terms'}
+        onClose={() => setLegalModal(null)}
+      />
     </div>
   );
 };

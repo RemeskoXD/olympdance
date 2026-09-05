@@ -5,12 +5,16 @@ import {
   ShoppingBag, ToggleLeft, ToggleRight, FileText, CheckCircle as CheckCircleIcon, Clock, 
   AlertCircle, Mail, Users, Check, X as XIcon, Calendar, Info, LayoutDashboard, DollarSign, 
   Users as UsersIcon, Download, Printer, Search, Filter, ShieldCheck, ArrowLeft, ArrowRight, 
-  UserCheck, CheckSquare, Square, ChevronRight, Sparkles, MapPin, Building2, Phone, RotateCcw 
+  UserCheck, CheckSquare, Square, ChevronRight, Sparkles, MapPin, Building2, Phone, RotateCcw,
+  CreditCard
 } from 'lucide-react';
-import { School, Camp, Product, Registration, User, SchoolRegistration } from '../types';
+import { School, Camp, Product, Registration, User, SchoolRegistration, MerchOrder } from '../types';
 import { exportSchoolRegistrationsToCsv, exportCampRegistrationsToCsv } from '../utils/exportCsv';
 import { AttendanceSheetModal } from './AttendanceSheetModal';
+import { TrainingDatesModal } from './TrainingDatesModal';
 import { InsuranceConfirmationModal } from './InsuranceConfirmationModal';
+import { DeleteConfirmModal } from './DeleteConfirmModal';
+import { RbBankManager } from './RbBankManager';
 
 const Admin: React.FC = () => {
   const { users, addUser, updateUser, deleteUser, schools, schoolRegistrations, attendance, excuses, updateAttendance } = useData();
@@ -18,7 +22,7 @@ const Admin: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'schools' | 'camps' | 'gallery' | 'merch' | 'registrations' | 'school_registrations' | 'users' | 'attendance'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'schools' | 'camps' | 'gallery' | 'merch' | 'registrations' | 'school_registrations' | 'users' | 'attendance' | 'rb_bank'>('dashboard');
 
   // Check for persisted login on mount
   useEffect(() => {
@@ -224,6 +228,17 @@ const Admin: React.FC = () => {
                 <Users size={18} className="mr-2" />
                 Uživatelé
               </button>
+              <button
+                onClick={() => setActiveTab('rb_bank')}
+                className={`flex items-center px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+                  activeTab === 'rb_bank' 
+                  ? 'bg-brand-blue text-white shadow-md' 
+                  : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <CreditCard size={18} className="mr-2" />
+                Banka & Platby API
+              </button>
             </>
           )}
 
@@ -251,6 +266,7 @@ const Admin: React.FC = () => {
         {activeTab === 'registrations' && <RegistrationManager />}
         {activeTab === 'users' && <UserManager />}
         {activeTab === 'attendance' && <AttendanceManager currentUser={currentUser} />}
+        {activeTab === 'rb_bank' && <RbBankManager />}
       </div>
     </div>
   );
@@ -496,6 +512,7 @@ const SchoolManager: React.FC = () => {
   const { schools, addSchool, updateSchool, deleteSchool } = useData();
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: '', city: '', day: '', time: '', price: '', isKindergarten: false });
+  const [datesModalSchool, setDatesModalSchool] = useState<School | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -596,36 +613,69 @@ const SchoolManager: React.FC = () => {
 
       {/* List */}
       <div className="lg:col-span-2 space-y-4">
-        {schools.map(school => (
-          <div key={school.id} className={`bg-white p-4 rounded-xl shadow-sm border flex justify-between items-center group transition-all ${isEditing === school.id ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 hover:shadow-md'}`}>
-            <div>
-              <div className="flex items-center gap-2">
-                  <h4 className="font-bold text-gray-900">{school.name}</h4>
-                  {school.isKindergarten && <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded font-bold">MŠ</span>}
+        {schools.map(school => {
+          const filledDates = (school.trainingDates || []).filter(Boolean).length;
+
+          return (
+            <div key={school.id} className={`bg-white p-4 rounded-xl shadow-sm border flex justify-between items-center group transition-all ${isEditing === school.id ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 hover:shadow-md'}`}>
+              <div>
+                <div className="flex items-center gap-2">
+                    <h4 className="font-bold text-gray-900">{school.name}</h4>
+                    {school.isKindergarten && <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded font-bold">MŠ</span>}
+                </div>
+                <p className="text-sm text-gray-500">{school.city} • {school.day} {school.time}</p>
+                <div className="flex items-center gap-3 mt-1">
+                  <p className="text-sm font-semibold text-brand-blue">{school.price}</p>
+                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full flex items-center ${
+                    filledDates > 0 
+                      ? 'bg-blue-50 text-brand-blue border border-blue-200' 
+                      : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    <Calendar size={11} className="mr-1" />
+                    {filledDates > 0 ? `${filledDates}/14 termínů` : 'Termíny nezadány'}
+                  </span>
+                </div>
               </div>
-              <p className="text-sm text-gray-500">{school.city} • {school.day} {school.time}</p>
-              <p className="text-sm font-semibold text-brand-blue mt-1">{school.price}</p>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setDatesModalSchool(school)}
+                  className="px-2.5 py-1.5 text-xs font-bold text-brand-blue bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors flex items-center"
+                  title="Nastavit data tréninků (14 lekcí)"
+                >
+                  <Calendar size={14} className="mr-1" />
+                  <span className="hidden sm:inline">14 termínů</span>
+                </button>
+                <button 
+                  onClick={() => handleEdit(school)}
+                  className="p-2 text-gray-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors"
+                  title="Upravit"
+                >
+                  <Edit2 size={18} />
+                </button>
+                <button 
+                  onClick={() => { if(confirm('Opravdu smazat?')) deleteSchool(school.id) }}
+                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  title="Smazat"
+                >
+                  <Trash2 size={18} />
+                </button>
+              </div>
             </div>
-            <div className="flex space-x-2">
-              <button 
-                onClick={() => handleEdit(school)}
-                className="p-2 text-gray-400 hover:text-brand-blue hover:bg-blue-50 rounded-lg transition-colors"
-                title="Upravit"
-              >
-                <Edit2 size={20} />
-              </button>
-              <button 
-                onClick={() => { if(confirm('Opravdu smazat?')) deleteSchool(school.id) }}
-                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                title="Smazat"
-              >
-                <Trash2 size={20} />
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
         {schools.length === 0 && <p className="text-gray-500 text-center py-8">Žádné školy v seznamu.</p>}
       </div>
+
+      {datesModalSchool && (
+        <TrainingDatesModal
+          school={datesModalSchool}
+          onClose={() => setDatesModalSchool(null)}
+          onSave={(trainingDates) => {
+            updateSchool(datesModalSchool.id, { trainingDates });
+            setDatesModalSchool(null);
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -889,8 +939,12 @@ const GalleryManager: React.FC = () => {
 };
 
 const MerchManager: React.FC = () => {
-    const { products, addProduct, deleteProduct, isMerchEnabled, toggleMerch } = useData();
+    const { products, addProduct, deleteProduct, isMerchEnabled, toggleMerch, merchOrders, updateMerchOrder, deleteMerchOrder } = useData();
+    const [subTab, setSubTab] = useState<'orders' | 'products'>('orders');
     const [formData, setFormData] = useState({ name: '', price: '', description: '', image: '' });
+    const [statusFilter, setStatusFilter] = useState<'ALL' | 'pending' | 'paid' | 'completed' | 'cancelled'>('ALL');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedOrderForQr, setSelectedOrderForQr] = useState<MerchOrder | null>(null);
   
     const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
@@ -898,105 +952,338 @@ const MerchManager: React.FC = () => {
       addProduct(formData);
       setFormData({ name: '', price: '', description: '', image: '' });
     };
+
+    const filteredOrders = useMemo(() => {
+      return (merchOrders || []).filter(order => {
+        const matchesStatus = statusFilter === 'ALL' || order.status === statusFilter;
+        const matchesSearch = !searchTerm || 
+          order.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          order.userEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          order.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (order.variableSymbol && order.variableSymbol.includes(searchTerm));
+        return matchesStatus && matchesSearch;
+      });
+    }, [merchOrders, statusFilter, searchTerm]);
+
+    const pendingOrdersCount = useMemo(() => {
+      return (merchOrders || []).filter(o => o.status === 'pending').length;
+    }, [merchOrders]);
+
+    const getStatusBadge = (status: MerchOrder['status']) => {
+      switch (status) {
+        case 'paid':
+          return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">✅ Zaplaceno</span>;
+        case 'completed':
+          return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">📦 Předáno / Hotovo</span>;
+        case 'cancelled':
+          return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">❌ Zrušeno</span>;
+        case 'pending':
+        default:
+          return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800">⏳ Čeká na platbu</span>;
+      }
+    };
   
     return (
-      <div className="space-y-8">
-        {/* Visibility Toggle */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
-           <div>
-               <h3 className="text-lg font-bold text-gray-900">Viditelnost E-shopu</h3>
-               <p className="text-gray-500 text-sm">Pokud vypnete, odkaz zmizí z patičky a stránka nebude přístupná.</p>
-           </div>
-           <button 
-             onClick={() => toggleMerch(!isMerchEnabled)}
-             className={`flex items-center px-4 py-2 rounded-full font-bold transition-all ${isMerchEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}
-           >
-               {isMerchEnabled ? <ToggleRight size={40} className="mr-2" /> : <ToggleLeft size={40} className="mr-2" />}
-               {isMerchEnabled ? 'Aktivní' : 'Vypnuto'}
-           </button>
+      <div className="space-y-6">
+        {/* Navigation tabs between Orders and Catalog */}
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 pb-4">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setSubTab('orders')}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${subTab === 'orders' ? 'bg-brand-blue text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+            >
+              <ShoppingBag size={18} />
+              <span>Objednávky z E-shopu</span>
+              {pendingOrdersCount > 0 && (
+                <span className="bg-brand-red text-white text-xs px-2 py-0.5 rounded-full font-extrabold">
+                  {pendingOrdersCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setSubTab('products')}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${subTab === 'products' ? 'bg-brand-blue text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+            >
+              <Plus size={18} />
+              <span>Katalog produktů & Nastavení</span>
+            </button>
+          </div>
+
+          {/* Visibility Toggle */}
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-500 font-medium">E-shop pro veřejnost:</span>
+            <button 
+              onClick={() => toggleMerch(!isMerchEnabled)}
+              className={`flex items-center px-3 py-1.5 rounded-full text-xs font-bold transition-all ${isMerchEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}
+            >
+              {isMerchEnabled ? <ToggleRight size={26} className="mr-1 text-green-600" /> : <ToggleLeft size={26} className="mr-1 text-gray-400" />}
+              {isMerchEnabled ? 'Aktivní' : 'Vypnuto'}
+            </button>
+          </div>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-8">
-          {/* Form */}
-          <div className="lg:col-span-1">
-            <div className="bg-white p-6 rounded-2xl shadow-md sticky top-24">
-              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-                 <Plus size={20} className="mr-2 text-brand-red" /> Přidat produkt
-              </h3>
-              <form onSubmit={handleSubmit} className="space-y-3">
-                <input 
-                  className="w-full px-3 py-2 border rounded-lg text-sm" 
-                  placeholder="Název produktu" 
-                  value={formData.name} 
-                  onChange={e => setFormData({...formData, name: e.target.value})} 
-                  required 
+        {subTab === 'orders' ? (
+          <div className="space-y-4">
+            {/* Filter bar */}
+            <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col sm:flex-row gap-3 items-center justify-between">
+              <div className="relative w-full sm:w-80">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  placeholder="Hledat zákazníka, email, VS..."
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-blue outline-none"
                 />
-                <input 
-                  className="w-full px-3 py-2 border rounded-lg text-sm" 
-                  placeholder="Cena" 
-                  value={formData.price} 
-                  onChange={e => setFormData({...formData, price: e.target.value})} 
-                  required 
-                />
-                <textarea 
-                  className="w-full px-3 py-2 border rounded-lg text-sm" 
-                  placeholder="Popis produktu..." 
-                  rows={3}
-                  value={formData.description} 
-                  onChange={e => setFormData({...formData, description: e.target.value})} 
-                />
-                <input 
-                  className="w-full px-3 py-2 border rounded-lg text-sm" 
-                  placeholder="URL obrázku" 
-                  value={formData.image} 
-                  onChange={e => setFormData({...formData, image: e.target.value})} 
-                  required 
-                />
-                {formData.image && (
-                     <div className="mt-2 rounded-lg overflow-hidden border border-gray-200">
-                        <img src={formData.image} alt="Náhled" className="w-full h-32 object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
-                     </div>
-                )}
-                <button className="w-full bg-brand-blue text-white font-bold py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                  Přidat produkt
-                </button>
-              </form>
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <span className="text-xs text-gray-500 font-medium shrink-0">Stav:</span>
+                <select
+                  value={statusFilter}
+                  onChange={e => setStatusFilter(e.target.value as any)}
+                  className="w-full sm:w-auto px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-blue outline-none bg-white"
+                >
+                  <option value="ALL">Všechny objednávky</option>
+                  <option value="pending">⏳ Čeká na platbu</option>
+                  <option value="paid">✅ Zaplaceno</option>
+                  <option value="completed">📦 Předáno / Hotovo</option>
+                  <option value="cancelled">❌ Zrušeno</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Orders Table */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase">
+                      <th className="px-5 py-3.5">Objednávka & Zboží</th>
+                      <th className="px-5 py-3.5">Zákazník</th>
+                      <th className="px-5 py-3.5">Cena & Platba</th>
+                      <th className="px-5 py-3.5">Stav</th>
+                      <th className="px-5 py-3.5 text-right">Akce</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredOrders.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-12 text-center text-gray-500 italic">
+                          Zatím nebyly nalezeny žádné objednávky z E-shopu.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredOrders.map(order => (
+                        <tr key={order.id} className="hover:bg-gray-50/80 transition-colors">
+                          <td className="px-5 py-4">
+                            <div className="font-bold text-gray-900">{order.productName}</div>
+                            <div className="text-xs text-gray-500">Velikost: <span className="font-semibold text-gray-700">{order.size}</span> • {order.quantity} ks</div>
+                            <div className="text-xs text-gray-400 mt-1">Vytvořeno: {new Date(order.createdAt).toLocaleString('cs-CZ')}</div>
+                            {order.deliveryNote && (
+                              <div className="text-xs text-blue-800 bg-blue-50 px-2 py-1 rounded-lg mt-1.5 border border-blue-100">
+                                📍 {order.deliveryNote}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-5 py-4">
+                            <div className="font-bold text-gray-900">{order.userName}</div>
+                            <div className="text-xs text-gray-600">{order.userEmail}</div>
+                            <div className="text-xs text-gray-600">{order.userPhone}</div>
+                          </td>
+                          <td className="px-5 py-4">
+                            <div className="font-extrabold text-brand-red text-base">{order.totalPrice} Kč</div>
+                            <div className="text-xs text-gray-500">VS: <span className="font-bold text-gray-800">{order.variableSymbol}</span></div>
+                            <button
+                              onClick={() => setSelectedOrderForQr(order)}
+                              className="text-xs text-brand-blue font-bold hover:underline mt-1 inline-flex items-center gap-1"
+                            >
+                              📲 Zobrazit QR platbu
+                            </button>
+                          </td>
+                          <td className="px-5 py-4">
+                            {getStatusBadge(order.status)}
+                          </td>
+                          <td className="px-5 py-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {order.status !== 'paid' && (
+                                <button
+                                  onClick={() => {
+                                    if (confirm(`Označit objednávku ${order.variableSymbol} (${order.userName}) jako ZAPLACENOU? Zákazníkovi odejde potvrzovací email.`)) {
+                                      updateMerchOrder(order.id, { status: 'paid' });
+                                    }
+                                  }}
+                                  title="Označit jako zaplaceno (odešle se email)"
+                                  className="px-2.5 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-colors"
+                                >
+                                  Označit Zaplaceno
+                                </button>
+                              )}
+                              {order.status === 'paid' && (
+                                <button
+                                  onClick={() => updateMerchOrder(order.id, { status: 'completed' })}
+                                  title="Označit jako předáno zákazníkovi"
+                                  className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors"
+                                >
+                                  Předat / Hotovo
+                                </button>
+                              )}
+                              <button
+                                onClick={() => {
+                                  if (confirm('Opravdu smazat tuto objednávku?')) {
+                                    deleteMerchOrder(order.id);
+                                  }
+                                }}
+                                title="Smazat objednávku"
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* QR Payment Inspection Modal */}
+            {selectedOrderForQr && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                <div className="bg-white p-6 rounded-2xl max-w-sm w-full text-center relative shadow-2xl border border-gray-100">
+                  <button 
+                    onClick={() => setSelectedOrderForQr(null)}
+                    className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+                  >
+                    <X size={20} />
+                  </button>
+                  <h3 className="font-bold text-gray-900 text-lg mb-1">QR Platba (Raiffeisenbank)</h3>
+                  <p className="text-xs text-gray-500 mb-4">{selectedOrderForQr.userName} • {selectedOrderForQr.productName}</p>
+                  
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(`SPD*1.0*ACC:CZ6555000000000287413002*AM:${selectedOrderForQr.totalPrice.toFixed(2)}*CC:CZK*X-VS:${selectedOrderForQr.variableSymbol}*MSG:${encodeURIComponent(`Merch ${selectedOrderForQr.productName}`)}`)}`}
+                    alt="QR kód"
+                    className="w-48 h-48 mx-auto mb-4 border border-gray-200 rounded-xl p-2 bg-white"
+                  />
+
+                  <div className="text-left text-xs bg-gray-50 p-3 rounded-xl space-y-1 mb-4">
+                    <div><strong>Číslo účtu:</strong> 287413002/5500</div>
+                    <div><strong>Částka:</strong> {selectedOrderForQr.totalPrice} Kč</div>
+                    <div><strong>Variabilní symbol:</strong> {selectedOrderForQr.variableSymbol}</div>
+                    <div><strong>Stav:</strong> {selectedOrderForQr.status}</div>
+                  </div>
+
+                  <button
+                    onClick={() => setSelectedOrderForQr(null)}
+                    className="w-full py-2 bg-gray-900 text-white font-bold rounded-xl text-sm"
+                  >
+                    Zavřít
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="grid lg:grid-cols-3 gap-8">
+            {/* Form */}
+            <div className="lg:col-span-1">
+              <div className="bg-white p-6 rounded-2xl shadow-md sticky top-24">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                   <Plus size={20} className="mr-2 text-brand-red" /> Přidat produkt
+                </h3>
+                <form onSubmit={handleSubmit} className="space-y-3">
+                  <input 
+                    className="w-full px-3 py-2 border rounded-lg text-sm" 
+                    placeholder="Název produktu" 
+                    value={formData.name} 
+                    onChange={e => setFormData({...formData, name: e.target.value})} 
+                    required 
+                  />
+                  <input 
+                    className="w-full px-3 py-2 border rounded-lg text-sm" 
+                    placeholder="Cena (např. 450 Kč)" 
+                    value={formData.price} 
+                    onChange={e => setFormData({...formData, price: e.target.value})} 
+                    required 
+                  />
+                  <textarea 
+                    className="w-full px-3 py-2 border rounded-lg text-sm" 
+                    placeholder="Popis produktu..." 
+                    rows={3}
+                    value={formData.description} 
+                    onChange={e => setFormData({...formData, description: e.target.value})} 
+                  />
+                  <input 
+                    className="w-full px-3 py-2 border rounded-lg text-sm" 
+                    placeholder="URL obrázku" 
+                    value={formData.image} 
+                    onChange={e => setFormData({...formData, image: e.target.value})} 
+                    required 
+                  />
+                  {formData.image && (
+                       <div className="mt-2 rounded-lg overflow-hidden border border-gray-200">
+                          <img src={formData.image} alt="Náhled" className="w-full h-32 object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                       </div>
+                  )}
+                  <button className="w-full bg-brand-blue text-white font-bold py-2.5 rounded-lg hover:bg-blue-700 transition-colors shadow-md">
+                    Přidat produkt do nabídky
+                  </button>
+                </form>
+              </div>
+            </div>
+    
+            {/* List */}
+            <div className="lg:col-span-2 space-y-4">
+               {products.map(prod => (
+                  <div key={prod.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex gap-4 items-center">
+                      <img src={prod.image} alt="" className="w-20 h-20 object-cover rounded-lg bg-gray-100" />
+                      <div className="flex-grow">
+                          <h4 className="font-bold text-gray-900">{prod.name}</h4>
+                          <p className="text-brand-red font-bold text-sm">{prod.price}</p>
+                          <p className="text-gray-500 text-sm line-clamp-1">{prod.description}</p>
+                      </div>
+                      <button 
+                          onClick={() => { if(confirm('Opravdu smazat?')) deleteProduct(prod.id) }}
+                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                          <Trash2 size={20} />
+                      </button>
+                  </div>
+               ))}
+               {products.length === 0 && <p className="text-gray-500 text-center py-8">Žádné produkty v E-shopu.</p>}
             </div>
           </div>
-  
-          {/* List */}
-          <div className="lg:col-span-2 space-y-4">
-             {products.map(prod => (
-                <div key={prod.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex gap-4 items-center">
-                    <img src={prod.image} alt="" className="w-20 h-20 object-cover rounded-lg bg-gray-100" />
-                    <div className="flex-grow">
-                        <h4 className="font-bold text-gray-900">{prod.name}</h4>
-                        <p className="text-brand-red font-bold text-sm">{prod.price}</p>
-                        <p className="text-gray-500 text-sm line-clamp-1">{prod.description}</p>
-                    </div>
-                    <button 
-                        onClick={() => { if(confirm('Opravdu smazat?')) deleteProduct(prod.id) }}
-                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    >
-                        <Trash2 size={20} />
-                    </button>
-                </div>
-             ))}
-             {products.length === 0 && <p className="text-gray-500 text-center py-8">Žádné produkty v E-shopu.</p>}
-          </div>
-        </div>
+        )}
       </div>
     );
 };
 
 const RegistrationManager: React.FC = () => {
-  const { registrations, camps, updateRegistration } = useData();
+  const { registrations, camps, updateRegistration, deleteRegistration } = useData();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [adminNote, setAdminNote] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [campFilter, setCampFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [insuranceReg, setInsuranceReg] = useState<Registration | null>(null);
+  const [deletingReg, setDeletingReg] = useState<Registration | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleConfirmDelete = async () => {
+    if (!deletingReg) return;
+    try {
+      setIsDeleting(true);
+      await deleteRegistration(deletingReg.id);
+      setDeletingReg(null);
+    } catch (err) {
+      console.error('Chyba při mazání přihlášky:', err);
+      alert('Chyba při mazání přihlášky.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const handleUpdateStatus = (id: string, status: Registration['status']) => {
     updateRegistration(id, { status });
@@ -1011,11 +1298,13 @@ const RegistrationManager: React.FC = () => {
   const filteredRegistrations = useMemo(() => {
     return registrations.filter(reg => {
       const camp = camps.find(c => c.id === reg.campId);
+      const regVs = reg.variableSymbol || camp?.variableSymbol || '';
       const matchesSearch = 
         reg.childName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         reg.parentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         reg.parentEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
         reg.parentPhone.includes(searchTerm) ||
+        regVs.includes(searchTerm) ||
         (camp?.title || '').toLowerCase().includes(searchTerm.toLowerCase());
 
       const matchesCamp = campFilter === 'ALL' || reg.campId === campFilter;
@@ -1120,8 +1409,10 @@ const RegistrationManager: React.FC = () => {
                         <div className="font-bold text-gray-900">{reg.childName}</div>
                         <div className="text-xs text-gray-500">{reg.childBirthDate}</div>
                         <div className="text-xs font-medium text-brand-blue mt-1">{camp?.title}</div>
-                        {camp?.variableSymbol && (
-                          <div className="text-[11px] text-gray-500 font-mono mt-0.5">VS: {camp.variableSymbol}</div>
+                        {(reg.variableSymbol || camp?.variableSymbol) && (
+                          <div className="text-[11px] text-gray-700 font-mono font-bold mt-0.5 bg-blue-50 px-1.5 py-0.5 rounded w-fit border border-blue-100">
+                            VS: {reg.variableSymbol || camp?.variableSymbol}
+                          </div>
                         )}
                       </td>
                       <td className="px-6 py-4">
@@ -1192,6 +1483,13 @@ const RegistrationManager: React.FC = () => {
                             >
                               <ShieldCheck size={16} />
                             </button>
+                            <button
+                              onClick={() => setDeletingReg(reg)}
+                              className="p-1.5 bg-red-50 text-red-500 rounded hover:bg-red-100 hover:text-red-700 transition-colors"
+                              title="Smazat přihlášku"
+                            >
+                              <Trash2 size={16} />
+                            </button>
                           </div>
                           
                           {editingId === reg.id && (
@@ -1258,6 +1556,17 @@ const RegistrationManager: React.FC = () => {
           onClose={() => setInsuranceReg(null)}
         />
       )}
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={!!deletingReg}
+        onClose={() => setDeletingReg(null)}
+        onConfirm={handleConfirmDelete}
+        title="Opravdu smazat přihlášku na tábor?"
+        itemName={deletingReg ? `${deletingReg.childName} (${camps.find(c => c.id === deletingReg.campId)?.title || 'Tábor'})` : undefined}
+        description="Přihláška bude trvale odstraněna ze systému i z databáze. Tuto akci nelze vzít zpět."
+        isDeleting={isDeleting}
+      />
     </div>
   );
 };
@@ -1645,12 +1954,13 @@ const UserManager: React.FC = () => {
 };
 
 const AttendanceManager: React.FC<{ currentUser: User | null }> = ({ currentUser }) => {
-  const { schools, schoolRegistrations, attendance, updateAttendance, excuses } = useData();
+  const { schools, schoolRegistrations, attendance, updateAttendance, updateSchool, excuses } = useData();
   const [selectedSchoolId, setSelectedSchoolId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [expandedInfo, setExpandedInfo] = useState<string | null>(null);
   const [showPrintSheet, setShowPrintSheet] = useState(false);
   const [studentSearchTerm, setStudentSearchTerm] = useState('');
+  const [editingDatesSchool, setEditingDatesSchool] = useState<School | null>(null);
 
   // Extract all assigned schools for this trainer
   const assignedSchools = useMemo(() => {
@@ -1790,6 +2100,23 @@ const AttendanceManager: React.FC<{ currentUser: User | null }> = ({ currentUser
                       <UsersIcon size={14} className="mr-2 text-gray-400 shrink-0" />
                       <strong>{enrolledStudents.length}</strong> {enrolledStudents.length === 1 ? 'přihlášené dítě' : enrolledStudents.length < 5 ? 'přihlášené děti' : 'přihlášených dětí'}
                     </p>
+                    <div className="flex items-center justify-between pt-1 text-xs">
+                      <span className="flex items-center text-gray-500">
+                        <Calendar size={13} className="mr-1 text-brand-blue" />
+                        Termíny: <strong className="ml-1 text-gray-800">{(school.trainingDates || []).filter(Boolean).length}/14</strong>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingDatesSchool(school);
+                        }}
+                        className="px-2 py-0.5 text-[11px] font-bold text-brand-blue bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md transition-colors"
+                        title="Nastavit a upravit data tréninků"
+                      >
+                        {(school.trainingDates || []).filter(Boolean).length > 0 ? 'Upravit data' : '+ Zadat data'}
+                      </button>
+                    </div>
                   </div>
 
                   {todayExcuses.length > 0 && (
@@ -1812,6 +2139,17 @@ const AttendanceManager: React.FC<{ currentUser: User | null }> = ({ currentUser
             );
           })}
         </div>
+
+        {editingDatesSchool && (
+          <TrainingDatesModal
+            school={editingDatesSchool}
+            onClose={() => setEditingDatesSchool(null)}
+            onSave={(trainingDates) => {
+              updateSchool(editingDatesSchool.id, { trainingDates });
+              setEditingDatesSchool(null);
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -1856,7 +2194,15 @@ const AttendanceManager: React.FC<{ currentUser: User | null }> = ({ currentUser
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-end sm:self-auto">
+        <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
+          <button
+            onClick={() => setEditingDatesSchool(activeSchool)}
+            className="px-3.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-brand-blue text-xs font-bold transition-colors flex items-center border border-blue-200 shadow-xs"
+            title="Nastavit a spravovat termíny tréninků (14 lekcí)"
+          >
+            <Calendar size={15} className="mr-1.5" />
+            Termíny tréninků ({(activeSchool.trainingDates || []).filter(Boolean).length}/14)
+          </button>
           <button
             onClick={() => setShowPrintSheet(true)}
             className="px-3.5 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold transition-colors flex items-center border border-purple-200 shadow-xs"
@@ -1910,6 +2256,37 @@ const AttendanceManager: React.FC<{ currentUser: User | null }> = ({ currentUser
             </div>
           </div>
         </div>
+
+        {/* Quick Lesson Selector from set training dates */}
+        {activeSchool.trainingDates && activeSchool.trainingDates.some(Boolean) && (
+          <div className="p-3 bg-blue-50/70 border-b border-blue-100 flex items-center gap-1.5 overflow-x-auto text-xs py-2 px-4 scrollbar-thin">
+            <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider shrink-0 mr-1 flex items-center">
+              <Calendar size={12} className="mr-1 text-brand-blue" />
+              Vybrat lekci:
+            </span>
+            {activeSchool.trainingDates.map((dStr, idx) => {
+              if (!dStr) return null;
+              const isCurrent = selectedDate === dStr;
+              const parts = dStr.split('-');
+              const day = parseInt(parts[2], 10);
+              const month = parseInt(parts[1], 10);
+              return (
+                <button
+                  key={idx}
+                  onClick={() => setSelectedDate(dStr)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold shrink-0 transition-all ${
+                    isCurrent
+                      ? 'bg-brand-blue text-white shadow-xs'
+                      : 'bg-white text-gray-700 hover:bg-blue-100 border border-gray-200'
+                  }`}
+                  title={`${idx + 1}. lekce: ${dStr}`}
+                >
+                  {idx + 1}. ({day}.{month}.)
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Stats & Quick Action Bar */}
         <div className="p-4 sm:p-5 bg-gray-50 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -2137,6 +2514,18 @@ const AttendanceManager: React.FC<{ currentUser: User | null }> = ({ currentUser
           onClose={() => setShowPrintSheet(false)}
         />
       )}
+
+      {/* Modal for Setting Training Dates (14 sessions) */}
+      {editingDatesSchool && (
+        <TrainingDatesModal
+          school={editingDatesSchool}
+          onClose={() => setEditingDatesSchool(null)}
+          onSave={(trainingDates) => {
+            updateSchool(editingDatesSchool.id, { trainingDates });
+            setEditingDatesSchool(null);
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -2144,7 +2533,7 @@ const AttendanceManager: React.FC<{ currentUser: User | null }> = ({ currentUser
 // --- SchoolRegistrationManager ---
 
 const SchoolRegistrationManager: React.FC = () => {
-  const { schoolRegistrations, schools, updateSchoolRegistration, excuses } = useData();
+  const { schoolRegistrations, schools, updateSchoolRegistration, deleteSchoolRegistration, excuses } = useData();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [adminNote, setAdminNote] = useState('');
   const [showHistoryFor, setShowHistoryFor] = useState<string | null>(null);
@@ -2153,6 +2542,22 @@ const SchoolRegistrationManager: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedSchoolForSheet, setSelectedSchoolForSheet] = useState<School | null>(null);
   const [insuranceReg, setInsuranceReg] = useState<SchoolRegistration | null>(null);
+  const [deletingReg, setDeletingReg] = useState<SchoolRegistration | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleConfirmDelete = async () => {
+    if (!deletingReg) return;
+    try {
+      setIsDeleting(true);
+      await deleteSchoolRegistration(deletingReg.id);
+      setDeletingReg(null);
+    } catch (err) {
+      console.error('Chyba při mazání přihlášky na kroužek:', err);
+      alert('Chyba při mazání přihlášky.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const handleUpdateStatus = (id: string, status: SchoolRegistration['status']) => {
     updateSchoolRegistration(id, { status });
@@ -2167,11 +2572,13 @@ const SchoolRegistrationManager: React.FC = () => {
   const filteredRegistrations = useMemo(() => {
     return schoolRegistrations.filter(reg => {
       const school = schools.find(s => s.id === reg.schoolId);
+      const regVs = reg.variableSymbol || '';
       const matchesSearch = 
         reg.childName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         reg.parentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         reg.parentEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
         reg.parentPhone.includes(searchTerm) ||
+        regVs.includes(searchTerm) ||
         (school?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (school?.city || '').toLowerCase().includes(searchTerm.toLowerCase());
 
@@ -2294,6 +2701,11 @@ const SchoolRegistrationManager: React.FC = () => {
                         <div className="font-bold text-gray-900">{reg.childName}</div>
                         <div className="text-xs text-gray-500">{reg.childBirthDate} {reg.childPhone && `• ${reg.childPhone}`}</div>
                         <div className="text-xs font-medium text-brand-blue mt-1">{school?.name} - {school?.city}</div>
+                        {reg.variableSymbol && (
+                          <div className="text-[11px] text-gray-700 font-mono font-bold mt-0.5 bg-blue-50 px-1.5 py-0.5 rounded w-fit border border-blue-100">
+                            VS: {reg.variableSymbol}
+                          </div>
+                        )}
                         {reg.afterSchoolClub && (
                            <div className="mt-1"><span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-[10px] font-bold">Školní družina</span></div>
                         )}
@@ -2384,6 +2796,13 @@ const SchoolRegistrationManager: React.FC = () => {
                             >
                               <ShieldCheck size={16} />
                             </button>
+                            <button
+                              onClick={() => setDeletingReg(reg)}
+                              className="p-1.5 bg-red-50 text-red-500 rounded hover:bg-red-100 hover:text-red-700 transition-colors"
+                              title="Smazat přihlášku"
+                            >
+                              <Trash2 size={16} />
+                            </button>
                           </div>
                           
                           {editingId === reg.id && (
@@ -2458,6 +2877,17 @@ const SchoolRegistrationManager: React.FC = () => {
           onClose={() => setInsuranceReg(null)}
         />
       )}
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={!!deletingReg}
+        onClose={() => setDeletingReg(null)}
+        onConfirm={handleConfirmDelete}
+        title="Opravdu smazat přihlášku na kroužek?"
+        itemName={deletingReg ? `${deletingReg.childName} (${schools.find(s => s.id === deletingReg.schoolId)?.name || 'Kroužek'})` : undefined}
+        description="Přihláška žáka bude trvale odstraněna ze systému a databáze. Tuto akci nelze vzít zpět."
+        isDeleting={isDeleting}
+      />
     </div>
   );
 };

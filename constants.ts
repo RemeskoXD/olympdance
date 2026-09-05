@@ -46,7 +46,7 @@ export const CAMPS: Camp[] = [
     date: '13.7. - 17.7. 2027',
     price: '3 890 Kč',
     description: 'Příměstský tábor v Prostějově plný tance pro všechny věkové kategorie.',
-    image: 'https://static.wixstatic.com/media/93005c_7b35dfc300bf43649d7ae8b5fbb3fbb1~mv2.png/v1/fill/w_308,h_231,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/IMG_6247%202_HEIC.png',
+    image: '/images/camp-prostejov.jpg',
     variableSymbol: '2027002',
     details: `## CENA
 Cena za letní camp je 3890 Kč. (2390 Kč po příspěvku ZP.)
@@ -72,7 +72,7 @@ Cena zahrnuje 5x oběd, 10 x svačina, pitný režim, celodenní dozor, táborov
     date: '19.7. - 24.7. 2027',
     price: '5 990 Kč',
     description: 'Bílá, 1. turnus. Týden plný tance, her a zábavy v krásném prostředí Beskyd.',
-    image: 'https://static.wixstatic.com/media/93005c_5baa5ec580a946b0bbdc5c0b06ae0c8b~mv2.jpeg/v1/fill/w_308,h_231,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/IMG_8522.jpeg',
+    image: '/images/camp-bila-turnus1.jpg',
     variableSymbol: '2027001',
     details: `## CENA
 Cena za jeden turnus DANCE CAMPU je 5990 Kč. (4490 Kč po příspěvku ZP.)
@@ -94,7 +94,7 @@ Ubytování je ve dvou až pěti lůžkových pokojích na Horské chatě Bílá
     date: '20.7. - 24.7. 2027',
     price: '3 990 Kč',
     description: 'Intenzivní taneční průprava, moderní styly a zábava přímo v Olomouci.',
-    image: 'https://static.wixstatic.com/media/93005c_e279092e065b4500ba586ef831cd966e~mv2.png/v1/fill/w_308,h_231,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/93005c_e279092e065b4500ba586ef831cd966e~mv2.png',
+    image: '/images/camp-olomouc.jpg',
     variableSymbol: '2027003',
     details: `## CENA
 Cena za letní camp je 3990 Kč. (2490 Kč po příspěvku ZP.)
@@ -119,7 +119,7 @@ Cena zahrnuje 5x oběd, 10 x svačina, pitný režim, celodenní dozor, táborov
     date: '23.8. - 28.8. 2027',
     price: '5 990 Kč',
     description: 'Bílá, 2. turnus. Zakončení prázdnin tancem a pohybem v přírodě.',
-    image: 'https://static.wixstatic.com/media/93005c_c0f4a6edf5834e4eb2abdd3210aade89~mv2.png/v1/fill/w_308,h_231,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/IMG_0059_HEIC.png',
+    image: '/images/camp-bila-turnus2.jpg',
     variableSymbol: '2027004',
     details: `## CENA
 Cena za jeden turnus DANCE CAMPU je 5990 Kč. (4490 Kč po příspěvku ZP.)
@@ -146,13 +146,13 @@ export const GALLERY_IMAGES: GalleryImage[] = [
   { id: 'gp5', url: "https://web2.itnahodinu.cz/olympdance/prostejov/img_14_optimized.02.25_00014.jpg" },
   { id: 'gp6', url: "https://web2.itnahodinu.cz/olympdance/prostejov/img_14_optimized.02.25_00028.jpg" },
   { id: 'gp7', url: "https://web2.itnahodinu.cz/olympdance/prostejov/img_14_optimized.02.25_00050.jpg" },
-  // Existing images
-  { id: 'g1', url: "https://static.wixstatic.com/media/93005c_4ab5a66bf36d4345a999b8a126bff477~mv2.jpg/v1/fill/w_1000,h_600,al_c,q_85/dance-school.jpg" },
-  { id: 'g2', url: "https://static.wixstatic.com/media/93005c_573dc43953b84fde95242482a4c20b9c~mv2.jpg/v1/fill/w_1000,h_600,al_c,q_85/summer-camp.jpg" },
-  { id: 'g3', url: "https://static.wixstatic.com/media/93005c_362da366b610451abefc712af9703b80~mv2.jpg/v1/fill/w_1901,h_231,al_c,q_85/banner.jpg" },
-  { id: 'g4', url: "https://static.wixstatic.com/media/93005c_5baa5ec580a946b0bbdc5c0b06ae0c8b~mv2.jpeg/v1/fill/w_600,h_450,al_c,q_80/camp1.jpeg" },
-  { id: 'g5', url: "https://static.wixstatic.com/media/93005c_e279092e065b4500ba586ef831cd966e~mv2.png/v1/fill/w_600,h_450,al_c,q_85/camp2.png" },
-  { id: 'g6', url: "https://static.wixstatic.com/media/93005c_c0f4a6edf5834e4eb2abdd3210aade89~mv2.png/v1/fill/w_600,h_450,al_c,q_85/camp3.png" },
+  // Localized images
+  { id: 'g1', url: "/images/dance-school.jpg" },
+  { id: 'g2', url: "/images/summer-camp.jpg" },
+  { id: 'g3', url: "/images/banner-olymp.jpg" },
+  { id: 'g4', url: "/images/camp-bila-turnus1.jpg" },
+  { id: 'g5', url: "/images/camp-olomouc.jpg" },
+  { id: 'g6', url: "/images/camp-bila-turnus2.jpg" },
   { id: 'g7', url: "https://images.unsplash.com/photo-1547153760-18fc86324498?auto=format&fit=crop&q=80&w=800" },
   { id: 'g8', url: "https://images.unsplash.com/photo-1504609773096-104ff2c73ba4?auto=format&fit=crop&q=80&w=800" },
   { id: 'g9', url: "https://images.unsplash.com/photo-1518834107812-67b0b7c58434?auto=format&fit=crop&q=80&w=800" },
@@ -205,14 +205,19 @@ export const PRODUCTS: Product[] = [
 
 export const CONTACT_INFO = {
   name: "Taneční klub Olymp Olomouc, z. s.",
-  address: "ZŠ Holečkova 10, 779 00, Olomouc",
+  registeredOffice: "Jiráskova 381/25, Hodolany, 779 00 Olomouc",
+  trainingLocation: "ZŠ Holečkova 10, 779 00, Olomouc",
+  address: "Jiráskova 381/25, Hodolany, 779 00 Olomouc",
   ico: "68347286",
   email: "info@olympdance.cz",
   phone: "+420 722 017 700"
 };
 
 export const BANK_INFO = {
-  account: "2100845678/2010",
-  bankName: "Fio banka",
-  iban: "CZ0855000000001806875329"
+  account: "1806875329/5500",
+  bankName: "Raiffeisenbank",
+  iban: "CZ0855000000001806875329",
+  ibanFormatted: "CZ08 5500 0000 0018 0687 5329",
+  bic: "RZBCCZPP",
+  swift: "RZBCCZPP"
 };

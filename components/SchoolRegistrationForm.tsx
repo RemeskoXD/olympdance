@@ -4,6 +4,7 @@ import { useData } from '../context/DataContext';
 import { ChevronRight, ChevronLeft, CheckCircle, CreditCard, User, Mail, Phone, Calendar as CalendarIcon, MapPin, Plus, Trash2, School as SchoolIcon } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { BANK_INFO } from '../constants';
+import { LegalModal, LegalDocType } from './LegalModal';
 
 const SchoolRegistrationForm: React.FC = () => {
   const { schoolId } = useParams<{ schoolId: string }>();
@@ -13,6 +14,7 @@ const SchoolRegistrationForm: React.FC = () => {
   const initialSchool = schools.find(c => c.id === schoolId);
   
   const [step, setStep] = useState(1);
+  const [legalModal, setLegalModal] = useState<LegalDocType | null>(null);
   const [parentData, setParentData] = useState({
     parentName: '',
     parentEmail: '',
@@ -33,7 +35,7 @@ const SchoolRegistrationForm: React.FC = () => {
     children.forEach(child => {
       const school = schools.find(s => s.id === child.schoolId);
       if (school) {
-        amount += parseFloat(school.price.replace(/\s/g, '').replace('Kč', '')) || 0;
+        amount += parseFloat(String(school.price).replace(/\s/g, '').replace('Kč', '')) || 0;
       }
     });
     setTotalAmount(amount);
@@ -302,35 +304,21 @@ const SchoolRegistrationForm: React.FC = () => {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                          <div className="space-y-1.5 sm:space-y-2">
-                            <label className="text-sm font-bold text-gray-700 flex items-center">
-                              <Phone size={14} className="mr-1 text-brand-blue shrink-0" /> Telefonní číslo (nepovinné)
-                            </label>
-                            <input
-                              type="tel"
-                              value={child.childPhone}
-                              onChange={(e) => handleChildChange(child.id, 'childPhone', e.target.value)}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue outline-none text-sm sm:text-base"
-                              placeholder="+420 123 456 789"
-                            />
-                          </div>
-                          <div className="space-y-1.5 sm:space-y-2">
-                            <label className="text-sm font-bold text-gray-700 flex items-center">
-                              <SchoolIcon size={14} className="mr-1 text-brand-blue shrink-0" /> Výběr kroužku
-                            </label>
-                            <select
-                              required
-                              value={child.schoolId}
-                              onChange={(e) => handleChildChange(child.id, 'schoolId', e.target.value)}
-                              className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue outline-none bg-white text-sm sm:text-base"
-                            >
-                              <option value="" disabled>Vyberte kroužek...</option>
-                              {schools.map(s => (
-                                <option key={s.id} value={s.id}>{s.name} ({s.day} {s.time}) - {s.price}</option>
-                              ))}
-                            </select>
-                          </div>
+                        <div className="space-y-1.5 sm:space-y-2">
+                          <label className="text-sm font-bold text-gray-700 flex items-center">
+                            <SchoolIcon size={14} className="mr-1 text-brand-blue shrink-0" /> Výběr kroužku
+                          </label>
+                          <select
+                            required
+                            value={child.schoolId}
+                            onChange={(e) => handleChildChange(child.id, 'schoolId', e.target.value)}
+                            className="w-full px-3 sm:px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue outline-none bg-white text-sm sm:text-base font-medium"
+                          >
+                            <option value="" disabled>Vyberte kroužek...</option>
+                            {schools.map(s => (
+                              <option key={s.id} value={s.id}>{s.name} ({s.day} {s.time}) - {s.price}</option>
+                            ))}
+                          </select>
                         </div>
 
                         <div className="mt-4 flex items-center">
@@ -339,9 +327,9 @@ const SchoolRegistrationForm: React.FC = () => {
                             id={`druzina-${child.id}`}
                             checked={child.afterSchoolClub || false}
                             onChange={(e) => handleChildChange(child.id, 'afterSchoolClub', e.target.checked)}
-                            className="w-4 h-4 text-brand-blue rounded border-gray-300 focus:ring-brand-blue"
+                            className="w-4 h-4 text-brand-blue rounded border-gray-300 focus:ring-brand-blue cursor-pointer"
                           />
-                          <label htmlFor={`druzina-${child.id}`} className="ml-2 text-sm text-gray-700">
+                          <label htmlFor={`druzina-${child.id}`} className="ml-2 text-sm text-gray-700 cursor-pointer">
                             Vyzvednout dítě z družiny
                           </label>
                         </div>
@@ -363,20 +351,36 @@ const SchoolRegistrationForm: React.FC = () => {
                       <input 
                         type="checkbox" 
                         required 
-                        className="mt-1 w-5 h-5 rounded border-gray-300 text-brand-blue focus:ring-brand-blue"
+                        className="mt-1 w-5 h-5 rounded border-gray-300 text-brand-blue focus:ring-brand-blue shrink-0 cursor-pointer"
                       />
-                      <span className="text-sm text-gray-600">
-                        Souhlasím se zpracováním osobních údajů (GDPR) pro účely organizace kroužku.
+                      <span className="text-sm text-gray-700">
+                        Souhlasím se{' '}
+                        <button
+                          type="button"
+                          onClick={() => setLegalModal('gdpr')}
+                          className="text-brand-blue font-semibold hover:underline underline-offset-2 decoration-brand-blue/50 hover:decoration-brand-blue inline cursor-pointer"
+                        >
+                          zpracováním osobních údajů (GDPR)
+                        </button>{' '}
+                        pro účely organizace kroužku.
                       </span>
                     </label>
                     <label className="flex items-start space-x-3 cursor-pointer">
                       <input 
                         type="checkbox" 
                         required 
-                        className="mt-1 w-5 h-5 rounded border-gray-300 text-brand-blue focus:ring-brand-blue"
+                        className="mt-1 w-5 h-5 rounded border-gray-300 text-brand-blue focus:ring-brand-blue shrink-0 cursor-pointer"
                       />
-                      <span className="text-sm text-gray-600">
-                        Souhlasím s <a href="#" className="text-brand-blue hover:underline">obchodními podmínkami</a> a řádem tanečního klubu.
+                      <span className="text-sm text-gray-700">
+                        Souhlasím s{' '}
+                        <button
+                          type="button"
+                          onClick={() => setLegalModal('terms')}
+                          className="text-brand-blue font-semibold hover:underline underline-offset-2 decoration-brand-blue/50 hover:decoration-brand-blue inline cursor-pointer"
+                        >
+                          obchodními podmínkami a provozním řádem
+                        </button>{' '}
+                        tanečního klubu.
                       </span>
                     </label>
                     <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200 mt-4">
@@ -402,8 +406,9 @@ const SchoolRegistrationForm: React.FC = () => {
                 <div className="space-y-4">
                   {children.map((child) => {
                     const childSchool = schools.find(s => s.id === child.schoolId);
-                    const amount = childSchool ? parseFloat(childSchool.price.replace(/\s/g, '').replace('Kč', '')) || 0 : 0;
-                    const childQrData = `SPD*1.0*ACC:${BANK_INFO.iban}*AM:${amount}*CC:CZK*MSG:${child.childName} ${child.childSurname} ${child.childRodneCislo}`;
+                    const amount = childSchool ? parseFloat(String(childSchool.price).replace(/\s/g, '').replace('Kč', '')) || 0 : 0;
+                    const childVs = String(child.childRodneCislo || child.id || '').replace(/\D/g, '').slice(0, 10) || '2026';
+                    const childQrData = `SPD*1.0*ACC:${BANK_INFO.iban}*AM:${amount}*CC:CZK*X-VS:${childVs}*MSG:${child.childName} ${child.childSurname}`;
 
                     return (
                       <div key={child.id} className="bg-gray-50 p-4 sm:p-6 rounded-2xl border border-gray-200">
@@ -419,12 +424,18 @@ const SchoolRegistrationForm: React.FC = () => {
                               <CreditCard size={18} className="mr-2 text-brand-blue shrink-0" /> Platební údaje (za 1. pololetí)
                             </h4>
                             <div className="grid grid-cols-2 gap-y-2 text-xs sm:text-sm text-left">
-                              <span className="text-gray-500">Číslo účtu:</span>
+                              <span className="text-gray-500">Číslo účtu ({BANK_INFO.bankName}):</span>
                               <span className="font-bold">{BANK_INFO.account}</span>
+                              <span className="text-gray-500">IBAN:</span>
+                              <span className="font-mono text-xs font-bold break-all">{BANK_INFO.ibanFormatted || BANK_INFO.iban}</span>
+                              <span className="text-gray-500">BIC / SWIFT:</span>
+                              <span className="font-mono font-bold">{BANK_INFO.bic}</span>
                               <span className="text-gray-500">Částka:</span>
                               <span className="font-bold text-brand-red">{amount} Kč</span>
+                              <span className="text-gray-500">Variabilní symbol:</span>
+                              <span className="font-bold text-brand-blue">{childVs}</span>
                               <span className="text-gray-500">Zpráva pro příjemce:</span>
-                              <span className="font-bold break-all">{child.childName} {child.childSurname} {child.childRodneCislo}</span>
+                              <span className="font-bold break-all">{child.childName} {child.childSurname}</span>
                             </div>
                           </div>
                         </div>
@@ -492,6 +503,13 @@ const SchoolRegistrationForm: React.FC = () => {
           </form>
         </div>
       </div>
+
+      {/* Legal terms and GDPR modal */}
+      <LegalModal
+        isOpen={!!legalModal}
+        type={legalModal || 'terms'}
+        onClose={() => setLegalModal(null)}
+      />
     </div>
   );
 };

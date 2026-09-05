@@ -60,7 +60,7 @@ const Camps: React.FC = () => {
         {/* Banner Section */}
         <div className="relative rounded-2xl overflow-hidden shadow-xl mb-8 sm:mb-12">
           <img 
-            src="https://web2.itnahodinu.cz/olympdance/prostejov/img_14_optimized.02.25_00050.jpg" 
+            src="/images/IMG_8522.jpg" 
             alt="Letní tábory" 
             className="w-full h-[240px] sm:h-[340px] md:h-[450px] object-cover object-center"
           />

@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { SchoolRegistration, School } from '../types';
-import { LogIn, User, FileText, CheckCircle, Clock, AlertCircle, LogOut, ChevronRight, Calendar, PenTool, ShieldCheck, Copy, Check } from 'lucide-react';
+import { LogIn, User, FileText, CheckCircle, Clock, AlertCircle, LogOut, ChevronRight, Calendar, PenTool, ShieldCheck, Copy, Check, X } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { BANK_INFO } from '../constants';
 import { useNavigate } from 'react-router-dom';
 import { InsuranceConfirmationModal } from './InsuranceConfirmationModal';
+import { ForgotPasswordModal } from './ForgotPasswordModal';
 
 const SchoolPortal: React.FC = () => {
   const navigate = useNavigate();
@@ -15,6 +16,7 @@ const SchoolPortal: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState<SchoolRegistration | null>(null);
   const [error, setError] = useState('');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   
   const [excuseDate, setExcuseDate] = useState('');
   const [excuseReason, setExcuseReason] = useState('');
@@ -233,12 +235,29 @@ const SchoolPortal: React.FC = () => {
           
           <div className="mt-8 pt-6 border-t border-gray-100 text-center space-y-2">
             <p className="text-sm text-gray-500">
-              Zapomněli jste heslo? <button onClick={() => navigate('/kontakt')} className="text-brand-blue font-bold">Kontaktujte nás</button>
+              Zapomněli jste heslo?{' '}
+              <button
+                type="button"
+                onClick={() => setShowForgotPassword(true)}
+                className="text-brand-blue font-bold hover:underline"
+              >
+                Obnovit heslo
+              </button>
             </p>
             <p className="text-sm text-gray-500">
-              Nemáte ještě účet? <button onClick={() => navigate('/tanecnikrouzky')} className="text-brand-red font-bold">Přihlaste se do kroužku</button>
+              Nemáte ještě účet? <button type="button" onClick={() => navigate('/tanecnikrouzky')} className="text-brand-red font-bold hover:underline">Přihlaste se do kroužku</button>
             </p>
           </div>
+
+          <ForgotPasswordModal
+            isOpen={showForgotPassword}
+            onClose={() => setShowForgotPassword(false)}
+            initialEmail={email}
+            onPasswordResetSuccess={(resetEmail) => {
+              setEmail(resetEmail);
+              setError('');
+            }}
+          />
         </div>
       </div>
     );
@@ -488,48 +507,229 @@ const SchoolPortal: React.FC = () => {
                       )}
 
                       {!isEditing && reg.status !== 'cancelled' && (
-                        <div className="mb-6 grid md:grid-cols-2 gap-6">
-                          <div>
-                            <h5 className="font-bold text-gray-700 text-sm mb-3">Odeslané omluvenky</h5>
-                            {excuses.filter(e => e.registrationId === reg.id).length > 0 ? (
-                              <ul className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                                {excuses.filter(e => e.registrationId === reg.id).map(excuse => (
-                                  <li key={excuse.id} className="bg-white p-3 rounded-lg border border-gray-200 text-sm">
-                                    <span className="font-bold text-gray-900 mr-2">{new Date(excuse.date).toLocaleDateString('cs-CZ')}:</span>
-                                    <span className="text-gray-600">{excuse.reason}</span>
-                                  </li>
-                                ))}
-                              </ul>
+                        <div className="mb-6 space-y-6">
+                          {/* Training Dates & Attendance Schedule (14 sessions) */}
+                          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b border-gray-100">
+                              <div>
+                                <h5 className="font-bold text-gray-900 text-base flex items-center">
+                                  <Calendar size={18} className="mr-2 text-brand-blue" />
+                                  Termíny tréninků & docházka (14 lekcí)
+                                </h5>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                  Rozpis lekcí stanovený trenérem pro školu {regSchool?.name} ({regSchool?.day} {regSchool?.time})
+                                </p>
+                              </div>
+                              {regSchool?.trainingDates && regSchool.trainingDates.filter(Boolean).length > 0 && (
+                                <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-blue-50 text-brand-blue border border-blue-200 self-start sm:self-auto">
+                                  {regSchool.trainingDates.filter(Boolean).length}/14 termínů vypsáno
+                                </span>
+                              )}
+                            </div>
+
+                            {/* If training dates are configured */}
+                            {regSchool?.trainingDates && regSchool.trainingDates.filter(Boolean).length > 0 ? (
+                              <div className="space-y-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                  {regSchool.trainingDates.map((dateStr, idx) => {
+                                    if (!dateStr) {
+                                      return (
+                                        <div key={idx} className="p-3 rounded-xl border border-dashed border-gray-200 bg-gray-50/50 flex items-center justify-between text-xs text-gray-400">
+                                          <span className="font-bold">{idx + 1}. lekce</span>
+                                          <span>Termín zatím nezadán</span>
+                                        </div>
+                                      );
+                                    }
+
+                                    // Check attendance and excuse status
+                                    const attRecord = attendance.find(a => a.schoolId === reg.schoolId && a.date === dateStr);
+                                    const isRecorded = attRecord && attRecord.records[reg.id] !== undefined;
+                                    const isPresent = isRecorded ? attRecord.records[reg.id] : null;
+                                    const excuse = excuses.find(e => e.registrationId === reg.id && e.date === dateStr);
+
+                                    const todayStr = new Date().toISOString().split('T')[0];
+                                    const isToday = dateStr === todayStr;
+                                    const isFuture = dateStr > todayStr;
+
+                                    const formattedDate = new Date(dateStr + 'T12:00:00').toLocaleDateString('cs-CZ', {
+                                      weekday: 'short',
+                                      day: 'numeric',
+                                      month: 'numeric',
+                                      year: 'numeric'
+                                    });
+
+                                    return (
+                                      <div 
+                                        key={idx} 
+                                        className={`p-3 rounded-xl border transition-all flex items-center justify-between text-xs ${
+                                          isToday 
+                                            ? 'bg-blue-50/80 border-blue-300 ring-1 ring-blue-300' 
+                                            : isRecorded 
+                                              ? (isPresent ? 'bg-green-50/60 border-green-200' : 'bg-red-50/60 border-red-200')
+                                              : excuse 
+                                                ? 'bg-amber-50/60 border-amber-200'
+                                                : 'bg-white border-gray-200 hover:border-gray-300'
+                                        }`}
+                                      >
+                                        <div className="flex items-center space-x-2.5 min-w-0">
+                                          <span className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-[11px] shrink-0 ${
+                                            isToday ? 'bg-brand-blue text-white' : 'bg-gray-100 text-gray-700'
+                                          }`}>
+                                            {idx + 1}
+                                          </span>
+                                          <div className="min-w-0">
+                                            <p className="font-bold text-gray-900 truncate capitalize">{formattedDate}</p>
+                                            <p className="text-[11px] text-gray-500">{regSchool.time || 'Čas dle rozvrhu'}</p>
+                                          </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                          {isRecorded ? (
+                                            isPresent ? (
+                                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-green-100 text-green-800 border border-green-200">
+                                                <Check size={12} className="mr-1" /> Přítomen
+                                              </span>
+                                            ) : (
+                                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-red-100 text-red-800 border border-red-200">
+                                                <X size={12} className="mr-1" /> Nepřítomen
+                                              </span>
+                                            )
+                                          ) : excuse ? (
+                                            <span 
+                                              className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200"
+                                              title={excuse.reason ? `Omluveno: ${excuse.reason}` : 'Omluveno'}
+                                            >
+                                              ✉ Omluveno
+                                            </span>
+                                          ) : isToday ? (
+                                            <div className="flex items-center gap-1">
+                                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800">
+                                                Dnes
+                                              </span>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setExcuseRegistrationId(reg.id);
+                                                  setExcuseDate(dateStr);
+                                                  const excuseEl = document.getElementById('excuse-form');
+                                                  if (excuseEl) excuseEl.scrollIntoView({ behavior: 'smooth' });
+                                                }}
+                                                className="text-[11px] text-brand-blue hover:underline font-bold ml-1"
+                                              >
+                                                Omluvit
+                                              </button>
+                                            </div>
+                                          ) : isFuture ? (
+                                            <div className="flex items-center gap-1">
+                                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-600">
+                                                Plánováno
+                                              </span>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setExcuseRegistrationId(reg.id);
+                                                  setExcuseDate(dateStr);
+                                                  const excuseEl = document.getElementById('excuse-form');
+                                                  if (excuseEl) excuseEl.scrollIntoView({ behavior: 'smooth' });
+                                                }}
+                                                className="text-[11px] text-brand-blue hover:underline font-bold ml-1"
+                                                title="Předem omluvit tento trénink"
+                                              >
+                                                Omluvit
+                                              </button>
+                                            </div>
+                                          ) : (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] text-gray-400 bg-gray-50 border border-gray-200">
+                                              Proběhlo
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
                             ) : (
-                              <p className="text-sm text-gray-500 italic">Zatím nebyly odeslány žádné omluvenky.</p>
+                              <div className="text-center py-6 px-4 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                                <Calendar size={32} className="mx-auto text-gray-300 mb-2" />
+                                <p className="text-sm font-bold text-gray-700">Termíny tréninků budou brzy vypsány</p>
+                                <p className="text-xs text-gray-500 max-w-md mx-auto mt-1">
+                                  Lektor nebo administrátor školy termíny pro toto pololetí brzy upřesní. Poté zde uvidíte kompletní rozpis všech 14 lekcí.
+                                </p>
+                              </div>
                             )}
                           </div>
-                          <div>
-                            <h5 className="font-bold text-gray-700 text-sm mb-3">Historie docházky</h5>
-                            {attendance.filter(a => a.schoolId === reg.schoolId && a.records[reg.id] !== undefined).length > 0 ? (
-                              <ul className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                                {attendance
-                                  .filter(a => a.schoolId === reg.schoolId && a.records[reg.id] !== undefined)
-                                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                                  .map(a => (
-                                  <li key={a.id} className="bg-white p-3 rounded-lg border border-gray-200 text-sm flex justify-between items-center">
-                                    <span className="font-bold text-gray-900">{new Date(a.date).toLocaleDateString('cs-CZ')}</span>
-                                    {a.records[reg.id] ? (
-                                      <span className="text-green-600 font-bold bg-green-50 px-2 py-1 rounded text-xs">Přítomen</span>
-                                    ) : (
-                                      <span className="text-red-600 font-bold bg-red-50 px-2 py-1 rounded text-xs">Nepřítomen</span>
-                                    )}
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <p className="text-sm text-gray-500 italic">Zatím není zaznamenána žádná docházka.</p>
-                            )}
+
+                          {/* Excuses history & Attendance Summary */}
+                          <div className="grid md:grid-cols-2 gap-6">
+                            <div>
+                              <h5 className="font-bold text-gray-700 text-sm mb-3 flex items-center">
+                                <PenTool size={15} className="mr-1.5 text-brand-blue" />
+                                Odeslané omluvenky
+                              </h5>
+                              {excuses.filter(e => e.registrationId === reg.id).length > 0 ? (
+                                <ul className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                                  {excuses.filter(e => e.registrationId === reg.id).map(excuse => (
+                                    <li key={excuse.id} className="bg-white p-3 rounded-xl border border-gray-200 text-xs">
+                                      <div className="flex justify-between items-center mb-1">
+                                        <span className="font-bold text-gray-900">
+                                          {new Date(excuse.date + 'T12:00:00').toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric', year: 'numeric' })}
+                                        </span>
+                                        <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">
+                                          Omluveno
+                                        </span>
+                                      </div>
+                                      <p className="text-gray-600 italic">{excuse.reason || 'Bez udání důvodu'}</p>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <p className="text-xs text-gray-500 italic p-3 bg-white rounded-xl border border-gray-100">Zatím nebyly odeslány žádné omluvenky.</p>
+                              )}
+                            </div>
+
+                            <div>
+                              <h5 className="font-bold text-gray-700 text-sm mb-3 flex items-center">
+                                <CheckCircle size={15} className="mr-1.5 text-green-600" />
+                                Souhrn účasti
+                              </h5>
+                              <div className="bg-white p-4 rounded-xl border border-gray-200 text-xs space-y-2">
+                                <div className="flex justify-between items-center pb-2 border-b border-gray-100">
+                                  <span className="text-gray-600">Zaznamenaných lekcí:</span>
+                                  <strong className="text-gray-900">
+                                    {attendance.filter(a => a.schoolId === reg.schoolId && a.records[reg.id] !== undefined).length}
+                                  </strong>
+                                </div>
+                                <div className="flex justify-between items-center text-green-700">
+                                  <span className="flex items-center"><Check size={13} className="mr-1" /> Přítomen:</span>
+                                  <strong className="font-bold">
+                                    {attendance.filter(a => a.schoolId === reg.schoolId && a.records[reg.id] === true).length}
+                                  </strong>
+                                </div>
+                                <div className="flex justify-between items-center text-red-600">
+                                  <span className="flex items-center"><X size={13} className="mr-1" /> Nepřítomen:</span>
+                                  <strong className="font-bold">
+                                    {attendance.filter(a => a.schoolId === reg.schoolId && a.records[reg.id] === false).length}
+                                  </strong>
+                                </div>
+                                <div className="flex justify-between items-center text-amber-700 pt-1 border-t border-gray-100">
+                                  <span>Omluvené tréninky:</span>
+                                  <strong className="font-bold">
+                                    {excuses.filter(e => e.registrationId === reg.id).length}
+                                  </strong>
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       )}
 
-                      {reg.status === 'pending_payment' && !isEditing && (
+                      {reg.status === 'pending_payment' && !isEditing && (() => {
+                        const regVs = (reg.variableSymbol || (reg.childRodneCislo ? reg.childRodneCislo.replace(/\D/g, '').slice(0, 10) : '') || `261${reg.id.replace(/\D/g, '').slice(-6)}`).replace(/\D/g, '').slice(0, 10);
+                        const cleanAmount = parseFloat(regSchool?.price.replace(/\s/g, '').replace('Kč', '') || '0');
+                        const qrValue = `SPD*1.0*ACC:${BANK_INFO.iban}*AM:${cleanAmount}*CC:CZK*X-VS:${regVs}*MSG:${reg.childName} ${reg.childSurname || ''}`;
+
+                        return (
                         <div className="mt-8 pt-6 border-t border-gray-200">
                           <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100 mb-6 shadow-sm">
                             <h4 className="font-bold text-brand-blue text-base mb-4 flex items-center">
@@ -538,7 +738,7 @@ const SchoolPortal: React.FC = () => {
                             <div className="flex flex-col md:flex-row gap-6 items-center">
                               <div className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center">
                                 <QRCodeSVG 
-                                  value={`SPD*1.0*ACC:${BANK_INFO.iban}*AM:${parseFloat(regSchool?.price.replace(/\s/g, '').replace('Kč', '') || '0')}*CC:CZK*MSG:${reg.childName} ${reg.childBirthDate}`} 
+                                  value={qrValue} 
                                   size={130} 
                                 />
                                 <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-2">Naskenujte v bance</span>
@@ -546,7 +746,7 @@ const SchoolPortal: React.FC = () => {
                               <div className="flex-1 w-full space-y-2.5 text-sm">
                                 <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-gray-100">
                                   <div>
-                                    <span className="text-xs text-gray-400 block font-medium">Číslo účtu</span>
+                                    <span className="text-xs text-gray-400 block font-medium">Číslo účtu ({BANK_INFO.bankName})</span>
                                     <span className="font-bold text-gray-900">{BANK_INFO.account}</span>
                                   </div>
                                   <button
@@ -555,6 +755,20 @@ const SchoolPortal: React.FC = () => {
                                   >
                                     {copiedField === `acc-${reg.id}` ? <Check size={14} className="text-green-600 mr-1" /> : <Copy size={14} className="mr-1" />}
                                     {copiedField === `acc-${reg.id}` ? 'Zkopírováno' : 'Kopírovat'}
+                                  </button>
+                                </div>
+
+                                <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-gray-100">
+                                  <div>
+                                    <span className="text-xs text-gray-400 block font-medium">IBAN / BIC</span>
+                                    <span className="font-mono text-xs font-bold text-gray-800">{BANK_INFO.ibanFormatted || BANK_INFO.iban} <span className="text-gray-400 font-normal">({BANK_INFO.bic})</span></span>
+                                  </div>
+                                  <button
+                                    onClick={() => copyToClipboard(BANK_INFO.iban, `iban-${reg.id}`)}
+                                    className="text-xs font-bold text-brand-blue hover:text-blue-700 p-1.5 rounded-lg hover:bg-blue-50 transition-colors flex items-center"
+                                  >
+                                    {copiedField === `iban-${reg.id}` ? <Check size={14} className="text-green-600 mr-1" /> : <Copy size={14} className="mr-1" />}
+                                    {copiedField === `iban-${reg.id}` ? 'Zkopírováno' : 'Kopírovat'}
                                   </button>
                                 </div>
 
@@ -572,9 +786,24 @@ const SchoolPortal: React.FC = () => {
                                   </button>
                                 </div>
 
+                                <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border-2 border-blue-200 bg-blue-50/50 shadow-sm">
+                                  <div>
+                                    <span className="text-xs text-brand-blue block font-bold">Variabilní symbol (specifický pro platbu)</span>
+                                    <span className="font-mono text-base font-extrabold text-gray-950 tracking-wider">{regVs}</span>
+                                  </div>
+                                  <button
+                                    onClick={() => copyToClipboard(regVs, `vs-${reg.id}`)}
+                                    className="text-xs font-bold text-white bg-brand-blue hover:bg-blue-700 px-3 py-1.5 rounded-lg transition-colors flex items-center shadow-xs"
+                                    title="Kopírovat variabilní symbol"
+                                  >
+                                    {copiedField === `vs-${reg.id}` ? <Check size={14} className="text-white mr-1" /> : <Copy size={14} className="mr-1" />}
+                                    {copiedField === `vs-${reg.id}` ? 'Zkopírováno' : 'Kopírovat VS'}
+                                  </button>
+                                </div>
+
                                 <div className="p-2.5 bg-white rounded-xl border border-gray-100">
                                   <span className="text-xs text-gray-400 block font-medium">Zpráva pro příjemce</span>
-                                  <span className="font-bold text-gray-800 text-xs">{reg.childName} {reg.childBirthDate}</span>
+                                  <span className="font-bold text-gray-800 text-xs">{reg.childName} {reg.childSurname || ''} ({reg.childBirthDate})</span>
                                 </div>
                               </div>
                             </div>
@@ -587,14 +816,15 @@ const SchoolPortal: React.FC = () => {
                             Mám zaplaceno - odeslat ke schválení
                           </button>
                         </div>
-                      )}
+                        );
+                      })()}
                     </div>
                   );
                 })}
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div id="excuse-form" className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="p-6 border-b border-gray-100">
                 <h3 className="font-bold text-gray-900 flex items-center">
                   <PenTool size={18} className="mr-2 text-brand-blue" /> Odeslat omluvenku

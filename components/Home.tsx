@@ -113,7 +113,7 @@ const Home: React.FC = () => {
             <RevealOnScroll delay={100}>
               <div className="group relative rounded-2xl overflow-hidden shadow-xl aspect-[4/3] md:aspect-[16/9] cursor-pointer">
                 <img 
-                  src="https://static.wixstatic.com/media/93005c_4ab5a66bf36d4345a999b8a126bff477~mv2.jpg/v1/fill/w_1000,h_600,al_c,q_85/dance-school.jpg" 
+                  src="/images/dance-school.jpg" 
                   alt="Taneční kroužky" 
                   className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
@@ -138,7 +138,7 @@ const Home: React.FC = () => {
               <RevealOnScroll delay={300}>
                 <div className="group relative rounded-2xl overflow-hidden shadow-xl aspect-[4/3] md:aspect-[16/9] cursor-pointer">
                   <img 
-                    src="https://static.wixstatic.com/media/93005c_573dc43953b84fde95242482a4c20b9c~mv2.jpg/v1/fill/w_1000,h_600,al_c,q_85/summer-camp.jpg" 
+                    src="/images/summer-camp.jpg" 
                     alt="Letní tábory" 
                     className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                   />

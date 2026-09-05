@@ -6,6 +6,7 @@ export interface School {
   time: string;
   price: string;
   isKindergarten?: boolean;
+  trainingDates?: string[];
 }
 
 export interface NavItem {
@@ -42,6 +43,7 @@ export interface Product {
 
 export interface SchoolRegistration {
   id: string;
+  variableSymbol?: string;
   schoolId: string;
   parentName: string;
   parentEmail: string;
@@ -92,6 +94,7 @@ export interface Attendance {
 
 export interface Registration {
   id: string;
+  variableSymbol?: string;
   campId: string;
   parentName: string;
   parentEmail: string;
@@ -103,4 +106,22 @@ export interface Registration {
   documents: string[]; // Mocked document URLs or names
   createdAt: string;
   password?: string; // Mocked password for client portal
+}
+
+export interface MerchOrder {
+  id: string;
+  productId: string;
+  productName: string;
+  productPrice: string;
+  size: string;
+  quantity: number;
+  totalPrice: number;
+  userId?: string;
+  userName: string;
+  userEmail: string;
+  userPhone: string;
+  deliveryNote?: string;
+  variableSymbol: string;
+  status: 'pending' | 'paid' | 'completed' | 'cancelled';
+  createdAt: string;
 }

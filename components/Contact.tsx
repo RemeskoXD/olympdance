@@ -1,14 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Phone, MapPin, Building2, Facebook, Instagram, Send, CheckCircle } from 'lucide-react';
+import { Mail, Phone, MapPin, Building2, Facebook, Instagram, Send, CheckCircle, CreditCard, Copy, Check, Compass } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useData } from '../context/DataContext';
-import { CONTACT_INFO } from '../constants';
+import { CONTACT_INFO, BANK_INFO } from '../constants';
 
 const Contact: React.FC = () => {
   const { schools } = useData();
   const [selectedTopic, setSelectedTopic] = useState('');
+  const [formData, setFormData] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    message: '',
+  });
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
   const [searchParams] = useSearchParams();
+
+  const copyToClipboard = (text: string, field: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
 
   // Read the 'skola' query parameter when the component mounts
   useEffect(() => {
@@ -18,13 +33,37 @@ const Contact: React.FC = () => {
     }
   }, [searchParams]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate API call
-    setTimeout(() => {
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          phone: formData.phone,
+          email: formData.email,
+          topic: selectedTopic || 'Obecný dotaz',
+          message: formData.message,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Odeslání zprávy se nezdařilo. Zkuste to prosím znovu.');
+      }
+
       setIsSubmitted(true);
+      setFormData({ name: '', phone: '', email: '', message: '' });
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 800);
+    } catch (err: any) {
+      console.error('Contact form submission error:', err);
+      setSubmitError(err.message || 'Nepodařilo se odeslat zprávu. Zkontrolujte připojení.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -66,20 +105,47 @@ const Contact: React.FC = () => {
                   <Send size={18} className="mr-2 text-brand-blue shrink-0 sm:w-5 sm:h-5" />
                   Napište nám
                 </h3>
+
+                {submitError && (
+                  <div className="mb-4 p-3.5 bg-red-50 border border-red-200 text-red-700 text-xs sm:text-sm rounded-xl">
+                    {submitError}
+                  </div>
+                )}
+
                 <form className="space-y-3.5 sm:space-y-4" onSubmit={handleSubmit}>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
                     <div>
                       <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Jméno</label>
-                      <input required type="text" className="w-full px-3.5 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue outline-none transition-all bg-gray-50 focus:bg-white text-sm sm:text-base" placeholder="Jan Novák" />
+                      <input 
+                        required 
+                        type="text" 
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        className="w-full px-3.5 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue outline-none transition-all bg-gray-50 focus:bg-white text-sm sm:text-base" 
+                        placeholder="Jan Novák" 
+                      />
                     </div>
                     <div>
                       <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Telefon</label>
-                      <input type="tel" className="w-full px-3.5 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue outline-none transition-all bg-gray-50 focus:bg-white text-sm sm:text-base" placeholder="+420" />
+                      <input 
+                        type="tel" 
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        className="w-full px-3.5 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue outline-none transition-all bg-gray-50 focus:bg-white text-sm sm:text-base" 
+                        placeholder="+420" 
+                      />
                     </div>
                   </div>
                   <div>
                     <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Email <span className="text-red-500">*</span></label>
-                    <input required type="email" className="w-full px-3.5 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue outline-none transition-all bg-gray-50 focus:bg-white text-sm sm:text-base" placeholder="vas@email.cz" />
+                    <input 
+                      required 
+                      type="email" 
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      className="w-full px-3.5 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue outline-none transition-all bg-gray-50 focus:bg-white text-sm sm:text-base" 
+                      placeholder="vas@email.cz" 
+                    />
                   </div>
                   <div>
                     <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">O co máte zájem?</label>
@@ -104,10 +170,28 @@ const Contact: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Zpráva <span className="text-red-500">*</span></label>
-                    <textarea required rows={4} className="w-full px-3.5 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue outline-none transition-all bg-gray-50 focus:bg-white resize-none text-sm sm:text-base" placeholder="Na co se chcete zeptat?"></textarea>
+                    <textarea 
+                      required 
+                      rows={4} 
+                      value={formData.message}
+                      onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                      className="w-full px-3.5 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue outline-none transition-all bg-gray-50 focus:bg-white resize-none text-sm sm:text-base" 
+                      placeholder="Na co se chcete zeptat?"
+                    ></textarea>
                   </div>
-                  <button type="submit" className="w-full bg-brand-red text-white font-bold py-3 sm:py-4 rounded-xl hover:bg-red-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 mt-2 text-sm sm:text-base">
-                    Odeslat zprávu
+                  <button 
+                    type="submit" 
+                    disabled={isSubmitting}
+                    className="w-full bg-brand-red text-white font-bold py-3 sm:py-4 rounded-xl hover:bg-red-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 mt-2 text-sm sm:text-base disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                  >
+                    {isSubmitting ? (
+                      <span>Odesílám zprávu...</span>
+                    ) : (
+                      <>
+                        <Send size={18} />
+                        <span>Odeslat zprávu</span>
+                      </>
+                    )}
                   </button>
                 </form>
               </>
@@ -124,23 +208,76 @@ const Contact: React.FC = () => {
                 <h3 className="text-xl sm:text-2xl font-bold mb-6 sm:mb-8 relative z-10">{CONTACT_INFO.name}</h3>
                 
                 <div className="space-y-6 sm:space-y-8 relative z-10">
+                  {/* Sídlo */}
                   <div className="flex items-start group">
                     <div className="p-2.5 sm:p-3 bg-white/10 rounded-lg mr-3 sm:mr-4 group-hover:bg-white/20 transition-colors shrink-0">
                        <MapPin className="w-5 h-5 sm:w-6 sm:h-6 text-brand-lightBlue" />
                     </div>
                     <div>
                       <p className="font-semibold text-blue-200 text-xs sm:text-sm uppercase tracking-wide mb-1">Adresa sídla</p>
-                      <p className="text-base sm:text-lg leading-snug font-medium">{CONTACT_INFO.address}</p>
+                      <p className="text-base sm:text-lg leading-snug font-medium">{CONTACT_INFO.registeredOffice}</p>
+                    </div>
+                  </div>
+
+                  {/* Kde nás najdete */}
+                  <div className="flex items-start group">
+                    <div className="p-2.5 sm:p-3 bg-white/10 rounded-lg mr-3 sm:mr-4 group-hover:bg-white/20 transition-colors shrink-0">
+                       <Compass className="w-5 h-5 sm:w-6 sm:h-6 text-brand-lightBlue" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-blue-200 text-xs sm:text-sm uppercase tracking-wide mb-1">Kde nás najdete (Tréninkové centrum)</p>
+                      <p className="text-base sm:text-lg leading-snug font-medium">{CONTACT_INFO.trainingLocation}</p>
+                    </div>
+                  </div>
+
+                  {/* Fakturační údaje & IČO */}
+                  <div className="flex items-start group">
+                    <div className="p-2.5 sm:p-3 bg-white/10 rounded-lg mr-3 sm:mr-4 group-hover:bg-white/20 transition-colors shrink-0">
+                       <Building2 className="w-5 h-5 sm:w-6 sm:h-6 text-brand-lightBlue" />
+                    </div>
+                    <div className="w-full">
+                      <p className="font-semibold text-blue-200 text-xs sm:text-sm uppercase tracking-wide mb-1.5">Fakturační a identifikační údaje</p>
+                      <div className="bg-white/10 p-3.5 rounded-xl backdrop-blur-xs space-y-1 text-xs sm:text-sm">
+                        <p><span className="text-blue-200">Organizace:</span> <strong className="font-semibold text-white ml-1">{CONTACT_INFO.name}</strong></p>
+                        <p><span className="text-blue-200">Sídlo:</span> <span className="text-white ml-1">{CONTACT_INFO.registeredOffice}</span></p>
+                        <p><span className="text-blue-200">IČO:</span> <strong className="font-mono text-white font-semibold ml-1">{CONTACT_INFO.ico}</strong></p>
+                      </div>
                     </div>
                   </div>
 
                   <div className="flex items-start group">
                     <div className="p-2.5 sm:p-3 bg-white/10 rounded-lg mr-3 sm:mr-4 group-hover:bg-white/20 transition-colors shrink-0">
-                       <Building2 className="w-5 h-5 sm:w-6 sm:h-6 text-brand-lightBlue" />
+                       <CreditCard className="w-5 h-5 sm:w-6 sm:h-6 text-brand-lightBlue" />
                     </div>
-                    <div>
-                      <p className="font-semibold text-blue-200 text-xs sm:text-sm uppercase tracking-wide mb-1">Fakturační údaje</p>
-                      <p className="text-base sm:text-lg font-medium">IČO: {CONTACT_INFO.ico}</p>
+                    <div className="w-full">
+                      <p className="font-semibold text-blue-200 text-xs sm:text-sm uppercase tracking-wide mb-1">Bankovní spojení ({BANK_INFO.bankName})</p>
+                      <div className="space-y-1 text-sm sm:text-base">
+                        <div className="flex items-center justify-between">
+                          <span>Číslo účtu: <strong className="font-mono">{BANK_INFO.account}</strong></span>
+                          <button 
+                            onClick={() => copyToClipboard(BANK_INFO.account, 'contact-acc')}
+                            className="text-xs bg-white/20 hover:bg-white/30 text-white px-2 py-0.5 rounded ml-2 transition-colors inline-flex items-center"
+                            title="Kopírovat číslo účtu"
+                          >
+                            {copiedField === 'contact-acc' ? <Check size={12} className="mr-1 text-green-300" /> : <Copy size={12} className="mr-1" />}
+                            {copiedField === 'contact-acc' ? 'Zkopírováno' : 'Kopírovat'}
+                          </button>
+                        </div>
+                        <div className="flex items-center justify-between text-xs sm:text-sm text-blue-100">
+                          <span>IBAN: <strong className="font-mono">{BANK_INFO.ibanFormatted || BANK_INFO.iban}</strong></span>
+                          <button 
+                            onClick={() => copyToClipboard(BANK_INFO.iban, 'contact-iban')}
+                            className="text-xs bg-white/20 hover:bg-white/30 text-white px-2 py-0.5 rounded ml-2 transition-colors inline-flex items-center"
+                            title="Kopírovat IBAN"
+                          >
+                            {copiedField === 'contact-iban' ? <Check size={12} className="mr-1 text-green-300" /> : <Copy size={12} className="mr-1" />}
+                            {copiedField === 'contact-iban' ? 'Zkopírováno' : 'Kopírovat'}
+                          </button>
+                        </div>
+                        <p className="text-xs sm:text-sm text-blue-200">
+                          BIC / SWIFT: <strong className="font-mono">{BANK_INFO.bic}</strong>
+                        </p>
+                      </div>
                     </div>
                   </div>
 

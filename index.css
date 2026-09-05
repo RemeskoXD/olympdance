@@ -15,3 +15,108 @@ body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
+
+/* ==========================================================================
+   Print & PDF Optimization
+   ========================================================================== */
+@media print {
+  /* Enforce exact background colors, graphics and borders across all browsers */
+  *,
+  *::before,
+  *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #111827 !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+    width: 100% !important;
+  }
+
+  /* Hide regular UI elements when printing */
+  nav,
+  footer,
+  aside,
+  #floating-contact,
+  .print-hidden,
+  .print\:hidden {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* When a printable modal is active, isolate only the modal content */
+  body.has-print-modal > #root > *:not(:has(.printable-content-target)) {
+    display: none !important;
+  }
+
+  /* Reset modal overlays and wrappers into clean full-page flow */
+  .printable-modal-overlay {
+    position: static !important;
+    inset: auto !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  .printable-modal-card {
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  /* Page break helpers */
+  .print-avoid-break {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Portrait layout (Potvrzení pro pojišťovnu) */
+  body.print-portrait {
+    @page {
+      size: A4 portrait;
+      margin: 10mm 12mm;
+    }
+  }
+
+  /* Landscape layout (Prezenční listina pro trenéra) */
+  body.print-landscape {
+    @page {
+      size: A4 landscape;
+      margin: 8mm 10mm;
+    }
+  }
+
+  /* Default page margins */
+  @page {
+    margin: 10mm 12mm;
+  }
+}
+
