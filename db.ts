@@ -152,9 +152,26 @@ export const initDb = async () => {
         name VARCHAR(255) NOT NULL,
         price VARCHAR(255) NOT NULL,
         description TEXT,
-        image VARCHAR(500)
+        image VARCHAR(500),
+        isAction BOOLEAN DEFAULT FALSE,
+        originalPrice VARCHAR(255),
+        actionBadge VARCHAR(255) DEFAULT 'AKCE',
+        sizes JSON
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+
+    try {
+      await connection.query('ALTER TABLE products ADD COLUMN isAction BOOLEAN DEFAULT FALSE');
+    } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE products ADD COLUMN originalPrice VARCHAR(255)');
+    } catch (e) {}
+    try {
+      await connection.query("ALTER TABLE products ADD COLUMN actionBadge VARCHAR(255) DEFAULT 'AKCE'");
+    } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE products ADD COLUMN sizes JSON');
+    } catch (e) {}
 
     // 5. Camp Registrations table
     await connection.query(`

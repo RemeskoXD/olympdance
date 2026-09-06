@@ -9,7 +9,7 @@ const Navbar: React.FC = () => {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const { isMerchEnabled, isTanecniExpresEnabled, isCampsEnabled } = useData();
+  const { isMerchEnabled, isTanecniExpresEnabled, isCampsEnabled, isGalleryEnabled, isAboutEnabled } = useData();
 
   // Close dropdown and mobile menu when route changes
   useEffect(() => {
@@ -33,8 +33,8 @@ const Navbar: React.FC = () => {
     { path: '/tanecnikrouzky', label: 'Taneční Kroužky', icon: Music },
     ...(isTanecniExpresEnabled ? [{ path: '/tanecni-expres', label: 'Taneční Expres', icon: Sparkles }] : []),
     ...(isCampsEnabled ? [{ path: '/letnicampy', label: 'Letní Campy', icon: Sun }] : []),
-    { path: '/galerie', label: 'Galerie', icon: ImageIcon },
-    { path: '/o-nas', label: 'O nás', icon: Users },
+    ...(isGalleryEnabled ? [{ path: '/galerie', label: 'Galerie', icon: ImageIcon }] : []),
+    ...(isAboutEnabled ? [{ path: '/o-nas', label: 'O nás', icon: Users }] : []),
     { path: '/kontakt', label: 'Kontakt', icon: Phone },
     ...(isMerchEnabled ? [{ path: '/merch', label: 'E-shop', icon: ShoppingBag }] : []),
   ];

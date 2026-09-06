@@ -6,7 +6,7 @@ import {
   AlertCircle, Mail, Users, Check, X as XIcon, Calendar, Info, LayoutDashboard, DollarSign, 
   Users as UsersIcon, Download, Printer, Search, Filter, ShieldCheck, ArrowLeft, ArrowRight, 
   UserCheck, CheckSquare, Square, ChevronRight, Sparkles, MapPin, Building2, Phone, RotateCcw,
-  CreditCard
+  CreditCard, Tag, Upload
 } from 'lucide-react';
 import { School, Camp, Product, Registration, User, SchoolRegistration, MerchOrder } from '../types';
 import { exportSchoolRegistrationsToCsv, exportCampRegistrationsToCsv } from '../utils/exportCsv';
@@ -285,7 +285,11 @@ const DashboardManager: React.FC = () => {
     isCampsEnabled, 
     toggleCamps, 
     isMerchEnabled, 
-    toggleMerch 
+    toggleMerch,
+    isGalleryEnabled,
+    toggleGallery,
+    isAboutEnabled,
+    toggleAbout 
   } = useData();
 
   // Calculate stats
@@ -392,28 +396,39 @@ const DashboardManager: React.FC = () => {
 
       {/* Subpage Toggles */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-        <h3 className="font-bold text-lg text-gray-900 mb-4 pb-2 border-b">Aktivace a viditelnost podstránek</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-5 border-b gap-2">
+          <div>
+            <h3 className="font-bold text-lg text-gray-900">Globální aktivace a viditelnost podstránek</h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Změny se okamžitě ukládají do centrální databáze serveru a platí v reálném čase pro všechny návštěvníky webu (žádné cookies). Vypnutá stránka je zcela nepřístupná (404) a skrytá v menu i patičce.
+            </p>
+          </div>
+          <span className="self-start sm:self-center px-3 py-1 bg-green-50 text-green-700 text-xs font-bold rounded-full border border-green-200">
+            ✓ Centrální MySQL synchronizace
+          </span>
+        </div>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {/* Taneční expres toggle */}
           <div className="flex flex-col justify-between p-4 rounded-xl border border-gray-100 bg-gray-50/60">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="font-bold text-gray-900">Taneční Expres</span>
-                <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${isTanecniExpresEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
+                <span className="font-bold text-gray-900 text-sm">Taneční Expres</span>
+                <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${isTanecniExpresEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
                   {isTanecniExpresEnabled ? 'Zapnuto' : 'Vypnuto'}
                 </span>
               </div>
-              <p className="text-xs text-gray-500 mb-4">Zobrazuje položku Taneční Expres v navigaci a umožňuje přístup na stránku.</p>
+              <p className="text-xs text-gray-500 mb-4 leading-relaxed">Zobrazuje položku Taneční Expres v navigaci a umožňuje přístup na stránku.</p>
             </div>
             <button
               onClick={() => toggleTanecniExpres(!isTanecniExpresEnabled)}
-              className={`w-full py-2 px-3 rounded-lg font-bold text-sm flex items-center justify-center transition-all ${
+              className={`w-full py-2 px-3 rounded-lg font-bold text-xs sm:text-sm flex items-center justify-center transition-all ${
                 isTanecniExpresEnabled 
                   ? 'bg-red-50 text-brand-red hover:bg-red-100' 
                   : 'bg-green-600 text-white hover:bg-green-700'
               }`}
             >
-              {isTanecniExpresEnabled ? 'Vypnout podstránku' : 'Zapnout podstránku'}
+              {isTanecniExpresEnabled ? 'Vypnout stránku' : 'Zapnout stránku'}
             </button>
           </div>
 
@@ -421,22 +436,22 @@ const DashboardManager: React.FC = () => {
           <div className="flex flex-col justify-between p-4 rounded-xl border border-gray-100 bg-gray-50/60">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="font-bold text-gray-900">Letní Campy / Tábory</span>
-                <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${isCampsEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
+                <span className="font-bold text-gray-900 text-sm">Letní Campy</span>
+                <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${isCampsEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
                   {isCampsEnabled ? 'Zapnuto' : 'Vypnuto'}
                 </span>
               </div>
-              <p className="text-xs text-gray-500 mb-4">Zobrazuje Letní tábory v menu a na hlavní stránce, spravuje registrace.</p>
+              <p className="text-xs text-gray-500 mb-4 leading-relaxed">Zobrazuje Letní tábory v menu a na hlavní stránce, spravuje registrace.</p>
             </div>
             <button
               onClick={() => toggleCamps(!isCampsEnabled)}
-              className={`w-full py-2 px-3 rounded-lg font-bold text-sm flex items-center justify-center transition-all ${
+              className={`w-full py-2 px-3 rounded-lg font-bold text-xs sm:text-sm flex items-center justify-center transition-all ${
                 isCampsEnabled 
                   ? 'bg-red-50 text-brand-red hover:bg-red-100' 
                   : 'bg-green-600 text-white hover:bg-green-700'
               }`}
             >
-              {isCampsEnabled ? 'Vypnout podstránku' : 'Zapnout podstránku'}
+              {isCampsEnabled ? 'Vypnout stránku' : 'Zapnout stránku'}
             </button>
           </div>
 
@@ -444,22 +459,68 @@ const DashboardManager: React.FC = () => {
           <div className="flex flex-col justify-between p-4 rounded-xl border border-gray-100 bg-gray-50/60">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="font-bold text-gray-900">E-shop / Merch</span>
-                <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${isMerchEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
+                <span className="font-bold text-gray-900 text-sm">E-shop / Merch</span>
+                <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${isMerchEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
                   {isMerchEnabled ? 'Zapnuto' : 'Vypnuto'}
                 </span>
               </div>
-              <p className="text-xs text-gray-500 mb-4">Zobrazuje odkaz na Merch v patičce a navigačním menu.</p>
+              <p className="text-xs text-gray-500 mb-4 leading-relaxed">Zobrazuje e-shop v navigaci a umožňuje nákup klubového oblečení a doplňků.</p>
             </div>
             <button
               onClick={() => toggleMerch(!isMerchEnabled)}
-              className={`w-full py-2 px-3 rounded-lg font-bold text-sm flex items-center justify-center transition-all ${
+              className={`w-full py-2 px-3 rounded-lg font-bold text-xs sm:text-sm flex items-center justify-center transition-all ${
                 isMerchEnabled 
                   ? 'bg-red-50 text-brand-red hover:bg-red-100' 
                   : 'bg-green-600 text-white hover:bg-green-700'
               }`}
             >
               {isMerchEnabled ? 'Vypnout e-shop' : 'Zapnout e-shop'}
+            </button>
+          </div>
+
+          {/* Galerie toggle */}
+          <div className="flex flex-col justify-between p-4 rounded-xl border border-gray-100 bg-gray-50/60">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-bold text-gray-900 text-sm">Galerie</span>
+                <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${isGalleryEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
+                  {isGalleryEnabled ? 'Zapnuto' : 'Vypnuto'}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 mb-4 leading-relaxed">Zobrazuje fotogalerii v navigaci a umožňuje prohlížení fotografií z akcí.</p>
+            </div>
+            <button
+              onClick={() => toggleGallery(!isGalleryEnabled)}
+              className={`w-full py-2 px-3 rounded-lg font-bold text-xs sm:text-sm flex items-center justify-center transition-all ${
+                isGalleryEnabled 
+                  ? 'bg-red-50 text-brand-red hover:bg-red-100' 
+                  : 'bg-green-600 text-white hover:bg-green-700'
+              }`}
+            >
+              {isGalleryEnabled ? 'Vypnout galerii' : 'Zapnout galerii'}
+            </button>
+          </div>
+
+          {/* O nás toggle */}
+          <div className="flex flex-col justify-between p-4 rounded-xl border border-gray-100 bg-gray-50/60">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-bold text-gray-900 text-sm">O nás</span>
+                <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${isAboutEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
+                  {isAboutEnabled ? 'Zapnuto' : 'Vypnuto'}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 mb-4 leading-relaxed">Zobrazuje stránku O nás a informace o lektorech a historii klubu.</p>
+            </div>
+            <button
+              onClick={() => toggleAbout(!isAboutEnabled)}
+              className={`w-full py-2 px-3 rounded-lg font-bold text-xs sm:text-sm flex items-center justify-center transition-all ${
+                isAboutEnabled 
+                  ? 'bg-red-50 text-brand-red hover:bg-red-100' 
+                  : 'bg-green-600 text-white hover:bg-green-700'
+              }`}
+            >
+              {isAboutEnabled ? 'Vypnout stránku' : 'Zapnout stránku'}
             </button>
           </div>
         </div>
@@ -939,18 +1000,108 @@ const GalleryManager: React.FC = () => {
 };
 
 const MerchManager: React.FC = () => {
-    const { products, addProduct, deleteProduct, isMerchEnabled, toggleMerch, merchOrders, updateMerchOrder, deleteMerchOrder } = useData();
+    const { products, addProduct, updateProduct, deleteProduct, isMerchEnabled, toggleMerch, merchOrders, updateMerchOrder, deleteMerchOrder, uploadFile } = useData();
     const [subTab, setSubTab] = useState<'orders' | 'products'>('orders');
-    const [formData, setFormData] = useState({ name: '', price: '', description: '', image: '' });
+    const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+    const [formData, setFormData] = useState({ 
+      name: '', 
+      price: '', 
+      description: '', 
+      image: '',
+      isAction: false,
+      originalPrice: '',
+      actionBadge: 'AKCE'
+    });
+    const [isUploading, setIsUploading] = useState(false);
     const [statusFilter, setStatusFilter] = useState<'ALL' | 'pending' | 'paid' | 'completed' | 'cancelled'>('ALL');
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedOrderForQr, setSelectedOrderForQr] = useState<MerchOrder | null>(null);
   
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!formData.name) return;
-      addProduct(formData);
-      setFormData({ name: '', price: '', description: '', image: '' });
+
+      if (editingProduct) {
+        await updateProduct(editingProduct.id, {
+          name: formData.name,
+          price: formData.price,
+          description: formData.description,
+          image: formData.image,
+          isAction: formData.isAction,
+          originalPrice: formData.originalPrice,
+          actionBadge: formData.actionBadge || 'AKCE'
+        });
+        setEditingProduct(null);
+      } else {
+        await addProduct({
+          name: formData.name,
+          price: formData.price,
+          description: formData.description,
+          image: formData.image,
+          isAction: formData.isAction,
+          originalPrice: formData.originalPrice,
+          actionBadge: formData.actionBadge || 'AKCE'
+        });
+      }
+
+      setFormData({ 
+        name: '', 
+        price: '', 
+        description: '', 
+        image: '',
+        isAction: false,
+        originalPrice: '',
+        actionBadge: 'AKCE'
+      });
+    };
+
+    const handleEditProduct = (prod: Product) => {
+      setEditingProduct(prod);
+      setFormData({
+        name: prod.name,
+        price: prod.price,
+        description: prod.description || '',
+        image: prod.image,
+        isAction: Boolean(prod.isAction),
+        originalPrice: prod.originalPrice || '',
+        actionBadge: prod.actionBadge || 'AKCE'
+      });
+    };
+
+    const handleCancelEdit = () => {
+      setEditingProduct(null);
+      setFormData({
+        name: '',
+        price: '',
+        description: '',
+        image: '',
+        isAction: false,
+        originalPrice: '',
+        actionBadge: 'AKCE'
+      });
+    };
+
+    const handleToggleActionDirectly = async (prod: Product) => {
+      const nextState = !prod.isAction;
+      await updateProduct(prod.id, {
+        isAction: nextState,
+        actionBadge: prod.actionBadge || 'AKCE'
+      });
+    };
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        setIsUploading(true);
+        const url = await uploadFile(file);
+        setFormData(prev => ({ ...prev, image: url }));
+      } catch (err) {
+        console.error('Upload failed:', err);
+        alert('Nahrávání obrázku se nezdařilo');
+      } finally {
+        setIsUploading(false);
+      }
     };
 
     const filteredOrders = useMemo(() => {
@@ -1189,46 +1340,146 @@ const MerchManager: React.FC = () => {
           <div className="grid lg:grid-cols-3 gap-8">
             {/* Form */}
             <div className="lg:col-span-1">
-              <div className="bg-white p-6 rounded-2xl shadow-md sticky top-24">
-                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-                   <Plus size={20} className="mr-2 text-brand-red" /> Přidat produkt
-                </h3>
-                <form onSubmit={handleSubmit} className="space-y-3">
-                  <input 
-                    className="w-full px-3 py-2 border rounded-lg text-sm" 
-                    placeholder="Název produktu" 
-                    value={formData.name} 
-                    onChange={e => setFormData({...formData, name: e.target.value})} 
-                    required 
-                  />
-                  <input 
-                    className="w-full px-3 py-2 border rounded-lg text-sm" 
-                    placeholder="Cena (např. 450 Kč)" 
-                    value={formData.price} 
-                    onChange={e => setFormData({...formData, price: e.target.value})} 
-                    required 
-                  />
-                  <textarea 
-                    className="w-full px-3 py-2 border rounded-lg text-sm" 
-                    placeholder="Popis produktu..." 
-                    rows={3}
-                    value={formData.description} 
-                    onChange={e => setFormData({...formData, description: e.target.value})} 
-                  />
-                  <input 
-                    className="w-full px-3 py-2 border rounded-lg text-sm" 
-                    placeholder="URL obrázku" 
-                    value={formData.image} 
-                    onChange={e => setFormData({...formData, image: e.target.value})} 
-                    required 
-                  />
-                  {formData.image && (
-                       <div className="mt-2 rounded-lg overflow-hidden border border-gray-200">
-                          <img src={formData.image} alt="Náhled" className="w-full h-32 object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
-                       </div>
+              <div className="bg-white p-6 rounded-2xl shadow-md sticky top-24 border border-gray-100">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-gray-900 flex items-center">
+                    {editingProduct ? (
+                      <>
+                        <Edit2 size={20} className="mr-2 text-brand-blue" />
+                        Upravit produkt
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={20} className="mr-2 text-brand-red" />
+                        Přidat nový produkt
+                      </>
+                    )}
+                  </h3>
+                  {editingProduct && (
+                    <button 
+                      type="button"
+                      onClick={handleCancelEdit}
+                      className="text-xs text-gray-500 hover:text-gray-800 bg-gray-100 hover:bg-gray-200 px-2.5 py-1 rounded-lg font-medium transition-colors"
+                    >
+                      Zrušit
+                    </button>
                   )}
-                  <button className="w-full bg-brand-blue text-white font-bold py-2.5 rounded-lg hover:bg-blue-700 transition-colors shadow-md">
-                    Přidat produkt do nabídky
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Název produktu</label>
+                    <input 
+                      className="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-brand-blue outline-none" 
+                      placeholder="např. Olymp Dance tričko" 
+                      value={formData.name} 
+                      onChange={e => setFormData({...formData, name: e.target.value})} 
+                      required 
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Cena (Kč)</label>
+                      <input 
+                        className="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-brand-blue outline-none" 
+                        placeholder="např. 250 Kč" 
+                        value={formData.price} 
+                        onChange={e => setFormData({...formData, price: e.target.value})} 
+                        required 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Původní cena (nepovinné)</label>
+                      <input 
+                        className="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-brand-blue outline-none" 
+                        placeholder="např. 350 Kč" 
+                        value={formData.originalPrice} 
+                        onChange={e => setFormData({...formData, originalPrice: e.target.value})} 
+                      />
+                    </div>
+                  </div>
+
+                  {/* AKCE Section */}
+                  <div className="p-3.5 bg-red-50/70 border border-red-200 rounded-xl space-y-3">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input 
+                        type="checkbox"
+                        checked={formData.isAction}
+                        onChange={e => setFormData({ ...formData, isAction: e.target.checked })}
+                        className="w-4 h-4 text-red-600 rounded focus:ring-red-500"
+                      />
+                      <span className="font-bold text-sm text-red-900 flex items-center gap-1.5">
+                        <Sparkles size={16} className="text-brand-red" />
+                        Označit produkt jako AKCE
+                      </span>
+                    </label>
+
+                    {formData.isAction && (
+                      <div className="pt-2 border-t border-red-200/80 space-y-2 animate-fadeIn">
+                        <div>
+                          <label className="block text-[11px] font-bold text-red-800 uppercase mb-1">Text štítku</label>
+                          <input 
+                            type="text"
+                            value={formData.actionBadge}
+                            onChange={e => setFormData({ ...formData, actionBadge: e.target.value })}
+                            placeholder="AKCE (např. AKCE, SLEVA, -20%, VÝPRODEJ)"
+                            className="w-full px-3 py-1.5 bg-white border border-red-300 rounded-lg text-xs font-bold text-red-700 focus:ring-2 focus:ring-red-400 outline-none"
+                          />
+                        </div>
+                        <p className="text-[11px] text-red-700">
+                          Štítek se zobrazí v e-shopu v červeném zvýraznění s ikonou hvězdiček.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Popis produktu</label>
+                    <textarea 
+                      className="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-brand-blue outline-none" 
+                      placeholder="- 100% bavlna&#10;- prát naruby" 
+                      rows={3}
+                      value={formData.description} 
+                      onChange={e => setFormData({...formData, description: e.target.value})} 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Obrázek produktu</label>
+                    <div className="space-y-2">
+                      <input 
+                        className="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-brand-blue outline-none" 
+                        placeholder="URL obrázku nebo nahrajte ze souboru" 
+                        value={formData.image} 
+                        onChange={e => setFormData({...formData, image: e.target.value})} 
+                        required 
+                      />
+                      <label className={`w-full flex items-center justify-center gap-2 py-2 px-3 border border-dashed border-gray-300 rounded-xl text-xs font-bold text-gray-700 cursor-pointer transition-colors ${isUploading ? 'bg-gray-100 cursor-wait' : 'hover:bg-gray-50'}`}>
+                        <Upload size={14} className="text-brand-blue" />
+                        <span>{isUploading ? 'Nahrávám fotografii...' : 'Nahrát foto z disku'}</span>
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          className="hidden" 
+                          onChange={handleImageUpload}
+                          disabled={isUploading}
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  {formData.image && (
+                    <div className="mt-2 rounded-xl overflow-hidden border border-gray-200 bg-gray-50 relative p-2 flex items-center justify-center">
+                      <img src={formData.image} alt="Náhled" className="w-full h-32 object-contain" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                    </div>
+                  )}
+
+                  <button 
+                    type="submit"
+                    className="w-full bg-brand-blue text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition-colors shadow-md text-sm"
+                  >
+                    {editingProduct ? 'Uložit změny produktu' : 'Přidat produkt do nabídky'}
                   </button>
                 </form>
               </div>
@@ -1236,23 +1487,93 @@ const MerchManager: React.FC = () => {
     
             {/* List */}
             <div className="lg:col-span-2 space-y-4">
-               {products.map(prod => (
-                  <div key={prod.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex gap-4 items-center">
-                      <img src={prod.image} alt="" className="w-20 h-20 object-cover rounded-lg bg-gray-100" />
-                      <div className="flex-grow">
-                          <h4 className="font-bold text-gray-900">{prod.name}</h4>
-                          <p className="text-brand-red font-bold text-sm">{prod.price}</p>
-                          <p className="text-gray-500 text-sm line-clamp-1">{prod.description}</p>
+              <div className="bg-blue-50 border border-blue-200 p-4 rounded-2xl flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Tag size={18} className="text-brand-blue" />
+                  <span className="font-bold text-sm text-blue-900">Správa zboží v E-shopu</span>
+                </div>
+                <span className="text-xs text-blue-800 bg-white px-2.5 py-1 rounded-lg font-bold border border-blue-100">
+                  Celkem produktů: {products.length}
+                </span>
+              </div>
+
+              {products.map(prod => (
+                <div 
+                  key={prod.id} 
+                  className={`bg-white p-4 sm:p-5 rounded-2xl shadow-sm border transition-all flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between ${
+                    prod.isAction ? 'border-red-200 ring-1 ring-red-100' : 'border-gray-100 hover:border-gray-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-4 flex-grow min-w-0">
+                    <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden bg-gray-50 border border-gray-100 shrink-0 flex items-center justify-center p-1">
+                      <img src={prod.image} alt="" className="w-full h-full object-contain" />
+                      {prod.isAction && (
+                        <span className="absolute top-1 left-1 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow-sm">
+                          {prod.actionBadge || 'AKCE'}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-grow">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <h4 className="font-bold text-gray-900 text-base">{prod.name}</h4>
+                        {prod.isAction && (
+                          <span className="bg-red-50 text-red-700 text-xs font-extrabold px-2 py-0.5 rounded-md border border-red-200 flex items-center gap-1">
+                            <Sparkles size={12} /> {prod.actionBadge || 'AKCE'}
+                          </span>
+                        )}
                       </div>
-                      <button 
-                          onClick={() => { if(confirm('Opravdu smazat?')) deleteProduct(prod.id) }}
-                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      >
-                          <Trash2 size={20} />
-                      </button>
+
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-brand-red font-black text-base">{prod.price}</p>
+                        {prod.isAction && prod.originalPrice && (
+                          <span className="text-xs text-gray-400 line-through font-semibold">
+                            {prod.originalPrice}
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-gray-500 text-xs line-clamp-2 leading-relaxed">{prod.description}</p>
+                    </div>
                   </div>
-               ))}
-               {products.length === 0 && <p className="text-gray-500 text-center py-8">Žádné produkty v E-shopu.</p>}
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleActionDirectly(prod)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 border ${
+                        prod.isAction
+                          ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                          : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                      }`}
+                      title={prod.isAction ? 'Vypnout označení AKCE' : 'Označit jako AKCE'}
+                    >
+                      <Sparkles size={13} className={prod.isAction ? 'text-red-600' : 'text-gray-400'} />
+                      <span>{prod.isAction ? 'Vypnout AKCI' : 'Nastavit AKCI'}</span>
+                    </button>
+
+                    <button 
+                      type="button"
+                      onClick={() => handleEditProduct(prod)}
+                      className="p-2 text-gray-500 hover:text-brand-blue hover:bg-blue-50 rounded-xl transition-colors border border-gray-200"
+                      title="Upravit produkt"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+
+                    <button 
+                      type="button"
+                      onClick={() => { if(confirm(`Opravdu chcete smazat produkt "${prod.name}"?`)) deleteProduct(prod.id) }}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-gray-200"
+                      title="Smazat produkt"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {products.length === 0 && <p className="text-gray-500 text-center py-12 bg-white rounded-2xl border border-dashed border-gray-200">Žádné produkty v E-shopu.</p>}
             </div>
           </div>
         )}

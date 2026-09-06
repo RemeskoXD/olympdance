@@ -21,7 +21,7 @@ import TanecniExpres from './components/TanecniExpres';
 import VersionCheck from './components/VersionCheck';
 import { FloatingContact } from './components/FloatingContact';
 import { LegalPage } from './components/LegalPage';
-import { DataProvider } from './context/DataContext';
+import { DataProvider, useData } from './context/DataContext';
 
 import { CONTACT_INFO } from './constants';
 
@@ -396,6 +396,35 @@ const Layout = ({ children }: { children?: React.ReactNode }) => (
   </div>
 );
 
+const AppRoutes = () => {
+  const { isMerchEnabled, isTanecniExpresEnabled, isCampsEnabled, isGalleryEnabled, isAboutEnabled } = useData();
+
+  return (
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/tanecnikrouzky" element={<Locations />} />
+      
+      {/* Dynamic Subpages - when turned off globally in admin, route is blocked and renders 404 NotFound */}
+      <Route path="/tanecni-expres" element={isTanecniExpresEnabled ? <TanecniExpres /> : <NotFound />} />
+      <Route path="/letnicampy" element={isCampsEnabled ? <Camps /> : <NotFound />} />
+      <Route path="/registrace/:campId" element={isCampsEnabled ? <RegistrationForm /> : <NotFound />} />
+      <Route path="/portal" element={isCampsEnabled ? <ClientPortal /> : <NotFound />} />
+      <Route path="/merch" element={isMerchEnabled ? <Merch /> : <NotFound />} />
+      <Route path="/galerie" element={isGalleryEnabled ? <Gallery /> : <NotFound />} />
+      <Route path="/o-nas" element={isAboutEnabled ? <About /> : <NotFound />} />
+      
+      <Route path="/registrace-krouzek/:schoolId" element={<SchoolRegistrationForm />} />
+      <Route path="/portal-krouzky" element={<SchoolPortal />} />
+      <Route path="/kontakt" element={<Contact />} />
+      <Route path="/admin" element={<Admin />} />
+      <Route path="/webmaster" element={<Webmaster />} />
+      <Route path="/gdpr" element={<LegalPage />} />
+      <Route path="/obchodni-podminky" element={<LegalPage />} />
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
+};
+
 function App() {
   return (
     <HelmetProvider>
@@ -403,25 +432,7 @@ function App() {
         <Router>
           <PageHandler />
           <Layout>
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/tanecnikrouzky" element={<Locations />} />
-              <Route path="/tanecni-expres" element={<TanecniExpres />} />
-              <Route path="/letnicampy" element={<Camps />} />
-              <Route path="/registrace/:campId" element={<RegistrationForm />} />
-              <Route path="/registrace-krouzek/:schoolId" element={<SchoolRegistrationForm />} />
-              <Route path="/portal" element={<ClientPortal />} />
-              <Route path="/portal-krouzky" element={<SchoolPortal />} />
-              <Route path="/galerie" element={<Gallery />} />
-              <Route path="/o-nas" element={<About />} />
-              <Route path="/kontakt" element={<Contact />} />
-              <Route path="/admin" element={<Admin />} />
-              <Route path="/webmaster" element={<Webmaster />} />
-              <Route path="/merch" element={<Merch />} />
-              <Route path="/gdpr" element={<LegalPage />} />
-              <Route path="/obchodni-podminky" element={<LegalPage />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+            <AppRoutes />
           </Layout>
         </Router>
       </DataProvider>

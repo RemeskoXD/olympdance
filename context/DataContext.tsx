@@ -2,6 +2,19 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { SCHOOLS as INITIAL_SCHOOLS, CAMPS as INITIAL_CAMPS, GALLERY_IMAGES as INITIAL_GALLERY_IMAGES, PRODUCTS as INITIAL_PRODUCTS } from '../constants';
 import { School, Camp, GalleryImage, Product, Registration, SchoolRegistration, User, Excuse, Attendance, MerchOrder } from '../types';
 
+declare global {
+  interface Window {
+    __OLYMP_SETTINGS__?: {
+      isMerchEnabled?: boolean;
+      isTanecniExpresEnabled?: boolean;
+      isCampsEnabled?: boolean;
+      isGalleryEnabled?: boolean;
+      isAboutEnabled?: boolean;
+      [key: string]: any;
+    };
+  }
+}
+
 interface DataContextType {
   schools: School[];
   camps: Camp[];
@@ -16,6 +29,8 @@ interface DataContextType {
   isMerchEnabled: boolean;
   isTanecniExpresEnabled: boolean;
   isCampsEnabled: boolean;
+  isGalleryEnabled: boolean;
+  isAboutEnabled: boolean;
   campGeneralInfo: string;
   siteContent: any;
   updateSiteContent: (newContent: any) => void;
@@ -45,12 +60,15 @@ interface DataContextType {
   addExcuse: (excuse: Omit<Excuse, 'id' | 'createdAt'>) => Promise<void>;
   deleteExcuse: (id: string) => Promise<void>;
   updateAttendance: (schoolId: string, date: string, records: Record<string, boolean>) => Promise<void>;
-  toggleMerch: (enabled: boolean) => void;
-  toggleTanecniExpres: (enabled: boolean) => void;
-  toggleCamps: (enabled: boolean) => void;
+  toggleMerch: (enabled: boolean) => Promise<void>;
+  toggleTanecniExpres: (enabled: boolean) => Promise<void>;
+  toggleCamps: (enabled: boolean) => Promise<void>;
+  toggleGallery: (enabled: boolean) => Promise<void>;
+  toggleAbout: (enabled: boolean) => Promise<void>;
   updateCampGeneralInfo: (info: string) => void;
   uploadFile: (file: File) => Promise<string>;
   refreshData: () => Promise<void>;
+  refreshSettings: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -147,32 +165,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
 
-  const [isMerchEnabled, setIsMerchEnabled] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem('olymp_settings_merch');
-      return saved !== null ? JSON.parse(saved) : true;
-    } catch {
-      return true;
+  const getInitialSetting = (key: 'isMerchEnabled' | 'isTanecniExpresEnabled' | 'isCampsEnabled' | 'isGalleryEnabled' | 'isAboutEnabled', fallback: boolean = true) => {
+    if (typeof window !== 'undefined' && window.__OLYMP_SETTINGS__ && window.__OLYMP_SETTINGS__[key] !== undefined) {
+      return Boolean(window.__OLYMP_SETTINGS__[key]);
     }
-  });
+    try {
+      const saved = localStorage.getItem(`olymp_settings_${key}`);
+      return saved !== null ? JSON.parse(saved) : fallback;
+    } catch {
+      return fallback;
+    }
+  };
 
-  const [isTanecniExpresEnabled, setIsTanecniExpresEnabled] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem('olymp_settings_tanecni_expres');
-      return saved !== null ? JSON.parse(saved) : true;
-    } catch {
-      return true;
-    }
-  });
-
-  const [isCampsEnabled, setIsCampsEnabled] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem('olymp_settings_camps');
-      return saved !== null ? JSON.parse(saved) : true;
-    } catch {
-      return true;
-    }
-  });
+  const [isMerchEnabled, setIsMerchEnabled] = useState<boolean>(() => getInitialSetting('isMerchEnabled', true));
+  const [isTanecniExpresEnabled, setIsTanecniExpresEnabled] = useState<boolean>(() => getInitialSetting('isTanecniExpresEnabled', true));
+  const [isCampsEnabled, setIsCampsEnabled] = useState<boolean>(() => getInitialSetting('isCampsEnabled', true));
+  const [isGalleryEnabled, setIsGalleryEnabled] = useState<boolean>(() => getInitialSetting('isGalleryEnabled', true));
+  const [isAboutEnabled, setIsAboutEnabled] = useState<boolean>(() => getInitialSetting('isAboutEnabled', true));
 
   const [campGeneralInfo, setCampGeneralInfo] = useState<string>('');
   const [siteContent, setSiteContent] = useState<any>(() => {
@@ -239,16 +248,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             localStorage.setItem('olymp_attendance', JSON.stringify(data.attendance));
           }
           if (data.isMerchEnabled !== undefined) {
-            setIsMerchEnabled(data.isMerchEnabled);
-            localStorage.setItem('olymp_settings_merch', JSON.stringify(data.isMerchEnabled));
+            setIsMerchEnabled(Boolean(data.isMerchEnabled));
+            localStorage.setItem('olymp_settings_isMerchEnabled', JSON.stringify(data.isMerchEnabled));
           }
           if (data.isTanecniExpresEnabled !== undefined) {
-            setIsTanecniExpresEnabled(data.isTanecniExpresEnabled);
-            localStorage.setItem('olymp_settings_tanecni_expres', JSON.stringify(data.isTanecniExpresEnabled));
+            setIsTanecniExpresEnabled(Boolean(data.isTanecniExpresEnabled));
+            localStorage.setItem('olymp_settings_isTanecniExpresEnabled', JSON.stringify(data.isTanecniExpresEnabled));
           }
           if (data.isCampsEnabled !== undefined) {
-            setIsCampsEnabled(data.isCampsEnabled);
-            localStorage.setItem('olymp_settings_camps', JSON.stringify(data.isCampsEnabled));
+            setIsCampsEnabled(Boolean(data.isCampsEnabled));
+            localStorage.setItem('olymp_settings_isCampsEnabled', JSON.stringify(data.isCampsEnabled));
+          }
+          if (data.isGalleryEnabled !== undefined) {
+            setIsGalleryEnabled(Boolean(data.isGalleryEnabled));
+            localStorage.setItem('olymp_settings_isGalleryEnabled', JSON.stringify(data.isGalleryEnabled));
+          }
+          if (data.isAboutEnabled !== undefined) {
+            setIsAboutEnabled(Boolean(data.isAboutEnabled));
+            localStorage.setItem('olymp_settings_isAboutEnabled', JSON.stringify(data.isAboutEnabled));
           }
           if (data.campGeneralInfo !== undefined) {
             setCampGeneralInfo(data.campGeneralInfo);
@@ -268,11 +285,52 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const refreshSettings = async () => {
+    try {
+      const response = await fetch('/api/settings', { cache: 'no-store' });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.isMerchEnabled !== undefined) {
+          setIsMerchEnabled(Boolean(data.isMerchEnabled));
+          localStorage.setItem('olymp_settings_isMerchEnabled', JSON.stringify(data.isMerchEnabled));
+        }
+        if (data.isTanecniExpresEnabled !== undefined) {
+          setIsTanecniExpresEnabled(Boolean(data.isTanecniExpresEnabled));
+          localStorage.setItem('olymp_settings_isTanecniExpresEnabled', JSON.stringify(data.isTanecniExpresEnabled));
+        }
+        if (data.isCampsEnabled !== undefined) {
+          setIsCampsEnabled(Boolean(data.isCampsEnabled));
+          localStorage.setItem('olymp_settings_isCampsEnabled', JSON.stringify(data.isCampsEnabled));
+        }
+        if (data.isGalleryEnabled !== undefined) {
+          setIsGalleryEnabled(Boolean(data.isGalleryEnabled));
+          localStorage.setItem('olymp_settings_isGalleryEnabled', JSON.stringify(data.isGalleryEnabled));
+        }
+        if (data.isAboutEnabled !== undefined) {
+          setIsAboutEnabled(Boolean(data.isAboutEnabled));
+          localStorage.setItem('olymp_settings_isAboutEnabled', JSON.stringify(data.isAboutEnabled));
+        }
+        if (data.campGeneralInfo !== undefined) {
+          setCampGeneralInfo(data.campGeneralInfo);
+        }
+      }
+    } catch (e) {
+      // offline fallback
+    }
+  };
+
   useEffect(() => {
+    refreshSettings();
     refreshData();
-    // Auto-sync with remote database every 30 seconds and when browser tab regains focus
-    const interval = setInterval(refreshData, 30000);
-    const onFocus = () => refreshData();
+    // Auto-sync with remote database every 15 seconds and when browser tab regains focus
+    const interval = setInterval(() => {
+      refreshSettings();
+      refreshData();
+    }, 15000);
+    const onFocus = () => {
+      refreshSettings();
+      refreshData();
+    };
     window.addEventListener('focus', onFocus);
     return () => {
       clearInterval(interval);
@@ -528,31 +586,58 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const toggleMerch = async (enabled: boolean) => {
-      setIsMerchEnabled(enabled);
-      localStorage.setItem('olymp_settings_merch', JSON.stringify(enabled));
-      await apiCall('/api/settings', 'POST', { isMerchEnabled: enabled });
+    setIsMerchEnabled(enabled);
+    localStorage.setItem('olymp_settings_isMerchEnabled', JSON.stringify(enabled));
+    if (typeof window !== 'undefined' && window.__OLYMP_SETTINGS__) {
+      window.__OLYMP_SETTINGS__.isMerchEnabled = enabled;
+    }
+    await apiCall('/api/settings', 'POST', { isMerchEnabled: enabled });
   };
 
   const toggleTanecniExpres = async (enabled: boolean) => {
-      setIsTanecniExpresEnabled(enabled);
-      localStorage.setItem('olymp_settings_tanecni_expres', JSON.stringify(enabled));
-      await apiCall('/api/settings', 'POST', { isTanecniExpresEnabled: enabled });
+    setIsTanecniExpresEnabled(enabled);
+    localStorage.setItem('olymp_settings_isTanecniExpresEnabled', JSON.stringify(enabled));
+    if (typeof window !== 'undefined' && window.__OLYMP_SETTINGS__) {
+      window.__OLYMP_SETTINGS__.isTanecniExpresEnabled = enabled;
+    }
+    await apiCall('/api/settings', 'POST', { isTanecniExpresEnabled: enabled });
   };
 
   const toggleCamps = async (enabled: boolean) => {
-      setIsCampsEnabled(enabled);
-      localStorage.setItem('olymp_settings_camps', JSON.stringify(enabled));
-      await apiCall('/api/settings', 'POST', { isCampsEnabled: enabled });
+    setIsCampsEnabled(enabled);
+    localStorage.setItem('olymp_settings_isCampsEnabled', JSON.stringify(enabled));
+    if (typeof window !== 'undefined' && window.__OLYMP_SETTINGS__) {
+      window.__OLYMP_SETTINGS__.isCampsEnabled = enabled;
+    }
+    await apiCall('/api/settings', 'POST', { isCampsEnabled: enabled });
+  };
+
+  const toggleGallery = async (enabled: boolean) => {
+    setIsGalleryEnabled(enabled);
+    localStorage.setItem('olymp_settings_isGalleryEnabled', JSON.stringify(enabled));
+    if (typeof window !== 'undefined' && window.__OLYMP_SETTINGS__) {
+      window.__OLYMP_SETTINGS__.isGalleryEnabled = enabled;
+    }
+    await apiCall('/api/settings', 'POST', { isGalleryEnabled: enabled });
+  };
+
+  const toggleAbout = async (enabled: boolean) => {
+    setIsAboutEnabled(enabled);
+    localStorage.setItem('olymp_settings_isAboutEnabled', JSON.stringify(enabled));
+    if (typeof window !== 'undefined' && window.__OLYMP_SETTINGS__) {
+      window.__OLYMP_SETTINGS__.isAboutEnabled = enabled;
+    }
+    await apiCall('/api/settings', 'POST', { isAboutEnabled: enabled });
   };
 
   const updateCampGeneralInfo = async (info: string) => {
-      setCampGeneralInfo(info);
-      await apiCall('/api/settings', 'POST', { campGeneralInfo: info });
+    setCampGeneralInfo(info);
+    await apiCall('/api/settings', 'POST', { campGeneralInfo: info });
   };
 
   const updateSiteContent = async (newContent: any) => {
-      setSiteContent(newContent);
-      await apiCall('/api/settings', 'POST', { siteContent: newContent });
+    setSiteContent(newContent);
+    await apiCall('/api/settings', 'POST', { siteContent: newContent });
   };
 
   const uploadFile = async (file: File): Promise<string> => {
@@ -588,7 +673,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <DataContext.Provider value={{ 
-      schools, camps, galleryImages, products, registrations, schoolRegistrations, merchOrders, users, excuses, attendance, isMerchEnabled, isTanecniExpresEnabled, isCampsEnabled, campGeneralInfo, siteContent, updateSiteContent,
+      schools, camps, galleryImages, products, registrations, schoolRegistrations, merchOrders, users, excuses, attendance, 
+      isMerchEnabled, isTanecniExpresEnabled, isCampsEnabled, isGalleryEnabled, isAboutEnabled, campGeneralInfo, siteContent, updateSiteContent,
       addSchool, updateSchool, deleteSchool, 
       addCamp, updateCamp, deleteCamp,
       addGalleryImage, deleteGalleryImage,
@@ -598,8 +684,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       addMerchOrder, updateMerchOrder, deleteMerchOrder,
       addUser, updateUser, deleteUser,
       addExcuse, deleteExcuse, updateAttendance,
-      toggleMerch, toggleTanecniExpres, toggleCamps, updateCampGeneralInfo,
-      uploadFile, refreshData
+      toggleMerch, toggleTanecniExpres, toggleCamps, toggleGallery, toggleAbout, updateCampGeneralInfo,
+      uploadFile, refreshData, refreshSettings
     }}>
       {children}
     </DataContext.Provider>

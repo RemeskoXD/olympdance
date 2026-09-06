@@ -28,9 +28,14 @@ const Merch: React.FC = () => {
     setTimeout(() => setCopiedField(null), 2000);
   };
 
+  const isOneSizeProduct = (name: string) => {
+    const n = name.toLowerCase();
+    return n.includes('vak') || n.includes('čepice') || n.includes('lahev') || n.includes('láhev');
+  };
+
   const handleOpenOrder = (product: Product) => {
     setSelectedProduct(product);
-    setSize('M');
+    setSize(isOneSizeProduct(product.name) ? 'Univerzální' : '140 (9-10 let)');
     setQuantity(1);
     setDeliveryNote('');
   };
@@ -118,20 +123,37 @@ const Merch: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
             {products.map((product) => (
               <div key={product.id} className="group bg-white rounded-2xl border border-gray-100 shadow-md sm:shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-300 flex flex-col h-full transform hover:-translate-y-1">
-                <div className="relative aspect-[4/3] overflow-hidden bg-gray-100">
+                <div className="relative aspect-square sm:aspect-[4/3] overflow-hidden bg-gray-50 flex items-center justify-center p-4">
                   <img 
                     src={product.image} 
                     alt={product.name} 
-                    className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-110"
+                    className="w-full h-full object-contain transition-transform duration-700 group-hover:scale-105"
                   />
-                  <div className="absolute top-3 right-3 sm:top-4 sm:right-4 bg-white/95 backdrop-blur-md px-3.5 py-1.5 rounded-full text-brand-red font-bold text-sm sm:text-base shadow-sm border border-red-100">
-                    {product.price}
+                  {product.isAction && (
+                    <div className="absolute top-3 left-3 sm:top-4 sm:left-4 bg-gradient-to-r from-red-600 to-rose-500 text-white font-black text-xs sm:text-sm px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5 uppercase tracking-wider border border-red-400/40">
+                      <Sparkles size={14} className="text-yellow-300" />
+                      {product.actionBadge || 'AKCE'}
+                    </div>
+                  )}
+                  <div className="absolute top-3 right-3 sm:top-4 sm:right-4 flex flex-col items-end gap-1">
+                    <div className={`backdrop-blur-md px-3.5 py-1.5 rounded-full font-black text-sm sm:text-base shadow-md border ${
+                      product.isAction 
+                        ? 'bg-red-600 text-white border-red-500' 
+                        : 'bg-white/95 text-brand-red border-red-100'
+                    }`}>
+                      {product.price}
+                    </div>
+                    {product.isAction && product.originalPrice && (
+                      <span className="bg-gray-900/80 backdrop-blur-md text-gray-300 line-through text-xs px-2.5 py-0.5 rounded-full font-semibold shadow-sm">
+                        {product.originalPrice}
+                      </span>
+                    )}
                   </div>
                 </div>
                 
                 <div className="p-4 sm:p-6 flex flex-col flex-grow">
                   <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-1.5 sm:mb-2">{product.name}</h3>
-                  <p className="text-gray-600 text-xs sm:text-sm mb-4 sm:mb-6 flex-grow leading-relaxed">
+                  <p className="text-gray-600 text-xs sm:text-sm mb-4 sm:mb-6 flex-grow leading-relaxed whitespace-pre-line">
                     {product.description}
                   </p>
                   
@@ -159,10 +181,18 @@ const Merch: React.FC = () => {
             Vyberte si zboží, klikněte na „Objednat zboží“, zvolte velikost a vyplňte své kontaktní údaje. 
             Ihned po odeslání se vám zobrazí QR kód pro platbu a všechny platební údaje odejdou na váš e-mail.
           </p>
-          <div className="flex flex-wrap justify-center gap-4 text-xs sm:text-sm font-medium text-gray-600">
+          <div className="flex flex-wrap justify-center gap-4 text-xs sm:text-sm font-medium text-gray-600 mb-6">
             <span className="flex items-center bg-white px-3.5 py-2 rounded-xl border border-gray-200 shadow-sm"><div className="w-2.5 h-2.5 bg-green-500 rounded-full mr-2 shrink-0"></div> Osobní odběr na tréninku</span>
             <span className="flex items-center bg-white px-3.5 py-2 rounded-xl border border-gray-200 shadow-sm"><div className="w-2.5 h-2.5 bg-brand-blue rounded-full mr-2 shrink-0"></div> Okamžitá QR platba v mobilu</span>
             <span className="flex items-center bg-white px-3.5 py-2 rounded-xl border border-gray-200 shadow-sm"><div className="w-2.5 h-2.5 bg-purple-500 rounded-full mr-2 shrink-0"></div> Potvrzení přímo do e-mailu</span>
+          </div>
+
+          <div className="pt-6 border-t border-gray-200/60 max-w-xl mx-auto text-xs sm:text-sm text-gray-500">
+            <p>
+              Potřebujete poradit s výběrem velikosti nebo objednávkou? Napište nám na{' '}
+              <a href="mailto:info@olympdance.cz" className="text-brand-blue font-bold hover:underline">info@olympdance.cz</a>{' '}
+              nebo volejte <a href="tel:+420722017700" className="text-brand-blue font-bold hover:underline">+420 722 017 700</a>.
+            </p>
           </div>
         </div>
       </div>
@@ -179,11 +209,27 @@ const Merch: React.FC = () => {
             </button>
 
             <div className="flex items-center gap-4 pb-5 border-b border-gray-100 mb-6">
-              <img src={selectedProduct.image} alt={selectedProduct.name} className="w-16 h-16 object-cover rounded-xl bg-gray-100 border border-gray-200" />
+              <div className="w-16 h-16 rounded-xl bg-gray-50 border border-gray-200 p-1 flex items-center justify-center shrink-0">
+                <img src={selectedProduct.image} alt={selectedProduct.name} className="w-full h-full object-contain" />
+              </div>
               <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-brand-red">Objednávka</span>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-xs font-bold uppercase tracking-wider text-brand-red">Objednávka</span>
+                  {selectedProduct.isAction && (
+                    <span className="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                      {selectedProduct.actionBadge || 'AKCE'}
+                    </span>
+                  )}
+                </div>
                 <h3 className="text-xl font-extrabold text-gray-900">{selectedProduct.name}</h3>
-                <p className="text-brand-red font-extrabold text-base">{selectedProduct.price}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-brand-red font-extrabold text-base">{selectedProduct.price}</p>
+                  {selectedProduct.isAction && selectedProduct.originalPrice && (
+                    <span className="text-xs text-gray-400 line-through font-semibold">
+                      {selectedProduct.originalPrice}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -191,28 +237,33 @@ const Merch: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">Velikost</label>
-                  <select 
-                    value={size} 
-                    onChange={e => setSize(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-blue outline-none"
-                  >
-                    <optgroup label="Dětské velikosti">
-                      <option value="116 (5-6 let)">116 (5-6 let)</option>
-                      <option value="128 (7-8 let)">128 (7-8 let)</option>
-                      <option value="140 (9-10 let)">140 (9-10 let)</option>
-                      <option value="152 (11-12 let)">152 (11-12 let)</option>
-                      <option value="164 (13-14 let)">164 (13-14 let)</option>
-                    </optgroup>
-                    <optgroup label="Dospělé velikosti">
-                      <option value="XS">XS</option>
-                      <option value="S">S</option>
-                      <option value="M">M</option>
-                      <option value="L">L</option>
-                      <option value="XL">XL</option>
-                      <option value="XXL">XXL</option>
-                    </optgroup>
-                    <option value="Univerzální">Univerzální / Jedna velikost</option>
-                  </select>
+                  {isOneSizeProduct(selectedProduct.name) ? (
+                    <div className="w-full px-3 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700">
+                      Univerzální velikost
+                    </div>
+                  ) : (
+                    <select 
+                      value={size} 
+                      onChange={e => setSize(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-blue outline-none"
+                    >
+                      <optgroup label="Dětské velikosti">
+                        <option value="116 (5-6 let)">116 (5-6 let)</option>
+                        <option value="128 (7-8 let)">128 (7-8 let)</option>
+                        <option value="140 (9-10 let)">140 (9-10 let)</option>
+                        <option value="152 (11-12 let)">152 (11-12 let)</option>
+                        <option value="164 (13-14 let)">164 (13-14 let)</option>
+                      </optgroup>
+                      <optgroup label="Dospělé velikosti">
+                        <option value="XS">XS</option>
+                        <option value="S">S</option>
+                        <option value="M">M</option>
+                        <option value="L">L</option>
+                        <option value="XL">XL</option>
+                        <option value="XXL">XXL</option>
+                      </optgroup>
+                    </select>
+                  )}
                 </div>
 
                 <div>

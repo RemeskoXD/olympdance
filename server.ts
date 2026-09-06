@@ -69,6 +69,9 @@ app.use('/images', express.static(path.join(process.cwd(), 'public', 'images')))
 
 // Data endpoints
 app.get('/api/data', async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
   try {
     const [schools] = await pool.query('SELECT * FROM schools');
     const [camps] = await pool.query('SELECT * FROM camps');
@@ -97,6 +100,9 @@ app.get('/api/data', async (req, res) => {
 
     const parsedProducts = (products as any[]).map(p => ({
       ...p,
+      isAction: Boolean(p.isAction),
+      originalPrice: p.originalPrice || '',
+      actionBadge: p.actionBadge || 'AKCE',
       sizes: typeof p.sizes === 'string' ? JSON.parse(p.sizes) : p.sizes
     }));
 
@@ -146,6 +152,8 @@ app.get('/api/data', async (req, res) => {
       isMerchEnabled: currentSettings.isMerchEnabled === undefined ? true : Boolean(currentSettings.isMerchEnabled),
       isTanecniExpresEnabled: currentSettings.isTanecniExpresEnabled === undefined ? true : Boolean(currentSettings.isTanecniExpresEnabled),
       isCampsEnabled: currentSettings.isCampsEnabled === undefined ? true : Boolean(currentSettings.isCampsEnabled),
+      isGalleryEnabled: currentSettings.isGalleryEnabled === undefined ? true : Boolean(currentSettings.isGalleryEnabled),
+      isAboutEnabled: currentSettings.isAboutEnabled === undefined ? true : Boolean(currentSettings.isAboutEnabled),
       campGeneralInfo: currentSettings.campGeneralInfo,
       siteContent: typeof currentSettings.siteContent === 'string' ? JSON.parse(currentSettings.siteContent) : (currentSettings.siteContent || {})
     });
@@ -294,12 +302,35 @@ app.delete('/api/gallery/:id', async (req, res) => {
 app.post('/api/products', async (req, res) => {
   try {
     const product = req.body;
-    const sqlProduct = {
+    const sqlProduct: any = {
       ...product,
-      sizes: JSON.stringify(product.sizes)
+      isAction: product.isAction !== undefined ? Boolean(product.isAction) : false,
+      originalPrice: product.originalPrice || '',
+      actionBadge: product.actionBadge || 'AKCE',
+      sizes: product.sizes ? JSON.stringify(product.sizes) : null
     };
     await pool.query('INSERT INTO products SET ?', sqlProduct);
     res.json(product);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.put('/api/products/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const product = req.body;
+    const sqlProduct: any = { ...product };
+    if (sqlProduct.sizes) {
+      sqlProduct.sizes = JSON.stringify(sqlProduct.sizes);
+    }
+    if (sqlProduct.isAction !== undefined) {
+      sqlProduct.isAction = Boolean(sqlProduct.isAction);
+    }
+    delete sqlProduct.id;
+    await pool.query('UPDATE products SET ? WHERE id = ?', [sqlProduct, id]);
+    res.json({ ...product, id });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Database error' });
@@ -1553,37 +1584,90 @@ app.delete('/api/products/:id', async (req, res) => {
   }
 });
 
-// Settings
+// Settings endpoints with no-cache and immediate database sync
+app.get('/api/settings', async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  try {
+    const [settings] = await pool.query('SELECT * FROM settings WHERE id = 1');
+    const current = (settings as any[])[0] || {};
+    res.json({
+      isMerchEnabled: current.isMerchEnabled === undefined ? true : Boolean(current.isMerchEnabled),
+      isTanecniExpresEnabled: current.isTanecniExpresEnabled === undefined ? true : Boolean(current.isTanecniExpresEnabled),
+      isCampsEnabled: current.isCampsEnabled === undefined ? true : Boolean(current.isCampsEnabled),
+      isGalleryEnabled: current.isGalleryEnabled === undefined ? true : Boolean(current.isGalleryEnabled),
+      isAboutEnabled: current.isAboutEnabled === undefined ? true : Boolean(current.isAboutEnabled),
+      campGeneralInfo: current.campGeneralInfo || '',
+      siteContent: typeof current.siteContent === 'string' ? JSON.parse(current.siteContent) : (current.siteContent || {})
+    });
+  } catch (error) {
+    console.error('Error fetching settings:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 app.post('/api/settings', async (req, res) => {
   try {
-    const { isMerchEnabled, isTanecniExpresEnabled, isCampsEnabled, campGeneralInfo, siteContent } = req.body;
+    const { isMerchEnabled, isTanecniExpresEnabled, isCampsEnabled, isGalleryEnabled, isAboutEnabled, campGeneralInfo, siteContent } = req.body;
     const updates: any = {};
-    if (isMerchEnabled !== undefined) updates.isMerchEnabled = isMerchEnabled;
-    if (isTanecniExpresEnabled !== undefined) updates.isTanecniExpresEnabled = isTanecniExpresEnabled;
-    if (isCampsEnabled !== undefined) updates.isCampsEnabled = isCampsEnabled;
+    if (isMerchEnabled !== undefined) updates.isMerchEnabled = isMerchEnabled ? 1 : 0;
+    if (isTanecniExpresEnabled !== undefined) updates.isTanecniExpresEnabled = isTanecniExpresEnabled ? 1 : 0;
+    if (isCampsEnabled !== undefined) updates.isCampsEnabled = isCampsEnabled ? 1 : 0;
+    if (isGalleryEnabled !== undefined) updates.isGalleryEnabled = isGalleryEnabled ? 1 : 0;
+    if (isAboutEnabled !== undefined) updates.isAboutEnabled = isAboutEnabled ? 1 : 0;
     if (campGeneralInfo !== undefined) updates.campGeneralInfo = campGeneralInfo;
-    if (siteContent !== undefined) updates.siteContent = JSON.stringify(siteContent);
+    if (siteContent !== undefined) updates.siteContent = typeof siteContent === 'object' ? JSON.stringify(siteContent) : siteContent;
     
-    await pool.query('UPDATE settings SET ? WHERE id = 1', updates);
-    res.json({ success: true });
+    if (Object.keys(updates).length > 0) {
+      await pool.query('UPDATE settings SET ? WHERE id = 1', updates);
+    }
+
+    const [settings] = await pool.query('SELECT * FROM settings WHERE id = 1');
+    const current = (settings as any[])[0] || {};
+    res.json({
+      success: true,
+      settings: {
+        isMerchEnabled: current.isMerchEnabled === undefined ? true : Boolean(current.isMerchEnabled),
+        isTanecniExpresEnabled: current.isTanecniExpresEnabled === undefined ? true : Boolean(current.isTanecniExpresEnabled),
+        isCampsEnabled: current.isCampsEnabled === undefined ? true : Boolean(current.isCampsEnabled),
+        isGalleryEnabled: current.isGalleryEnabled === undefined ? true : Boolean(current.isGalleryEnabled),
+        isAboutEnabled: current.isAboutEnabled === undefined ? true : Boolean(current.isAboutEnabled),
+      }
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Database error' });
   }
 });
 
-// Legacy generic sync endpoint - we'll keep it for now but it won't work well with SQL
-// We will rely on the frontend calling the specific endpoints.
-// But wait, the frontend IS calling /api/data with POST in the previous step.
-// I MUST update the frontend to call these specific endpoints.
-
+// Legacy generic sync endpoint
 app.post('/api/data', async (req, res) => {
-  // This is a fallback if frontend sends everything. 
-  // Implementing full sync logic here is complex (diffing).
-  // Instead, I will update the frontend to use the granular endpoints.
   res.status(501).json({ error: 'Please use granular endpoints' });
 });
 
+// Helper to fetch global settings payload for HTML injection
+async function getGlobalSettingsPayload() {
+  try {
+    const [settings] = await pool.query('SELECT * FROM settings WHERE id = 1');
+    const current = (settings as any[])[0] || {};
+    return {
+      isMerchEnabled: current.isMerchEnabled === undefined ? true : Boolean(current.isMerchEnabled),
+      isTanecniExpresEnabled: current.isTanecniExpresEnabled === undefined ? true : Boolean(current.isTanecniExpresEnabled),
+      isCampsEnabled: current.isCampsEnabled === undefined ? true : Boolean(current.isCampsEnabled),
+      isGalleryEnabled: current.isGalleryEnabled === undefined ? true : Boolean(current.isGalleryEnabled),
+      isAboutEnabled: current.isAboutEnabled === undefined ? true : Boolean(current.isAboutEnabled),
+    };
+  } catch (e) {
+    return {
+      isMerchEnabled: true,
+      isTanecniExpresEnabled: true,
+      isCampsEnabled: true,
+      isGalleryEnabled: true,
+      isAboutEnabled: true,
+    };
+  }
+}
 
 // Vite integration
 if (process.env.NODE_ENV !== 'production') {
@@ -1591,18 +1675,28 @@ if (process.env.NODE_ENV !== 'production') {
     server: { middlewareMode: true },
     appType: 'spa',
   });
+
   app.use(vite.middlewares);
 } else {
   // Serve static files in production
   const distPath = path.join(__dirname, 'dist');
   app.use(express.static(distPath));
   
-  // SPA fallback
-  app.get('*all', (req, res) => {
+  // SPA fallback with server-injected settings
+  app.get('*all', async (req, res) => {
     if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
       return res.status(404).send('Not found');
     }
-    res.sendFile(path.join(distPath, 'index.html'));
+    try {
+      const settingsPayload = await getGlobalSettingsPayload();
+      let html = await fs.readFile(path.join(distPath, 'index.html'), 'utf-8');
+      const scriptTag = `<script id="olymp-global-settings">window.__OLYMP_SETTINGS__ = ${JSON.stringify(settingsPayload)};</script>`;
+      html = html.replace('</head>', `${scriptTag}</head>`);
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.send(html);
+    } catch {
+      res.sendFile(path.join(distPath, 'index.html'));
+    }
   });
 }
 

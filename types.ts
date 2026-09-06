@@ -39,6 +39,10 @@ export interface Product {
   price: string;
   description: string;
   image: string;
+  isAction?: boolean;
+  originalPrice?: string;
+  actionBadge?: string;
+  sizes?: string[];
 }
 
 export interface SchoolRegistration {

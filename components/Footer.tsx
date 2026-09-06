@@ -5,7 +5,7 @@ import { CONTACT_INFO } from '../constants';
 import { useData } from '../context/DataContext';
 
 const Footer: React.FC = () => {
-  const { isMerchEnabled, isTanecniExpresEnabled, isCampsEnabled } = useData();
+  const { isMerchEnabled, isTanecniExpresEnabled, isCampsEnabled, isGalleryEnabled, isAboutEnabled } = useData();
   const currentVersion = document.querySelector('meta[name="app-version"]')?.getAttribute('content') || 'v1.0';
 
   const handleForceReload = () => {
@@ -54,8 +54,12 @@ const Footer: React.FC = () => {
               {isCampsEnabled && (
                 <li><Link to="/letnicampy" className="hover:text-brand-red transition-colors block py-1 sm:py-1.5">Letní tábory</Link></li>
               )}
-              <li><Link to="/galerie" className="hover:text-brand-red transition-colors block py-1 sm:py-1.5">Galerie</Link></li>
-              <li><Link to="/o-nas" className="hover:text-brand-red transition-colors block py-1 sm:py-1.5">O nás</Link></li>
+              {isGalleryEnabled && (
+                <li><Link to="/galerie" className="hover:text-brand-red transition-colors block py-1 sm:py-1.5">Galerie</Link></li>
+              )}
+              {isAboutEnabled && (
+                <li><Link to="/o-nas" className="hover:text-brand-red transition-colors block py-1 sm:py-1.5">O nás</Link></li>
+              )}
               <li><Link to="/kontakt" className="hover:text-brand-red transition-colors block py-1 sm:py-1.5">Kontakt</Link></li>
               {isMerchEnabled && (
                 <li><Link to="/merch" className="text-brand-lightBlue hover:text-white transition-colors block py-1 sm:py-1.5 font-bold">E-shop / Merch</Link></li>

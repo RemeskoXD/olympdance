@@ -159,48 +159,76 @@ export const GALLERY_IMAGES: GalleryImage[] = [
 ];
 
 export const PRODUCTS: Product[] = [
-    { 
-        id: 'p1', 
-        name: 'Taneční tričko Olymp 2026', 
-        price: '350 Kč', 
-        description: 'Kvalitní bavlněné tričko s logem pro tréninky i volný čas.', 
-        image: 'https://web2.itnahodinu.cz/olympdance/dscf0013-enhanced-nr_optimized.webp' 
-    },
-    { 
-        id: 'p2', 
-        name: 'Mikina s kapucí', 
-        price: '890 Kč', 
-        description: 'Hřejivá mikina, která tě udrží v teple po každém tréninku.', 
-        image: 'https://web2.itnahodinu.cz/olympdance/dscf0040-enhanced-nr_optimized.webp' 
-    },
-    { 
-        id: 'p3', 
-        name: 'Taneční batoh', 
-        price: '650 Kč', 
-        description: 'Stylový batoh na taneční boty a oblečení.', 
-        image: 'https://web2.itnahodinu.cz/olympdance/dscf0483-enhanced-nr_optimized.webp' 
-    },
-    { 
-        id: 'p4', 
-        name: 'Sportovní láhev', 
-        price: '250 Kč', 
-        description: 'Dodržuj pitný režim stylově s naší týmovou lahví.', 
-        image: 'https://web2.itnahodinu.cz/olympdance/dscf0221-enhanced-nr_optimized (1).jpg' 
-    },
-    { 
-        id: 'p5', 
-        name: 'Kšiltovka Snapback', 
-        price: '450 Kč', 
-        description: 'Street dance styl pro každého tanečníka.', 
-        image: 'https://web2.itnahodinu.cz/olympdance/dscf0192-enhanced-nr_optimized (1).jpg' 
-    },
-    { 
-        id: 'p6', 
-        name: 'Týmová souprava', 
-        price: '1200 Kč', 
-        description: 'Kompletní souprava na soutěže a vystoupení.', 
-        image: 'https://web2.itnahodinu.cz/olympdance/dscf0499-enhanced-nr_optimized (1).jpg' 
-    },
+  {
+    id: 'merch-1',
+    name: 'Olymp Dance tričko basic - jednobarevné',
+    price: '250 Kč',
+    description: '- 100% bavlna\n- nesušit v sušičce\n- perte naruby',
+    image: '/images/merch/tricko-basic.jpg'
+  },
+  {
+    id: 'merch-2',
+    name: 'Olymp Dance tričko premium - barevné',
+    price: '300 Kč',
+    description: '- 100% bavlna\n- nesušit v sušičce\n- perte naruby',
+    image: '/images/merch/tricko-premium.jpg'
+  },
+  {
+    id: 'merch-3',
+    name: 'Olymp Dance tričko sportovní - modré',
+    price: '200 Kč',
+    description: '- 100% polyester\n- nesušit v sušičce\n- perte naruby',
+    image: '/images/merch/tricko-sportovni-modre.jpg'
+  },
+  {
+    id: 'merch-4',
+    name: 'Olymp Dance mikina',
+    price: '500 Kč',
+    description: '- 80% bavlna, 20% polyester\n- nesušit v sušičce\n- perte naruby',
+    image: '/images/merch/mikina.jpg'
+  },
+  {
+    id: 'merch-5',
+    name: 'Olymp Dance crop top s rukávem',
+    price: '300 Kč',
+    description: '- 100% bavlna\n- nesušit v sušičce\n- perte naruby',
+    image: '/images/merch/crop-top-rukav.jpg'
+  },
+  {
+    id: 'merch-6',
+    name: 'Olymp Dance crop top tílkový',
+    price: '300 Kč',
+    description: '- 100% bavlna\n- nesušit v sušičce\n- perte naruby',
+    image: '/images/merch/crop-top-tilko.jpg'
+  },
+  {
+    id: 'merch-7',
+    name: 'Olymp Dance sportovní vak',
+    price: '100 Kč',
+    description: 'Sportovní vak pro každodenní použití. Vhodný na trénink, do tělocviku, popř. na výlet.',
+    image: '/images/merch/sportovni-vak.jpg'
+  },
+  {
+    id: 'merch-8',
+    name: 'Olymp Dance čepice',
+    price: '250 Kč',
+    description: 'Stylová dětská čepice, která zahřeje i v té největší zimě.',
+    image: '/images/merch/cepice.png'
+  },
+  {
+    id: 'merch-9',
+    name: 'Olymp Dance lahev',
+    price: '150 Kč',
+    description: 'Lahev na pití do školy, na kroužek nebo na výlet.',
+    image: '/images/merch/lahev.png'
+  },
+  {
+    id: 'merch-10',
+    name: 'Olymp Dance tričko sportovní - zelené',
+    price: '200 Kč',
+    description: '- 100% polyester\n- nesušit v sušičce\n- perte naruby',
+    image: '/images/merch/tricko-sportovni-zelene.png'
+  }
 ];
 
 export const CONTACT_INFO = {
