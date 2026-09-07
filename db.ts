@@ -321,6 +321,21 @@ export const initDb = async () => {
     try {
       await connection.query('ALTER TABLE settings ADD COLUMN rbSyncStatus TEXT');
     } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE settings ADD COLUMN smtpUser VARCHAR(255)');
+    } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE settings ADD COLUMN smtpPass VARCHAR(255)');
+    } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE settings ADD COLUMN smtpHost VARCHAR(255)');
+    } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE settings ADD COLUMN smtpPort VARCHAR(20)');
+    } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE settings ADD COLUMN smtpSecure VARCHAR(20)');
+    } catch (e) {}
 
     // 11. Password Resets table
     await connection.query(`
@@ -377,74 +392,99 @@ export const initDb = async () => {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    // 14. Uploaded files table (Durable storage in MySQL so photos/PDFs are never lost on container restart/deploy)
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS uploaded_files (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        filename VARCHAR(255) NOT NULL UNIQUE,
+        originalName VARCHAR(255) NOT NULL,
+        mimeType VARCHAR(100) NOT NULL,
+        size INT NOT NULL,
+        data LONGBLOB NOT NULL,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
     // ==========================================
-    // 1:1 Synchronization of Static Data to MySQL
+    // Synchronization of Initial Static Data to MySQL (ONLY on empty database)
     // ==========================================
 
-    // Schools (Seed initial if empty or insert missing)
-    for (const school of SCHOOLS) {
-      await connection.query(`
-        INSERT IGNORE INTO schools (id, name, city, day, time, price, isKindergarten) 
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `, [
-        school.id,
-        school.name,
-        school.city,
-        school.day,
-        school.time,
-        school.price,
-        Boolean(school.isKindergarten)
-      ]);
+    // Schools: Seed initial ONLY if table is completely empty
+    const [schoolsCountRow] = await connection.query('SELECT COUNT(*) as count FROM schools');
+    if ((schoolsCountRow as any[])[0]?.count === 0) {
+      for (const school of SCHOOLS) {
+        await connection.query(`
+          INSERT IGNORE INTO schools (id, name, city, day, time, price, isKindergarten) 
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `, [
+          school.id,
+          school.name,
+          school.city,
+          school.day,
+          school.time,
+          school.price,
+          Boolean(school.isKindergarten)
+        ]);
+      }
+      console.log(`Initial seed: ${SCHOOLS.length} schools inserted.`);
     }
-    console.log(`Synced ${SCHOOLS.length} schools into database.`);
 
-    // Camps (Seed initial if empty or insert missing)
-    for (const camp of CAMPS) {
-      await connection.query(`
-        INSERT IGNORE INTO camps (id, title, date, price, description, image, location, externalUrl, details, variableSymbol) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        camp.id,
-        camp.title,
-        camp.date,
-        camp.price,
-        camp.description || '',
-        camp.image || '',
-        camp.location || null,
-        camp.externalUrl || null,
-        camp.details || null,
-        camp.variableSymbol || null
-      ]);
+    // Camps: Seed initial ONLY if table is completely empty
+    const [campsCountRow] = await connection.query('SELECT COUNT(*) as count FROM camps');
+    if ((campsCountRow as any[])[0]?.count === 0) {
+      for (const camp of CAMPS) {
+        await connection.query(`
+          INSERT IGNORE INTO camps (id, title, date, price, description, image, location, externalUrl, details, variableSymbol) 
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          camp.id,
+          camp.title,
+          camp.date,
+          camp.price,
+          camp.description || '',
+          camp.image || '',
+          camp.location || null,
+          camp.externalUrl || null,
+          camp.details || null,
+          camp.variableSymbol || null
+        ]);
+      }
+      console.log(`Initial seed: ${CAMPS.length} camps inserted.`);
     }
-    console.log(`Synced ${CAMPS.length} camps into database.`);
 
-    // Gallery (Seed initial if empty or insert missing)
-    for (const img of GALLERY_IMAGES) {
-      await connection.query(`
-        INSERT IGNORE INTO gallery_images (id, url, caption) 
-        VALUES (?, ?, ?)
-      `, [
-        img.id,
-        img.url,
-        img.caption || null
-      ]);
+    // Gallery: Seed initial ONLY if table is completely empty
+    const [galleryCountRow] = await connection.query('SELECT COUNT(*) as count FROM gallery_images');
+    if ((galleryCountRow as any[])[0]?.count === 0) {
+      for (const img of GALLERY_IMAGES) {
+        await connection.query(`
+          INSERT IGNORE INTO gallery_images (id, url, caption) 
+          VALUES (?, ?, ?)
+        `, [
+          img.id,
+          img.url,
+          img.caption || null
+        ]);
+      }
+      console.log(`Initial seed: ${GALLERY_IMAGES.length} gallery images inserted.`);
     }
-    console.log(`Synced ${GALLERY_IMAGES.length} gallery images into database.`);
 
-    // Products (Seed initial if empty or insert missing)
-    for (const product of PRODUCTS) {
-      await connection.query(`
-        INSERT IGNORE INTO products (id, name, price, description, image) 
-        VALUES (?, ?, ?, ?, ?)
-      `, [
-        product.id,
-        product.name,
-        product.price,
-        product.description || '',
-        product.image || ''
-      ]);
+    // Products: Seed initial ONLY if table is completely empty
+    const [productsCountRow] = await connection.query('SELECT COUNT(*) as count FROM products');
+    if ((productsCountRow as any[])[0]?.count === 0) {
+      for (const product of PRODUCTS) {
+        await connection.query(`
+          INSERT IGNORE INTO products (id, name, price, description, image) 
+          VALUES (?, ?, ?, ?, ?)
+        `, [
+          product.id,
+          product.name,
+          product.price,
+          product.description || '',
+          product.image || ''
+        ]);
+      }
+      console.log(`Initial seed: ${PRODUCTS.length} products inserted.`);
     }
-    console.log(`Synced ${PRODUCTS.length} products into database.`);
 
     // Settings (Ensure default row id=1 exists)
     const [settingsRows] = await connection.query('SELECT COUNT(*) as count FROM settings WHERE id = 1');

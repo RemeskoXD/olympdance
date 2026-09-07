@@ -49,8 +49,8 @@ const Navbar: React.FC = () => {
   return (
     <nav className="fixed top-0 left-0 right-0 w-full bg-white/95 backdrop-blur-md shadow-md z-50 transition-all duration-300 print:hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16 sm:h-20 items-center">
-          {/* Logo Area */}
+        <div className="flex justify-between h-20 sm:h-28 items-center py-1">
+          {/* Logo Area (2x larger) */}
           <div 
             className="flex-shrink-0 flex items-center cursor-pointer gap-2 group py-1" 
             onClick={() => { navigate('/'); setIsOpen(false); }}
@@ -58,7 +58,7 @@ const Navbar: React.FC = () => {
             <img 
               src="https://web2.itnahodinu.cz/olympdance/logo.png" 
               alt="Olymp Dance Logo" 
-              className="h-12 sm:h-16 w-auto transition-transform group-hover:scale-105 drop-shadow-sm"
+              className="h-20 sm:h-28 md:h-32 w-auto transition-transform group-hover:scale-105 drop-shadow-sm object-contain"
             />
           </div>
 

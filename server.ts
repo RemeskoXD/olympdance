@@ -8,6 +8,17 @@ import { createServer as createViteServer } from 'vite';
 import pool, { initDb, isDbConfigured } from './db.ts';
 import { SCHOOLS, CAMPS, GALLERY_IMAGES, PRODUCTS } from './constants.ts';
 import { getRbConfig, testRbConnection, syncRbPayments, getRbLogs, processSinglePayment } from './rbService.ts';
+import { generateSchoolPaymentPdf } from './pdfGenerator.ts';
+import dns from 'dns';
+
+// Enforce IPv4 lookup order first so Docker/Coolify containers do not hang on IPv6 DNS queries
+try {
+  if (typeof dns.setDefaultResultOrder === 'function') {
+    dns.setDefaultResultOrder('ipv4first');
+  }
+} catch (e) {
+  console.warn('Could not set IPv4 default DNS resolution order:', e);
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -52,19 +63,64 @@ app.get('/api/seed', async (req, res) => {
 
 // API Routes
 
-// Upload endpoint
-app.post('/api/upload', upload.single('file'), (req, res) => {
+// Upload endpoint with persistent MySQL backup
+app.post('/api/upload', upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
-  // In production, this should be a full URL or relative path handled by proxy
-  // For this setup, we return a relative path
   const fileUrl = `/uploads/${req.file.filename}`;
+  
+  // Persist file into MySQL database uploaded_files so files/PDFs are never lost on restart/redeploy
+  try {
+    const fileBuffer = fs.readFileSync(req.file.path);
+    await pool.query(
+      `INSERT INTO uploaded_files (filename, originalName, mimeType, size, data) 
+       VALUES (?, ?, ?, ?, ?) 
+       ON DUPLICATE KEY UPDATE data = VALUES(data), size = VALUES(size), mimeType = VALUES(mimeType)`,
+      [
+        req.file.filename,
+        req.file.originalname,
+        req.file.mimetype || 'application/octet-stream',
+        req.file.size,
+        fileBuffer
+      ]
+    );
+  } catch (dbErr) {
+    console.error('Warning: Failed to backup uploaded file to MySQL:', dbErr);
+  }
+
   res.json({ url: fileUrl, filename: req.file.filename, originalName: req.file.originalname });
 });
 
-// Serve uploads & local images
-app.use('/uploads', express.static(UPLOADS_DIR));
+// Serve uploads: check local disk cache first; if container restarted/redeployed, restore from MySQL!
+app.get('/uploads/:filename', async (req, res) => {
+  const { filename } = req.params;
+  const localPath = path.join(UPLOADS_DIR, filename);
+  if (fs.existsSync(localPath)) {
+    return res.sendFile(localPath);
+  }
+
+  try {
+    const [rows] = await pool.query('SELECT mimeType, data FROM uploaded_files WHERE filename = ?', [filename]);
+    const fileRow = (rows as any[])[0];
+    if (fileRow && fileRow.data) {
+      // Re-populate disk cache
+      try {
+        fs.writeFileSync(localPath, fileRow.data);
+      } catch (writeErr) {
+        // Disk cache write failure is non-fatal
+      }
+      res.setHeader('Content-Type', fileRow.mimeType || 'application/octet-stream');
+      return res.send(fileRow.data);
+    }
+  } catch (dbErr) {
+    console.error('Error fetching file from database:', dbErr);
+  }
+
+  return res.status(404).send('File not found');
+});
+
+// Serve local images
 app.use('/images', express.static(path.join(process.cwd(), 'public', 'images')));
 
 // Data endpoints
@@ -350,25 +406,36 @@ app.delete('/api/products/:id', async (req, res) => {
 
 import nodemailer from 'nodemailer';
 
-// Robust Email Transporter (handles Gmail SSL/TLS and App Passwords with spaces)
-let currentTransporter: any = null;
-let lastSmtpUser = '';
-let lastSmtpPass = '';
+// Robust Email Transporter (handles Coolify Docker environments, IPv4 enforcement, Gmail SSL/TLS, port 465/587 fallbacks and DB settings)
+export const getSmtpConfig = async () => {
+  let dbSettings: any = null;
+  try {
+    const [rows] = await pool.query('SELECT smtpUser, smtpPass, smtpHost, smtpPort, smtpSecure FROM settings WHERE id = 1');
+    if ((rows as any[]).length > 0) {
+      dbSettings = (rows as any[])[0];
+    }
+  } catch (e) {}
 
-const getTransporter = () => {
-  const host = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const port = parseInt(process.env.SMTP_PORT || '465', 10);
-  const secure = port === 465 || process.env.SMTP_SECURE === 'true' || process.env.SMTP_SECURE === 'ssl';
-  const user = (process.env.SMTP_USER || '').trim();
-  const pass = (process.env.SMTP_PASS || '').replace(/\s+/g, '');
+  const host = (process.env.SMTP_HOST || dbSettings?.smtpHost || 'smtp.gmail.com').trim();
+  const port = parseInt(process.env.SMTP_PORT || dbSettings?.smtpPort || '465', 10);
+  const secureSetting = process.env.SMTP_SECURE || dbSettings?.smtpSecure;
+  const secure = secureSetting ? (secureSetting === 'true' || secureSetting === 'ssl') : (port === 465);
+  const user = (process.env.SMTP_USER || dbSettings?.smtpUser || '').trim();
+  const pass = (process.env.SMTP_PASS || dbSettings?.smtpPass || '').replace(/\s+/g, '').replace(/^["']|["']$/g, '');
 
-  if (currentTransporter && user === lastSmtpUser && pass === lastSmtpPass) {
-    return currentTransporter;
-  }
+  return {
+    host,
+    port,
+    secure,
+    user,
+    pass,
+    isConfigured: Boolean(user && pass),
+    source: process.env.SMTP_USER ? 'env' : (dbSettings?.smtpUser ? 'database' : 'none')
+  };
+};
 
-  lastSmtpUser = user;
-  lastSmtpPass = pass;
-  currentTransporter = nodemailer.createTransport({
+const createTransporterFor = (host: string, port: number, secure: boolean, user: string, pass: string) => {
+  return nodemailer.createTransport({
     host,
     port,
     secure,
@@ -376,12 +443,15 @@ const getTransporter = () => {
       user,
       pass,
     },
+    family: 4, // Critical for Coolify / Docker: Prevents IPv6 lookup timeouts on VPS
+    connectionTimeout: 12000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
     tls: {
-      rejectUnauthorized: false
+      rejectUnauthorized: false,
+      minVersion: 'TLSv1.2'
     }
-  });
-
-  return currentTransporter;
+  } as any);
 };
 
 const BANK_DETAILS = {
@@ -415,7 +485,7 @@ const generateQrPaymentUrl = (amount: number, vs: string, message: string) => {
 };
 
 // Admin recipient list (both primary and requested test emails)
-const getAdminEmails = (): string[] => {
+const getAdminEmails = async (): Promise<string[]> => {
   const emails = new Set<string>();
   if (process.env.ADMIN_EMAIL) {
     process.env.ADMIN_EMAIL.split(',').forEach(e => {
@@ -423,103 +493,148 @@ const getAdminEmails = (): string[] => {
       if (clean && clean.includes('@')) emails.add(clean);
     });
   }
-  if (process.env.SMTP_USER) {
-    const cleanUser = process.env.SMTP_USER.trim();
-    if (cleanUser && cleanUser.includes('@')) emails.add(cleanUser);
+  const config = await getSmtpConfig();
+  if (config.user && config.user.includes('@')) {
+    emails.add(config.user);
   }
-  // User explicitly asked for ludvikremesekwork@gmail.com to receive notifications
+  // User explicitly asked for notifications
   emails.add('ludvikremesekwork@gmail.com');
   return Array.from(emails);
 };
 
-const getAdminEmail = () => getAdminEmails()[0] || 'ludvikremesekwork@gmail.com';
+const getAdminEmail = async () => (await getAdminEmails())[0] || 'ludvikremesekwork@gmail.com';
 
-// Helper to send email safely
-const sendEmail = async (to: string, subject: string, html: string) => {
-  console.log(`[Email Dispatch] To: ${to} | Subject: "${subject}"`);
-  if (!process.env.SMTP_USER) {
-    console.log('[Email Simulation] SMTP_USER not set. To:', to, '| Subject:', subject);
+// Helper to send email safely with IPv4 and auto-fallback (465 SSL <-> 587 STARTTLS)
+const sendEmail = async (
+  to: string, 
+  subject: string, 
+  html: string, 
+  attachments?: Array<{ filename: string; content: any; contentType?: string }>
+) => {
+  console.log(`[Email Dispatch] To: ${to} | Subject: "${subject}" | Attachments: ${attachments?.length || 0}`);
+  
+  const config = await getSmtpConfig();
+  if (!config.isConfigured) {
+    console.log('[Email Simulation] SMTP credentials not set (neither in ENV nor in Database settings). To:', to, '| Subject:', subject, '| Attachments:', attachments?.length || 0);
     return null;
   }
+
+  const mailOptions: any = {
+    from: `"Olymp Dance" <${config.user}>`,
+    to,
+    subject,
+    html,
+  };
+  if (attachments && attachments.length > 0) {
+    mailOptions.attachments = attachments;
+  }
+
+  // 1. Try primary configured port
   try {
-    const activeTransporter = getTransporter();
-    const info = await activeTransporter.sendMail({
-      from: `"Olymp Dance" <${process.env.SMTP_USER.trim()}>`,
-      to,
-      subject,
-      html,
-    });
+    const primaryTransporter = createTransporterFor(config.host, config.port, config.secure, config.user, config.pass);
+    const info = await primaryTransporter.sendMail(mailOptions);
     console.log('[Email Sent] Delivered to:', to, 'MessageId:', info?.messageId);
     return info;
-  } catch (error) {
+  } catch (error: any) {
+    console.warn(`[Email Warning] Primary SMTP connection failed (${config.host}:${config.port}, secure: ${config.secure}):`, error.message);
+
+    // 2. Fallback: If port 465 was blocked by VPS/Coolify host, try port 587 with STARTTLS (or vice-versa)
+    if (config.host.includes('gmail.com')) {
+      const fallbackPort = config.port === 465 ? 587 : 465;
+      const fallbackSecure = fallbackPort === 465;
+      console.log(`[Email Fallback] Retrying via port ${fallbackPort} (secure: ${fallbackSecure})...`);
+      try {
+        const fallbackTransporter = createTransporterFor(config.host, fallbackPort, fallbackSecure, config.user, config.pass);
+        const info = await fallbackTransporter.sendMail(mailOptions);
+        console.log('[Email Sent via Fallback] Delivered to:', to, 'MessageId:', info?.messageId);
+        return info;
+      } catch (fallbackError: any) {
+        console.error('[Email Error] Fallback SMTP connection also failed:', fallbackError.message);
+      }
+    }
+
     console.error('[Email Error] Failed sending email to:', to, error);
     // Don't rethrow to avoid breaking user response, but return null
     return null;
   }
 };
 
-// Admin test email endpoint to verify Gmail configuration
+// Admin SMTP status check endpoint
+app.get('/api/smtp/status', async (req, res) => {
+  try {
+    const config = await getSmtpConfig();
+    res.json({
+      isConfigured: config.isConfigured,
+      host: config.host,
+      port: config.port,
+      secure: config.secure,
+      user: config.user,
+      source: config.source,
+      hasPass: Boolean(config.pass),
+      envUser: process.env.SMTP_USER || null,
+      envHost: process.env.SMTP_HOST || null,
+      envPort: process.env.SMTP_PORT || null
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Admin test email endpoint with live connection test & diagnostics
 app.post('/api/test-email', async (req, res) => {
   try {
-    if (!process.env.SMTP_USER) {
+    const config = await getSmtpConfig();
+    if (!config.isConfigured) {
       return res.status(400).json({
         success: false,
-        error: 'V proměnných prostředí chybí nastavený SMTP_USER (váš Gmail, např. vas-ucet@gmail.com). Přidejte jej do Settings -> Secrets.'
+        error: 'V konfiguraci chybí SMTP uživatel nebo heslo. Zadejte je buď v Coolify (proměnné SMTP_USER a SMTP_PASS) nebo níže v Nastavení e-mailu.'
       });
     }
 
-    const recipients = getAdminEmails();
+    const targetRecipient = (req.body && req.body.testEmail && req.body.testEmail.includes('@'))
+      ? req.body.testEmail.trim()
+      : 'ludvikremesekwork@gmail.com';
+
     const testHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
         <div style="background-color: #002B49; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
           <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Olymp Dance Olomouc</h1>
-          <p style="color: #4ade80; margin: 6px 0 0 0; font-size: 15px; font-weight: bold;">Testovací e-mail spojení (Gmail SMTP)</p>
+          <p style="color: #4ade80; margin: 6px 0 0 0; font-size: 15px; font-weight: bold;">Testovací e-mail spojení (SMTP)</p>
         </div>
         <div style="background-color: #ffffff; padding: 32px 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
           <p style="font-size: 16px;">Dobrý den,</p>
-          <p>toto je <strong>testovací zpráva</strong> potvrzující, že Gmail SMTP spojení na webu Olymp Dance je plně funkční a aktivní!</p>
+          <p>toto je <strong>testovací zpráva</strong> potvrzující, že SMTP e-mailové spojení na webu Olymp Dance je plně funkční a aktivní!</p>
           <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 16px; margin: 20px 0;">
-            <p style="margin: 0; color: #166534; font-weight: bold;">✅ SMTP Odesílatel: ${process.env.SMTP_USER || 'Nenastaven'}</p>
-            <p style="margin: 4px 0 0 0; font-size: 13px; color: #15803d;">Doručeno na: ${recipients.join(', ')}</p>
+            <p style="margin: 0; color: #166534; font-weight: bold;">✅ SMTP Odesílatel: ${config.user}</p>
+            <p style="margin: 4px 0 0 0; font-size: 13px; color: #15803d;">Server: ${config.host}:${config.port} (zdroj: ${config.source})</p>
+            <p style="margin: 4px 0 0 0; font-size: 13px; color: #15803d;">Doručeno na: ${targetRecipient}</p>
             <p style="margin: 4px 0 0 0; font-size: 13px; color: #15803d;">Čas testu: ${new Date().toLocaleString('cs-CZ')}</p>
           </div>
           <p style="font-size: 13px; color: #64748b;">
-            Všechny odchozí e-maily (potvrzení kroužků a táborů s přihlašovacími údaji a QR platbou, obnova hesel s 6místným kódem, zprávy z kontaktního formuláře a objednávky merche) se nyní v pořádku odesílají.
+            Všechny odchozí e-maily (potvrzení přihlášek do tanečních kroužků a na tábory s QR platbou, obnova hesel, kontaktní formulář a objednávky merche) se nyní v pořádku odesílají.
+          </p>
+          <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
+          <p style="font-size: 13px; color: #94a3b8; text-align: center; margin: 0;">
+            Taneční klub Olymp Olomouc, z. s. • Jiráskova 25, Olomouc • info@olympdance.cz • +420 722 017 700
           </p>
         </div>
       </div>
     `;
 
-    let sentCount = 0;
-    let lastError: any = null;
-
-    for (const recipient of recipients) {
-      try {
-        const activeTransporter = getTransporter();
-        await activeTransporter.sendMail({
-          from: `"Olymp Dance" <${process.env.SMTP_USER.trim()}>`,
-          to: recipient,
-          subject: 'Testovací e-mail - Olymp Dance SMTP',
-          html: testHtml,
-        });
-        sentCount++;
-      } catch (e: any) {
-        console.error('Failed sending test email to', recipient, e);
-        lastError = e;
-      }
-    }
-
-    if (sentCount === 0 && lastError) {
+    const info = await sendEmail(targetRecipient, 'Testovací e-mail - Olymp Dance SMTP', testHtml);
+    if (!info) {
       return res.status(500).json({
         success: false,
-        error: `Chyba při odesílání přes Gmail: ${lastError.message || 'Neplatné heslo nebo přihlašovací údaje'}`
+        error: `Odeslání selhalo. Zkontrolujte prosím: 1. Zda je pro Gmail použito "Heslo aplikace" (App Password) s 2FA, nikoliv běžné heslo. 2. Zda váš hostingový poskytovatel (VPS) neblokuje odchozí port 465 nebo 587.`,
+        config: { host: config.host, port: config.port, user: config.user, source: config.source }
       });
     }
 
     res.json({
       success: true,
-      recipients,
-      message: `Testovací e-mail byl úspěšně odeslán na: ${recipients.join(', ')}`
+      recipient: targetRecipient,
+      messageId: info.messageId,
+      message: `Testovací e-mail byl úspěšně odeslán na: ${targetRecipient}`
     });
   } catch (err: any) {
     console.error('Test email error:', err);
@@ -607,10 +722,10 @@ app.post('/api/merch-orders', async (req, res) => {
             <p style="font-size: 12px; color: #64748b; margin: 8px 0 0 0;">Naskenujte v aplikaci své banky (Raiffeisenbank, KB, ČSOB, Spořitelna, AirBank atd.)</p>
           </div>
 
-          <p style="font-size: 14px; color: #475569;">Po přijetí platby zboží připravíme k předání. V případě dotazů nás můžete kdykoliv kontaktovat.</p>
+          <p style="font-size: 14px; color: #475569;">Po přijetí platby zboží připravíme k předání. V případě dotazů nás můžete kdykoliv kontaktovat na tel. <strong>+420 722 017 700</strong>.</p>
           <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
           <p style="font-size: 13px; color: #94a3b8; text-align: center; margin: 0;">
-            Taneční klub Olymp Olomouc • info@olympdance.cz
+            Taneční klub Olymp Olomouc • info@olympdance.cz • +420 722 017 700
           </p>
         </div>
       </div>
@@ -619,7 +734,7 @@ app.post('/api/merch-orders', async (req, res) => {
     sendEmail(fullOrder.userEmail, `Potvrzení objednávky merche (${fullOrder.productName}) - Olymp Dance`, buyerHtml).catch(console.error);
 
     // Notification to admin
-    const adminRecipients = getAdminEmails();
+    const adminRecipients = await getAdminEmails();
     const adminHtml = `
       <h2>Nová objednávka klubového merche</h2>
       <p><strong>Zákazník:</strong> ${fullOrder.userName}</p>
@@ -670,7 +785,7 @@ app.put('/api/merch-orders/:id', async (req, res) => {
               <p>Děkujeme za podporu našeho klubu!</p>
               <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
               <p style="font-size: 13px; color: #94a3b8; text-align: center; margin: 0;">
-                Taneční klub Olymp Olomouc • info@olympdance.cz
+                Taneční klub Olymp Olomouc • info@olympdance.cz • +420 722 017 700
               </p>
             </div>
           </div>
@@ -705,38 +820,71 @@ app.post('/api/payments/webhook', async (req, res) => {
     const { variableSymbol, amount, currency } = req.body;
     
     if (variableSymbol) {
-      // 1. Try matching school registrations
-      const [schoolRows] = await pool.query(
-        'SELECT id, parentEmail, childName FROM school_registrations WHERE variableSymbol = ? OR id = ? OR childRodneCislo LIKE ?',
-        [variableSymbol, variableSymbol, `%${variableSymbol}%`]
+      // 1. Try matching merch orders (E-shop)
+      const [merchRows] = await pool.query(
+        'SELECT * FROM merch_orders WHERE variableSymbol = ? OR TRIM(LEADING "0" FROM variableSymbol) = ? LIMIT 1',
+        [variableSymbol, String(variableSymbol).replace(/^0+/, '')]
       );
-      if ((schoolRows as any[]).length > 0) {
-        const reg = (schoolRows as any[])[0];
-        await pool.query('UPDATE school_registrations SET status = "approved" WHERE id = ?', [reg.id]);
-        console.log(`[Bank Auto-Match] School registration ${reg.id} approved`);
+      if ((merchRows as any[]).length > 0) {
+        const order = (merchRows as any[])[0];
+        if (order.status !== 'paid') {
+          await pool.query('UPDATE merch_orders SET status = "paid" WHERE id = ?', [order.id]);
+          console.log(`[Bank Auto-Match] Merch order ${order.id} paid`);
+
+          if (order.userEmail) {
+            const buyerHtml = `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
+                <div style="background-color: #002B49; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
+                  <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Olymp Dance Olomouc</h1>
+                  <p style="color: #4ade80; margin: 6px 0 0 0; font-size: 15px; font-weight: bold;">Platba byla úspěšně přijata</p>
+                </div>
+                <div style="background-color: #ffffff; padding: 32px 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
+                  <p style="font-size: 16px;">Dobrý den, <strong>${order.userName}</strong>,</p>
+                  <p>potvrzujeme, že jsme v pořádku obdrželi Vaši platbu ve výši <strong>${amount || order.totalPrice} Kč</strong> za objednávku klubového merche:</p>
+                  
+                  <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 18px; margin: 20px 0;">
+                    <h3 style="margin: 0 0 10px 0; color: #166534; font-size: 16px;">✅ Detaily objednávky</h3>
+                    <p style="margin: 4px 0; font-size: 14px;"><strong>Položka:</strong> ${order.productName}</p>
+                    <p style="margin: 4px 0; font-size: 14px;"><strong>Velikost / Varianta:</strong> ${order.size || 'Univerzální'} (${order.quantity} ks)</p>
+                    <p style="margin: 4px 0; font-size: 14px;"><strong>Částka:</strong> <span style="color: #16a34a; font-weight: bold;">${amount || order.totalPrice} Kč</span></p>
+                    <p style="margin: 4px 0; font-size: 14px;"><strong>Variabilní symbol:</strong> ${order.variableSymbol || variableSymbol}</p>
+                    <p style="margin: 4px 0; font-size: 14px;"><strong>Stav:</strong> <span style="color: #16a34a; font-weight: bold;">Zaplaceno</span></p>
+                  </div>
+
+                  <p style="font-size: 14px; color: #475569;">
+                    Objednávku nyní kompletujeme a připravujeme k předání (na tréninku dítěte nebo osobně v sále Olymp Dance dle domluvy).
+                  </p>
+                  <p style="font-size: 14px; color: #475569;">
+                    Děkujeme za podporu našeho tanečního klubu!
+                  </p>
+
+                  <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
+                  <p style="font-size: 13px; color: #94a3b8; text-align: center; margin: 0;">
+                    Taneční klub Olymp Olomouc • info@olympdance.cz • +420 722 017 700
+                  </p>
+                </div>
+              </div>
+            `;
+            sendEmail(order.userEmail, `Platba přijata: Objednávka merche (${order.productName}) - Olymp Dance`, buyerHtml).catch(console.error);
+          }
+        }
       }
 
-      // 2. Try matching camp registrations
+      // 2. Try matching camp registrations (Tábory) - mark paid in admin, NO automated email
       const [campRows] = await pool.query(
-        'SELECT id, parentEmail, childName FROM registrations WHERE variableSymbol = ? OR id = ?',
+        'SELECT id, childName, status FROM registrations WHERE variableSymbol = ? OR id = ?',
         [variableSymbol, variableSymbol]
       );
       if ((campRows as any[]).length > 0) {
         const reg = (campRows as any[])[0];
-        await pool.query('UPDATE registrations SET status = "approved" WHERE id = ?', [reg.id]);
-        console.log(`[Bank Auto-Match] Camp registration ${reg.id} approved`);
+        if (reg.status !== 'approved') {
+          await pool.query('UPDATE registrations SET status = "approved" WHERE id = ?', [reg.id]);
+          console.log(`[Bank Auto-Match] Camp registration ${reg.id} approved`);
+          // NOTE: As requested, no automated confirmation email for camps
+        }
       }
 
-      // 3. Try matching merch orders
-      const [merchRows] = await pool.query(
-        'SELECT id, userEmail, productName FROM merch_orders WHERE variableSymbol = ?',
-        [variableSymbol]
-      );
-      if ((merchRows as any[]).length > 0) {
-        const order = (merchRows as any[])[0];
-        await pool.query('UPDATE merch_orders SET status = "paid" WHERE id = ?', [order.id]);
-        console.log(`[Bank Auto-Match] Merch order ${order.id} paid`);
-      }
+      // 3. School registrations (Kroužky) - deferred to next prompt, NO automated email
     }
 
     res.json({ received: true });
@@ -866,7 +1014,7 @@ app.post('/api/rb/simulate-payment', async (req, res) => {
   }
 });
 
-// Background periodic sync with Raiffeisenbank API every 15 minutes
+// Background periodic sync with Raiffeisenbank API every 5 minutes
 setInterval(async () => {
   try {
     const config = await getRbConfig();
@@ -877,7 +1025,7 @@ setInterval(async () => {
   } catch (e: any) {
     console.error('[Background Task RB Sync Error]:', e.message);
   }
-}, 15 * 60 * 1000);
+}, 5 * 60 * 1000);
 
 // Initial check 10 seconds after server start
 setTimeout(async () => {
@@ -949,7 +1097,7 @@ app.post('/api/forgot-password', async (req, res) => {
           </p>
           <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
           <p style="font-size: 13px; color: #94a3b8; text-align: center; margin: 0;">
-            Taneční klub Olymp Olomouc • info@olympdance.cz
+            Taneční klub Olymp Olomouc • info@olympdance.cz • +420 722 017 700
           </p>
         </div>
       </div>
@@ -1111,7 +1259,7 @@ app.post('/api/registrations', async (req, res) => {
           <p>Těšíme se na skvělé léto plné tance!</p>
           <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
           <p style="font-size: 13px; color: #94a3b8; text-align: center; margin: 0;">
-            Taneční klub Olymp Olomouc • info@olympdance.cz
+            Taneční klub Olymp Olomouc • info@olympdance.cz • +420 722 017 700
           </p>
         </div>
       </div>
@@ -1123,7 +1271,7 @@ app.post('/api/registrations', async (req, res) => {
         await sendEmail(registration.parentEmail, `Potvrzení přihlášky na tábor (${registration.childName}) - Olymp Dance`, emailHtml);
         
         // Also notify all admin recipients
-        const adminRecipients = getAdminEmails();
+        const adminRecipients = await getAdminEmails();
         const adminHtml = `
           <h2>Nová přihláška na letní tábor</h2>
           <p><strong>Dítě:</strong> ${registration.childName} (${registration.childBirthDate})</p>
@@ -1181,7 +1329,7 @@ app.put('/api/registrations/:id', async (req, res) => {
               <p>Děkujeme a těšíme se na viděnou!</p>
               <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
               <p style="font-size: 13px; color: #94a3b8; text-align: center; margin: 0;">
-                Taneční klub Olymp Olomouc • info@olympdance.cz
+                Taneční klub Olymp Olomouc • info@olympdance.cz • +420 722 017 700
               </p>
             </div>
           </div>
@@ -1206,6 +1354,61 @@ app.delete('/api/registrations/:id', async (req, res) => {
   } catch (error) {
     console.error('Delete camp registration error:', error);
     res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Download official 1:1 camp payment confirmation PDF
+app.get('/api/registrations/:id/confirmation-pdf', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [rows] = await pool.query('SELECT * FROM registrations WHERE id = ?', [id]);
+    if ((rows as any[]).length === 0) {
+      return res.status(404).json({ error: 'Přihláška na tábor nenalezena' });
+    }
+    const reg = (rows as any[])[0];
+
+    // Find camp info
+    const [campRows] = await pool.query('SELECT * FROM camps WHERE id = ?', [reg.campId]);
+    const camp = (campRows as any[])[0];
+    const campTitle = camp?.title || 'Letní tábor Olymp Dance';
+
+    // Find bank payment log for sender account & exact transaction info
+    const [bankRows] = await pool.query(
+      'SELECT * FROM bank_payments_log WHERE matchedId = ? OR variableSymbol = ? ORDER BY createdAt DESC LIMIT 1',
+      [reg.id, reg.variableSymbol]
+    );
+    const bankTx = (bankRows as any[])[0];
+
+    let amountVal = 3500;
+    if (bankTx && bankTx.amount) {
+      amountVal = parseFloat(bankTx.amount);
+    } else if (camp && camp.price) {
+      const parsed = parseFloat(String(camp.price).replace(/[^0-9]/g, ''));
+      if (!isNaN(parsed) && parsed > 0) amountVal = parsed;
+    }
+
+    const pdfBuffer = await generateSchoolPaymentPdf({
+      activityType: 'tabor',
+      activityName: campTitle,
+      paymentDate: bankTx?.bookingDate || reg.createdAt || new Date(),
+      senderAccount: bankTx?.senderAccount || '',
+      parentName: reg.parentName || bankTx?.senderName || 'Zákonný zástupce',
+      childName: reg.childName,
+      childSurname: '',
+      childBirthDate: reg.childBirthDate,
+      childRodneCislo: null,
+      amount: amountVal,
+      period: camp?.date || 'červenec – srpen',
+      issueDate: bankTx?.bookingDate || new Date()
+    });
+
+    const safeName = (reg.childName || 'tabor').replace(/[^a-zA-Z0-9_-]/g, '_');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="Potvrzeni_o_prijeti_platby_tabor_${safeName}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (err: any) {
+    console.error('Error generating camp confirmation PDF:', err);
+    res.status(500).json({ error: 'Chyba při generování potvrzení: ' + err.message });
   }
 });
 
@@ -1298,7 +1501,7 @@ app.post('/api/school-registrations', async (req, res) => {
           <p>Těšíme se na naše taneční lekce s vaším dítětem!</p>
           <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
           <p style="font-size: 13px; color: #94a3b8; text-align: center; margin: 0;">
-            Taneční klub Olymp Olomouc • info@olympdance.cz
+            Taneční klub Olymp Olomouc • info@olympdance.cz • +420 722 017 700
           </p>
         </div>
       </div>
@@ -1310,7 +1513,7 @@ app.post('/api/school-registrations', async (req, res) => {
         await sendEmail(registration.parentEmail, `Potvrzení přihlášky do tanečního kroužku (${registration.childName}) - Olymp Dance`, emailHtml);
         
         // Also notify all admin recipients
-        const adminRecipients = getAdminEmails();
+        const adminRecipients = await getAdminEmails();
         const adminHtml = `
           <h2>Nová přihláška do tanečního kroužku</h2>
           <p><strong>Dítě:</strong> ${registration.childName} ${registration.childSurname || ''} (${registration.childClass || 'Třída neuvedena'})</p>
@@ -1351,32 +1554,87 @@ app.put('/api/school-registrations/:id', async (req, res) => {
       const [rows] = await pool.query('SELECT * FROM school_registrations WHERE id = ?', [id]);
       const registration = (rows as any[])[0];
       if (registration && registration.status !== 'approved') {
-        const [schoolRows] = await pool.query('SELECT name, city FROM schools WHERE id = ?', [registration.schoolId]);
+        const [schoolRows] = await pool.query('SELECT name, city, price FROM schools WHERE id = ?', [registration.schoolId]);
         const school = (schoolRows as any[])[0];
         const schoolName = school ? `${school.name} (${school.city})` : 'Taneční kroužek';
 
+        // Check if bank transaction exists for exact account & amount
+        const [bankRows] = await pool.query(
+          'SELECT * FROM bank_payments_log WHERE matchedId = ? OR variableSymbol = ? ORDER BY createdAt DESC LIMIT 1',
+          [registration.id, registration.variableSymbol]
+        );
+        const bankTx = (bankRows as any[])[0];
+        const amountVal = bankTx?.amount ? parseFloat(bankTx.amount) : (school?.price ? parseFloat(String(school.price).replace(/[^0-9]/g, '')) || 1700 : 1700);
+
+        const childFullName = [registration.childName, registration.childSurname].filter(Boolean).join(' ').trim();
+        const safeName = (childFullName || 'krouzek').replace(/[^a-zA-Z0-9_-]/g, '_');
+
+        // Generate 1:1 PDF confirmation
+        let attachments: any[] | undefined = undefined;
+        try {
+          const pdfBuffer = await generateSchoolPaymentPdf({
+            paymentDate: bankTx?.bookingDate || new Date(),
+            senderAccount: bankTx?.senderAccount || '',
+            parentName: registration.parentName || bankTx?.senderName || 'Zákonný zástupce',
+            childName: registration.childName,
+            childSurname: registration.childSurname,
+            childBirthDate: registration.childBirthDate,
+            childRodneCislo: registration.childRodneCislo,
+            amount: amountVal,
+            period: null,
+            issueDate: bankTx?.bookingDate || new Date()
+          });
+          attachments = [{
+            filename: `Potvrzeni_o_prijeti_platby_${safeName}.pdf`,
+            content: pdfBuffer,
+            contentType: 'application/pdf'
+          }];
+        } catch (pdfErr: any) {
+          console.error('[Manual Approval] Error generating PDF:', pdfErr.message);
+        }
+
+        const formattedAmt = amountVal.toLocaleString('cs-CZ');
         const emailHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
             <div style="background-color: #002B49; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
               <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Olymp Dance Olomouc</h1>
-              <p style="color: #4ade80; margin: 6px 0 0 0; font-size: 15px; font-weight: bold;">Platba přijata a přihláška schválena!</p>
+              <p style="color: #4ade80; margin: 6px 0 0 0; font-size: 15px; font-weight: bold;">Platba byla přijata a přihláška schválena</p>
             </div>
             <div style="background-color: #ffffff; padding: 32px 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
-              <p style="font-size: 16px;">Dobrý den, <strong>${registration.parentName}</strong>,</p>
-              <p>s radostí vám potvrzujeme, že Vaše platba za taneční kroužek byla úspěšně přijata a přihláška dítěte <strong>${registration.childName}</strong> na škole <strong>${schoolName}</strong> byla <strong>schválena</strong>.</p>
-              <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 16px; margin: 20px 0;">
-                <p style="margin: 0; color: #166534; font-weight: bold;">✅ Přihláška je oficiálně potvrzena.</p>
-                <p style="margin: 6px 0 0 0; font-size: 13px; color: #15803d;">V portálu můžete kdykoliv sledovat zapsanou docházku z tréninků, omlouvat nepřítomnost a stáhnout si potvrzení pro pojišťovnu.</p>
+              <p style="font-size: 16px;">Vážený rodiči, <strong>${registration.parentName}</strong>,</p>
+              <p>s radostí Vám potvrzujeme, že Vaše platba za taneční kroužek pro dítě <strong>${childFullName}</strong> byla úspěšně přijata a přihláška na škole <strong>${schoolName}</strong> je <strong>schválena</strong>.</p>
+              
+              <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 18px; margin: 20px 0;">
+                <h3 style="margin: 0 0 10px 0; color: #166534; font-size: 16px;">✅ Detaily přihlášky</h3>
+                <p style="margin: 4px 0; font-size: 14px;"><strong>Účastník:</strong> ${childFullName}</p>
+                <p style="margin: 4px 0; font-size: 14px;"><strong>Kroužek / Škola:</strong> ${schoolName}</p>
+                <p style="margin: 4px 0; font-size: 14px;"><strong>Částka:</strong> <span style="color: #16a34a; font-weight: bold;">${formattedAmt} Kč</span></p>
+                <p style="margin: 4px 0; font-size: 14px;"><strong>Variabilní symbol:</strong> ${registration.variableSymbol || registration.id}</p>
+                <p style="margin: 4px 0; font-size: 14px;"><strong>Stav:</strong> <span style="color: #16a34a; font-weight: bold;">Schváleno / Zaplaceno</span></p>
               </div>
-              <p>Děkujeme a těšíme se na trénincích!</p>
+
+              <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 16px; margin: 20px 0;">
+                <h4 style="margin: 0 0 8px 0; color: #1e40af; font-size: 15px;">📄 Oficiální potvrzení o platbě v příloze</h4>
+                <p style="margin: 0; font-size: 13px; color: #1e3a8a;">
+                  V příloze tohoto e-mailu naleznete oficiální <strong>Potvrzení o přijetí platby (PDF)</strong> s razítkem a podpisem zástupce TK Olymp Olomouc, které můžete předložit své zdravotní pojišťovně pro proplacení příspěvku na pohybovou aktivitu.
+                </p>
+              </div>
+
+              <p style="font-size: 14px; color: #475569;">
+                Ve Školním portálu na našem webu můžete kdykoliv sledovat zapsanou docházku z tréninků a omlouvat případné absence.
+              </p>
+              <p style="font-size: 14px; color: #475569;">
+                Děkujeme a těšíme se na trénincích!
+              </p>
+
               <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
               <p style="font-size: 13px; color: #94a3b8; text-align: center; margin: 0;">
-                Taneční klub Olymp Olomouc • info@olympdance.cz
+                Taneční klub Olymp Olomouc, z. s. • Jiráskova 25, Olomouc • info@olympdance.cz • +420 722 017 700
               </p>
             </div>
           </div>
         `;
-        sendEmail(registration.parentEmail, `Platba přijata a přihláška do kroužku schválena - Olymp Dance`, emailHtml).catch(console.error);
+        sendEmail(registration.parentEmail, `Platba přijata a přihláška do kroužku schválena - Olymp Dance`, emailHtml, attachments).catch(console.error);
       }
     }
 
@@ -1385,6 +1643,60 @@ app.put('/api/school-registrations/:id', async (req, res) => {
   } catch (error) {
     console.error('Update school registration error:', error);
     res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Download official 1:1 payment confirmation PDF
+app.get('/api/school-registrations/:id/confirmation-pdf', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [rows] = await pool.query('SELECT * FROM school_registrations WHERE id = ?', [id]);
+    if ((rows as any[]).length === 0) {
+      return res.status(404).json({ error: 'Přihláška nenalezena' });
+    }
+    const reg = (rows as any[])[0];
+
+    // Find bank payment log for sender account & exact transaction info
+    const [bankRows] = await pool.query(
+      'SELECT * FROM bank_payments_log WHERE matchedId = ? OR variableSymbol = ? ORDER BY createdAt DESC LIMIT 1',
+      [reg.id, reg.variableSymbol]
+    );
+    const bankTx = (bankRows as any[])[0];
+
+    // Fetch school price
+    let amountVal = 1700;
+    if (bankTx && bankTx.amount) {
+      amountVal = parseFloat(bankTx.amount);
+    } else if (reg.schoolId) {
+      const [schoolRows] = await pool.query('SELECT price FROM schools WHERE id = ?', [reg.schoolId]);
+      if ((schoolRows as any[]).length > 0 && (schoolRows as any[])[0].price) {
+        const parsed = parseFloat(String((schoolRows as any[])[0].price).replace(/[^0-9]/g, ''));
+        if (!isNaN(parsed) && parsed > 0) amountVal = parsed;
+      }
+    }
+
+    const pdfBuffer = await generateSchoolPaymentPdf({
+      paymentDate: bankTx?.bookingDate || reg.createdAt || new Date(),
+      senderAccount: bankTx?.senderAccount || '',
+      parentName: reg.parentName || bankTx?.senderName || 'Zákonný zástupce',
+      childName: reg.childName,
+      childSurname: reg.childSurname,
+      childBirthDate: reg.childBirthDate,
+      childRodneCislo: reg.childRodneCislo,
+      amount: amountVal,
+      period: null,
+      issueDate: bankTx?.bookingDate || new Date()
+    });
+
+    const childFullName = [reg.childName, reg.childSurname].filter(Boolean).join(' ').trim();
+    const safeName = (childFullName || 'krouzek').replace(/[^a-zA-Z0-9_-]/g, '_');
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="Potvrzeni_o_prijeti_platby_${safeName}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (err: any) {
+    console.error('Error generating confirmation PDF:', err);
+    res.status(500).json({ error: 'Chyba při generování potvrzení: ' + err.message });
   }
 });
 
@@ -1403,7 +1715,7 @@ app.delete('/api/school-registrations/:id', async (req, res) => {
 app.post('/api/contact', async (req, res) => {
   try {
     const { name, phone, email, topic, message } = req.body;
-    const adminRecipients = getAdminEmails();
+    const adminRecipients = await getAdminEmails();
     
     const html = `
       <h2>Nová zpráva z webu Olymp Dance</h2>
@@ -1435,10 +1747,10 @@ app.post('/api/contact', async (req, res) => {
               <p style="margin: 0; font-size: 13px; color: #64748b;"><strong>Předmět:</strong> ${topic || 'Obecný dotaz'}</p>
               <p style="margin: 8px 0 0 0; font-size: 14px; white-space: pre-wrap;">${message}</p>
             </div>
-            <p style="font-size: 14px; color: #475569;">V případě naléhavých dotazů nám můžete také zavolat na tel.: <strong>+420 774 227 197</strong>.</p>
+            <p style="font-size: 14px; color: #475569;">V případě naléhavých dotazů nám můžete také zavolat na tel.: <strong>+420 722 017 700</strong>.</p>
             <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
             <p style="font-size: 13px; color: #94a3b8; text-align: center; margin: 0;">
-              Taneční klub Olymp Olomouc • info@olympdance.cz
+              Taneční klub Olymp Olomouc • info@olympdance.cz • +420 722 017 700
             </p>
           </div>
         </div>
@@ -1592,6 +1904,7 @@ app.get('/api/settings', async (req, res) => {
   try {
     const [settings] = await pool.query('SELECT * FROM settings WHERE id = 1');
     const current = (settings as any[])[0] || {};
+    const smtpConfig = await getSmtpConfig();
     res.json({
       isMerchEnabled: current.isMerchEnabled === undefined ? true : Boolean(current.isMerchEnabled),
       isTanecniExpresEnabled: current.isTanecniExpresEnabled === undefined ? true : Boolean(current.isTanecniExpresEnabled),
@@ -1599,7 +1912,13 @@ app.get('/api/settings', async (req, res) => {
       isGalleryEnabled: current.isGalleryEnabled === undefined ? true : Boolean(current.isGalleryEnabled),
       isAboutEnabled: current.isAboutEnabled === undefined ? true : Boolean(current.isAboutEnabled),
       campGeneralInfo: current.campGeneralInfo || '',
-      siteContent: typeof current.siteContent === 'string' ? JSON.parse(current.siteContent) : (current.siteContent || {})
+      siteContent: typeof current.siteContent === 'string' ? JSON.parse(current.siteContent) : (current.siteContent || {}),
+      smtpUser: current.smtpUser || process.env.SMTP_USER || '',
+      smtpHost: current.smtpHost || process.env.SMTP_HOST || 'smtp.gmail.com',
+      smtpPort: current.smtpPort || process.env.SMTP_PORT || '465',
+      smtpSecure: current.smtpSecure || process.env.SMTP_SECURE || 'true',
+      isSmtpConfigured: smtpConfig.isConfigured,
+      smtpSource: smtpConfig.source
     });
   } catch (error) {
     console.error('Error fetching settings:', error);
@@ -1609,7 +1928,11 @@ app.get('/api/settings', async (req, res) => {
 
 app.post('/api/settings', async (req, res) => {
   try {
-    const { isMerchEnabled, isTanecniExpresEnabled, isCampsEnabled, isGalleryEnabled, isAboutEnabled, campGeneralInfo, siteContent } = req.body;
+    const { 
+      isMerchEnabled, isTanecniExpresEnabled, isCampsEnabled, isGalleryEnabled, isAboutEnabled, 
+      campGeneralInfo, siteContent,
+      smtpUser, smtpPass, smtpHost, smtpPort, smtpSecure
+    } = req.body;
     const updates: any = {};
     if (isMerchEnabled !== undefined) updates.isMerchEnabled = isMerchEnabled ? 1 : 0;
     if (isTanecniExpresEnabled !== undefined) updates.isTanecniExpresEnabled = isTanecniExpresEnabled ? 1 : 0;
@@ -1618,6 +1941,11 @@ app.post('/api/settings', async (req, res) => {
     if (isAboutEnabled !== undefined) updates.isAboutEnabled = isAboutEnabled ? 1 : 0;
     if (campGeneralInfo !== undefined) updates.campGeneralInfo = campGeneralInfo;
     if (siteContent !== undefined) updates.siteContent = typeof siteContent === 'object' ? JSON.stringify(siteContent) : siteContent;
+    if (smtpUser !== undefined) updates.smtpUser = smtpUser.trim();
+    if (smtpPass !== undefined && smtpPass.trim()) updates.smtpPass = smtpPass.trim().replace(/\s+/g, '');
+    if (smtpHost !== undefined) updates.smtpHost = smtpHost.trim();
+    if (smtpPort !== undefined) updates.smtpPort = String(smtpPort).trim();
+    if (smtpSecure !== undefined) updates.smtpSecure = String(smtpSecure);
     
     if (Object.keys(updates).length > 0) {
       await pool.query('UPDATE settings SET ? WHERE id = 1', updates);
@@ -1625,6 +1953,7 @@ app.post('/api/settings', async (req, res) => {
 
     const [settings] = await pool.query('SELECT * FROM settings WHERE id = 1');
     const current = (settings as any[])[0] || {};
+    const smtpConfig = await getSmtpConfig();
     res.json({
       success: true,
       settings: {
@@ -1633,6 +1962,8 @@ app.post('/api/settings', async (req, res) => {
         isCampsEnabled: current.isCampsEnabled === undefined ? true : Boolean(current.isCampsEnabled),
         isGalleryEnabled: current.isGalleryEnabled === undefined ? true : Boolean(current.isGalleryEnabled),
         isAboutEnabled: current.isAboutEnabled === undefined ? true : Boolean(current.isAboutEnabled),
+        isSmtpConfigured: smtpConfig.isConfigured,
+        smtpSource: smtpConfig.source
       }
     });
   } catch (error) {

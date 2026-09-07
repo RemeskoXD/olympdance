@@ -680,13 +680,36 @@ export const RbBankManager: React.FC = () => {
                       )}
                     </td>
                     <td className="py-3 px-4">
-                      {log.matchedType !== 'unmatched' ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded-full border border-green-200">
-                          <CheckCircle size={12} /> Schváleno & Odeslán email
+                      {log.matchedType === 'school' ? (
+                        <div>
+                          <span className="inline-flex items-center gap-1 text-xs font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded-full border border-green-200">
+                            <CheckCircle size={12} /> Schváleno & Odeslán email s PDF
+                          </span>
+                          {log.matchedId && (
+                            <div className="mt-1">
+                              <a
+                                href={`/api/school-registrations/${log.matchedId}/confirmation-pdf`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200"
+                                title="Stáhnout / zobrazit vygenerované PDF 1:1"
+                              >
+                                <FileCheck size={11} /> Stáhnout PDF potvrzení (1:1)
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      ) : log.matchedType === 'camp' ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200" title="Tábor - automaticky označeno v adminu bez e-mailu dle zadání">
+                          <CheckCircle size={12} /> Zaplaceno v adminu
+                        </span>
+                      ) : log.matchedType === 'merch' ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200">
+                          <CheckCircle size={12} /> Zaplaceno & Odeslán email
                         </span>
                       ) : (
                         <span className="text-xs text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
-                          Přijato na účet
+                          Přijato na účet (nespárováno)
                         </span>
                       )}
                     </td>

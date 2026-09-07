@@ -388,7 +388,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => (
   <div className="min-h-screen bg-white font-sans text-gray-900 selection:bg-brand-red selection:text-white flex flex-col">
     <Navbar />
     <VersionCheck />
-    <main className="flex-grow pt-16 sm:pt-20">
+    <main className="flex-grow pt-20 sm:pt-28 md:pt-32">
       {children}
     </main>
     <FloatingContact />

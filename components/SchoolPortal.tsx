@@ -893,6 +893,7 @@ const SchoolPortal: React.FC = () => {
       {selectedInsuranceReg && (
         <InsuranceConfirmationModal
           data={{
+            id: selectedInsuranceReg.id,
             childName: selectedInsuranceReg.childName,
             childBirthDate: selectedInsuranceReg.childBirthDate,
             parentName: selectedInsuranceReg.parentName,

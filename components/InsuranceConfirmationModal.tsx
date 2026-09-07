@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Printer, CheckCircle, ShieldCheck, Loader2 } from 'lucide-react';
+import { X, Printer, CheckCircle, ShieldCheck, Loader2, FileDown } from 'lucide-react';
 import { CONTACT_INFO } from '../constants';
 
 interface ConfirmationData {
+  id?: number | string;
   childName: string;
   childBirthDate: string;
   parentName: string;
@@ -67,6 +68,19 @@ export const InsuranceConfirmationModal: React.FC<InsuranceConfirmationModalProp
             </div>
           </div>
           <div className="flex items-center space-x-3">
+            {data.id && (
+              <a
+                href={data.activityType === 'tabor' ? `/api/registrations/${data.id}/confirmation-pdf` : `/api/school-registrations/${data.id}/confirmation-pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                download
+                className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold text-sm transition-colors flex items-center shadow-md"
+                title="Stáhnout oficiální PDF s razítkem a podpisem 1:1"
+              >
+                <FileDown size={16} className="mr-2" />
+                Oficiální PDF (1:1)
+              </a>
+            )}
             <button
               onClick={handlePrint}
               disabled={isPreparing}

@@ -5,6 +5,14 @@ import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 import crypto from 'crypto';
 import pool from './db.ts';
+import { generateSchoolPaymentPdf } from './pdfGenerator.ts';
+
+export type SendEmailFn = (
+  to: string,
+  subject: string,
+  html: string,
+  attachments?: Array<{ filename: string; content: any; contentType?: string }>
+) => Promise<any>;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -311,21 +319,33 @@ export const testRbConnection = async () => {
 
 // Extract Variable Symbol helper
 function extractVariableSymbol(tx: any): string {
-  // 1. Direct field
-  if (tx.variableSymbol) return String(tx.variableSymbol).trim();
-  if (tx.details?.variableSymbol) return String(tx.details.variableSymbol).trim();
+  // 1. Direct or structured RB Premium API paths
+  const premiumVs = tx.entryDetails?.transactionDetails?.remittanceInformation?.creditorReferenceInformation?.variable;
+  if (premiumVs && String(premiumVs).trim()) return String(premiumVs).trim();
 
-  // 2. Structured remittance info
+  const premiumRef = tx.entryDetails?.transactionDetails?.remittanceInformation?.creditorReferenceInformation?.reference;
+  if (premiumRef && String(premiumRef).trim()) return String(premiumRef).trim();
+
+  const directCreditorVar = tx.remittanceInformation?.creditorReferenceInformation?.variable;
+  if (directCreditorVar && String(directCreditorVar).trim()) return String(directCreditorVar).trim();
+
   const structRef = tx.remittanceInformation?.structured?.creditorReferenceInformation?.reference;
-  if (structRef) return String(structRef).trim();
+  if (structRef && String(structRef).trim()) return String(structRef).trim();
+
+  const directCreditorRef = tx.remittanceInformation?.creditorReferenceInformation?.reference;
+  if (directCreditorRef && String(directCreditorRef).trim()) return String(directCreditorRef).trim();
+
+  if (tx.variableSymbol && String(tx.variableSymbol).trim()) return String(tx.variableSymbol).trim();
+  if (tx.details?.variableSymbol && String(tx.details.variableSymbol).trim()) return String(tx.details.variableSymbol).trim();
 
   const vsRemit = tx.remittanceInformation?.variableSymbol;
-  if (vsRemit) return String(vsRemit).trim();
+  if (vsRemit && String(vsRemit).trim()) return String(vsRemit).trim();
 
-  // 3. Unstructured or message regex
+  // 2. Unstructured, originator message or message regex
   const textToSearch = [
-    tx.remittanceInformation?.unstructured,
+    tx.entryDetails?.transactionDetails?.remittanceInformation?.originatorMessage,
     tx.entryDetails?.transactionDetails?.remittanceInformation?.unstructured,
+    tx.remittanceInformation?.unstructured,
     tx.message,
     tx.details?.message,
     tx.additionalInformation
@@ -336,8 +356,8 @@ function extractVariableSymbol(tx: any): string {
     const vsMatch = textToSearch.match(/(?:VS|vs|v\.s\.|variabilní symbol)[:\s]*(\d{4,10})/i);
     if (vsMatch && vsMatch[1]) return vsMatch[1];
 
-    // Or a 6 to 10 digit standalone number
-    const standaloneMatch = textToSearch.match(/\b(20\d{4,8}|\d{6,10})\b/);
+    // Or a merch VS (starts with 80) or camp VS (starts with 26) or 6-10 digit number
+    const standaloneMatch = textToSearch.match(/\b(80\d{6}|26\d{6}|20\d{4,8}|\d{6,10})\b/);
     if (standaloneMatch && standaloneMatch[1]) return standaloneMatch[1];
   }
 
@@ -346,7 +366,7 @@ function extractVariableSymbol(tx: any): string {
 
 // Synchronize transactions and match payments
 export const syncRbPayments = async (
-  sendEmailFn?: (to: string, subject: string, html: string) => Promise<any>
+  sendEmailFn?: SendEmailFn
 ) => {
   const config = await getRbConfig();
   if (!config.clientId || !config.hasCert || !config.certPassword) {
@@ -408,189 +428,345 @@ export const syncRbPayments = async (
   for (const tx of transactions) {
     // Determine credit vs debit
     const amountVal = typeof tx.amount === 'object' ? parseFloat(tx.amount.value) : parseFloat(tx.amount || 0);
-    const indicator = tx.creditDebitIndicator || (amountVal > 0 ? 'CRDT' : 'DBIT');
+    const indicator = tx.creditDebitIndication || tx.creditDebitIndicator || (amountVal > 0 ? 'CRDT' : 'DBIT');
     if (indicator !== 'CRDT' && amountVal <= 0) {
       continue; // Skip outgoing payments
     }
+
+    const vs = extractVariableSymbol(tx);
+    const rawDate = tx.bookingDate || tx.valueDate || toDate;
+    const bookingDate = typeof rawDate === 'string' ? rawDate : toDate;
+    const currency = (typeof tx.amount === 'object' ? tx.amount.currency : tx.currency) || 'CZK';
+
+    const message = [
+      tx.entryDetails?.transactionDetails?.remittanceInformation?.originatorMessage,
+      tx.entryDetails?.transactionDetails?.remittanceInformation?.unstructured,
+      tx.remittanceInformation?.unstructured,
+      tx.message,
+      tx.details?.message
+    ].filter(Boolean).join(' ').trim();
+
+    const counterParty = tx.entryDetails?.transactionDetails?.relatedParties?.counterParty;
+    const senderName = 
+      counterParty?.name || 
+      tx.debtor?.name || 
+      tx.debtorAccount?.name || 
+      '';
+
+    const senderAccount = 
+      (counterParty?.account?.accountNumber 
+        ? `${counterParty.account.accountNumber}/${counterParty.organisationIdentification?.bankCode || ''}` 
+        : '') ||
+      tx.debtorAccount?.iban || 
+      tx.debtorAccount?.accountNumber || 
+      '';
 
     const txId = String(
       tx.entryReference || 
       tx.transactionId || 
       tx.id || 
-      `${tx.bookingDate || tx.valueDate || toDate}_${amountVal}_${extractVariableSymbol(tx)}`
+      `${bookingDate.slice(0, 10)}_${amountVal}_${vs || 'novs'}`
     );
 
-    // Check if already in bank_payments_log
-    const [logRows] = await pool.query('SELECT id, status FROM bank_payments_log WHERE transactionId = ?', [txId]);
-    if ((logRows as any[]).length > 0) {
+    // Check if already processed and matched in bank_payments_log
+    const [logRows] = await pool.query('SELECT id, status, matchedType FROM bank_payments_log WHERE transactionId = ?', [txId]);
+    const existingLog = (logRows as any[])[0];
+    if (existingLog && existingLog.matchedType !== 'unmatched' && existingLog.status === 'matched') {
       alreadyMatched++;
       continue;
     }
 
-    const vs = extractVariableSymbol(tx);
-    const bookingDate = tx.bookingDate || tx.valueDate || toDate;
-    const currency = (typeof tx.amount === 'object' ? tx.amount.currency : tx.currency) || 'CZK';
-    const message = [
-      tx.remittanceInformation?.unstructured,
-      tx.entryDetails?.transactionDetails?.remittanceInformation?.unstructured,
-      tx.message
-    ].filter(Boolean).join(' ');
-    const senderAccount = tx.debtorAccount?.iban || tx.debtorAccount?.accountNumber || '';
-    const senderName = tx.debtor?.name || tx.debtorAccount?.name || '';
-
-    let matchedType = 'unmatched';
+    let matchedType: 'school' | 'camp' | 'merch' | 'unmatched' = 'unmatched';
     let matchedId = '';
     let matchedName = '';
 
     // ==========================================
-    // 1. MATCH MERCH ORDERS
+    // 1. MATCH MERCH ORDERS (E-shop)
     // ==========================================
+    let merchOrder: any = null;
     if (vs) {
+      const cleanVs = vs.replace(/^0+/, '') || vs;
       const [merchRows] = await pool.query(
-        'SELECT * FROM merch_orders WHERE variableSymbol = ?',
-        [vs]
+        'SELECT * FROM merch_orders WHERE variableSymbol = ? OR variableSymbol = ? OR TRIM(LEADING "0" FROM variableSymbol) = ? LIMIT 1',
+        [vs, cleanVs, cleanVs]
       );
       if ((merchRows as any[]).length > 0) {
-        const order = (merchRows as any[])[0];
-        matchedType = 'merch';
-        matchedId = order.id;
-        matchedName = `${order.userName} - ${order.productName}`;
+        merchOrder = (merchRows as any[])[0];
+      }
+    }
 
-        if (order.status !== 'paid') {
-          await pool.query('UPDATE merch_orders SET status = "paid" WHERE id = ?', [order.id]);
-          newMatched++;
-          console.log(`[RB Auto-Match] Merch objednávka ${order.id} označena jako ZAPLACENO (VS: ${vs})`);
+    if (!merchOrder && message) {
+      // Check if message contains merch order variableSymbol
+      const [allMerch] = await pool.query('SELECT * FROM merch_orders WHERE status = "pending"');
+      for (const m of (allMerch as any[])) {
+        if (m.variableSymbol && message.includes(m.variableSymbol)) {
+          merchOrder = m;
+          break;
+        }
+      }
+    }
 
-          if (sendEmailFn && order.userEmail) {
-            const buyerHtml = `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b;">
-                <div style="background-color: #002B49; padding: 20px; border-radius: 12px 12px 0 0; text-align: center;">
-                  <h1 style="color: #ffffff; margin: 0; font-size: 22px;">Olymp Dance Olomouc</h1>
-                  <p style="color: #4ade80; margin: 6px 0 0 0; font-weight: bold;">Platba byla úspěšně přijata</p>
-                </div>
-                <div style="padding: 24px; border: 1px solid #e2e8f0; border-radius: 0 0 12px 12px; background: #fff;">
-                  <p>Dobrý den, <strong>${order.userName}</strong>,</p>
-                  <p>potvrzujeme přijetí Vaší platby ve výši <strong>${amountVal} Kč</strong> (VS: ${vs}) za objednávku klubového merche:</p>
-                  <div style="background: #f8fafc; padding: 16px; border-radius: 8px; margin: 16px 0;">
-                    <p style="margin: 4px 0;"><strong>Produkt:</strong> ${order.productName}</p>
-                    <p style="margin: 4px 0;"><strong>Velikost / kusy:</strong> ${order.size || 'Univerzální'} (${order.quantity} ks)</p>
-                    <p style="margin: 4px 0;"><strong>Stav objednávky:</strong> <span style="color: #16a34a; font-weight: bold;">Zaplaceno</span></p>
-                  </div>
-                  <p>Objednávku nyní připravíme k předání.</p>
-                  <p style="margin-top: 24px; color: #64748b; font-size: 13px;">Tým Olymp Dance Olomouc</p>
-                </div>
+    if (merchOrder) {
+      matchedType = 'merch';
+      matchedId = String(merchOrder.id);
+      matchedName = `${merchOrder.userName} - ${merchOrder.productName}`;
+
+      if (merchOrder.status !== 'paid') {
+        await pool.query('UPDATE merch_orders SET status = "paid" WHERE id = ?', [merchOrder.id]);
+        newMatched++;
+        console.log(`[RB Auto-Match] Merch objednávka ${merchOrder.id} (${merchOrder.productName}) označena jako ZAPLACENO (VS: ${vs || merchOrder.variableSymbol})`);
+
+        // Send informative confirmation email to customer
+        if (sendEmailFn && merchOrder.userEmail) {
+          const buyerHtml = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
+              <div style="background-color: #002B49; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
+                <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Olymp Dance Olomouc</h1>
+                <p style="color: #4ade80; margin: 6px 0 0 0; font-size: 15px; font-weight: bold;">Platba byla úspěšně přijata</p>
               </div>
-            `;
-            sendEmailFn(order.userEmail, `Platba přijata: Objednávka merche (${order.productName}) - Olymp Dance`, buyerHtml).catch(console.error);
-          }
-        }
-      }
-    }
-
-    // ==========================================
-    // 2. MATCH SCHOOL REGISTRATIONS (Kroužky)
-    // ==========================================
-    if (matchedType === 'unmatched' && (vs || message)) {
-      let schoolQuery = '';
-      let queryParams: any[] = [];
-
-      if (vs) {
-        schoolQuery = 'SELECT * FROM school_registrations WHERE variableSymbol = ? OR id = ? OR childRodneCislo LIKE ?';
-        queryParams = [vs, vs, `%${vs}%`];
-      } else if (message) {
-        schoolQuery = 'SELECT * FROM school_registrations WHERE (? LIKE CONCAT("%", variableSymbol, "%") AND variableSymbol IS NOT NULL AND LENGTH(variableSymbol) >= 4) OR (? LIKE CONCAT("%", childSurname, "%") AND ? LIKE CONCAT("%", childName, "%"))';
-        queryParams = [message, message, message];
-      }
-
-      if (schoolQuery) {
-        const [regRows] = await pool.query(schoolQuery, queryParams);
-        if ((regRows as any[]).length > 0) {
-          const reg = (regRows as any[])[0];
-          matchedType = 'school';
-          matchedId = reg.id;
-          matchedName = `${reg.childName} ${reg.childSurname || ''} (${reg.parentName})`;
-
-          if (reg.status !== 'approved') {
-            await pool.query('UPDATE school_registrations SET status = "approved" WHERE id = ?', [reg.id]);
-            newMatched++;
-            console.log(`[RB Auto-Match] Přihláška do kroužku ${reg.id} schválena jako ZAPLACENO (VS: ${vs || reg.variableSymbol})`);
-
-            if (sendEmailFn && reg.parentEmail) {
-              const parentHtml = `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b;">
-                  <div style="background-color: #002B49; padding: 20px; border-radius: 12px 12px 0 0; text-align: center;">
-                    <h1 style="color: #ffffff; margin: 0; font-size: 22px;">Olymp Dance Olomouc</h1>
-                    <p style="color: #4ade80; margin: 6px 0 0 0; font-weight: bold;">Platba kurzovného přijata</p>
-                  </div>
-                  <div style="padding: 24px; border: 1px solid #e2e8f0; border-radius: 0 0 12px 12px; background: #fff;">
-                    <p>Vážený rodiči <strong>${reg.parentName}</strong>,</p>
-                    <p>potvrzujeme přijetí platby kurzovného ve výši <strong>${amountVal} Kč</strong> pro dítě <strong>${reg.childName} ${reg.childSurname || ''}</strong>.</p>
-                    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 16px; border-radius: 8px; margin: 16px 0;">
-                      <p style="margin: 4px 0;"><strong>Stav přihlášky:</strong> <span style="color: #16a34a; font-weight: bold;">Schváleno / Zaplaceno</span></p>
-                      <p style="margin: 4px 0;"><strong>Dítě:</strong> ${reg.childName} ${reg.childSurname || ''}</p>
-                      <p style="margin: 4px 0;"><strong>Variabilní symbol:</strong> ${vs || reg.variableSymbol || 'Spárováno'}</p>
-                    </div>
-                    <p>V klientském portálu máte nyní k dispozici kompletní docházku a potvrzení o platbě pro pojišťovnu.</p>
-                    <p style="margin-top: 24px; color: #64748b; font-size: 13px;">Tým Olymp Dance Olomouc</p>
-                  </div>
+              <div style="background-color: #ffffff; padding: 32px 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
+                <p style="font-size: 16px;">Dobrý den, <strong>${merchOrder.userName}</strong>,</p>
+                <p>potvrzujeme, že jsme v pořádku obdrželi Vaši platbu ve výši <strong>${amountVal || merchOrder.totalPrice} Kč</strong> za objednávku klubového merche:</p>
+                
+                <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 18px; margin: 20px 0;">
+                  <h3 style="margin: 0 0 10px 0; color: #166534; font-size: 16px;">✅ Detaily objednávky</h3>
+                  <p style="margin: 4px 0; font-size: 14px;"><strong>Položka:</strong> ${merchOrder.productName}</p>
+                  <p style="margin: 4px 0; font-size: 14px;"><strong>Velikost / Varianta:</strong> ${merchOrder.size || 'Univerzální'} (${merchOrder.quantity} ks)</p>
+                  <p style="margin: 4px 0; font-size: 14px;"><strong>Částka:</strong> <span style="color: #16a34a; font-weight: bold;">${amountVal || merchOrder.totalPrice} Kč</span></p>
+                  <p style="margin: 4px 0; font-size: 14px;"><strong>Variabilní symbol:</strong> ${merchOrder.variableSymbol || vs}</p>
+                  <p style="margin: 4px 0; font-size: 14px;"><strong>Stav:</strong> <span style="color: #16a34a; font-weight: bold;">Zaplaceno</span></p>
                 </div>
-              `;
-              sendEmailFn(reg.parentEmail, `Potvrzení o zaplacení kroužku (${reg.childName}) - Olymp Dance`, parentHtml).catch(console.error);
-            }
-          }
+
+                <p style="font-size: 14px; color: #475569;">
+                  Objednávku nyní kompletujeme a připravujeme k předání (na tréninku dítěte nebo osobně v sále Olymp Dance dle domluvy).
+                </p>
+                <p style="font-size: 14px; color: #475569;">
+                  Děkujeme za podporu našeho tanečního klubu!
+                </p>
+
+                <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
+                <p style="font-size: 13px; color: #94a3b8; text-align: center; margin: 0;">
+                  Taneční klub Olymp Olomouc • info@olympdance.cz • +420 722 017 700
+                </p>
+              </div>
+            </div>
+          `;
+          sendEmailFn(merchOrder.userEmail, `Platba přijata: Objednávka merche (${merchOrder.productName}) - Olymp Dance`, buyerHtml).catch(console.error);
         }
+      } else {
+        alreadyMatched++;
       }
     }
 
     // ==========================================
-    // 3. MATCH CAMP REGISTRATIONS (Tábory)
+    // 2. MATCH CAMP REGISTRATIONS (Tábory)
     // ==========================================
+    // As explicitly instructed: Auto-mark as approved / paid in admin, NO automated email!
     if (matchedType === 'unmatched' && (vs || message)) {
-      let campQuery = '';
-      let campParams: any[] = [];
-
+      let campReg: any = null;
       if (vs) {
-        campQuery = 'SELECT * FROM registrations WHERE variableSymbol = ? OR id = ?';
-        campParams = [vs, vs];
-      } else if (message) {
-        campQuery = 'SELECT * FROM registrations WHERE (? LIKE CONCAT("%", variableSymbol, "%") AND variableSymbol IS NOT NULL AND LENGTH(variableSymbol) >= 4) OR (? LIKE CONCAT("%", childName, "%"))';
-        campParams = [message, message];
-      }
-
-      if (campQuery) {
-        const [campRows] = await pool.query(campQuery, campParams);
+        const cleanVs = vs.replace(/^0+/, '') || vs;
+        const [campRows] = await pool.query(
+          'SELECT * FROM registrations WHERE variableSymbol = ? OR variableSymbol = ? OR TRIM(LEADING "0" FROM variableSymbol) = ? OR id = ? LIMIT 1',
+          [vs, cleanVs, cleanVs, vs]
+        );
         if ((campRows as any[]).length > 0) {
-          const reg = (campRows as any[])[0];
-          matchedType = 'camp';
-          matchedId = reg.id;
-          matchedName = `${reg.childName} (${reg.parentName})`;
+          campReg = (campRows as any[])[0];
+        }
+      }
 
-          if (reg.status !== 'approved') {
-            await pool.query('UPDATE registrations SET status = "approved" WHERE id = ?', [reg.id]);
-            newMatched++;
-            console.log(`[RB Auto-Match] Přihláška na tábor ${reg.id} schválena jako ZAPLACENO (VS: ${vs})`);
+      if (!campReg && message) {
+        const [allCamps] = await pool.query('SELECT * FROM registrations WHERE status != "approved"');
+        for (const c of (allCamps as any[])) {
+          if (c.variableSymbol && message.includes(c.variableSymbol)) {
+            campReg = c;
+            break;
+          }
+          if (c.childName && message.toLowerCase().includes(c.childName.toLowerCase())) {
+            campReg = c;
+            break;
+          }
+        }
+      }
 
-            if (sendEmailFn && reg.parentEmail) {
-              const campHtml = `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b;">
-                  <div style="background-color: #002B49; padding: 20px; border-radius: 12px 12px 0 0; text-align: center;">
-                    <h1 style="color: #ffffff; margin: 0; font-size: 22px;">Olymp Dance Olomouc</h1>
-                    <p style="color: #4ade80; margin: 6px 0 0 0; font-weight: bold;">Platba tábora přijata</p>
+      if (campReg) {
+        matchedType = 'camp';
+        matchedId = String(campReg.id);
+        matchedName = `${campReg.childName} (${campReg.parentName || 'Rodič'})`;
+
+        if (campReg.status !== 'approved') {
+          await pool.query('UPDATE registrations SET status = "approved" WHERE id = ?', [campReg.id]);
+          newMatched++;
+          console.log(`[RB Auto-Match] Přihláška na tábor ${campReg.id} (${campReg.childName}) označena v adminu jako ZAPLACENO / SCHVÁLENO (VS: ${vs || campReg.variableSymbol})`);
+          // NOTE: As requested: "U Tabaru tam neposíláme potvrzení automaticky. Jen automaticky si označíme ze je zaplacený v adminu."
+          // Hence NO sendEmailFn call for camps!
+        } else {
+          alreadyMatched++;
+        }
+      }
+    }
+
+    // ==========================================
+    // 3. MATCH SCHOOL REGISTRATIONS (Kroužky)
+    // ==========================================
+    if (matchedType === 'unmatched' && (vs || message)) {
+      let schoolReg: any = null;
+
+      if (vs) {
+        const cleanVs = vs.replace(/^0+/, '') || vs;
+        // 1. Direct variableSymbol or ID
+        const [regRows] = await pool.query(
+          'SELECT * FROM school_registrations WHERE variableSymbol = ? OR variableSymbol = ? OR TRIM(LEADING "0" FROM variableSymbol) = ? OR id = ? LIMIT 1',
+          [vs, cleanVs, cleanVs, vs]
+        );
+        if ((regRows as any[]).length > 0) {
+          schoolReg = (regRows as any[])[0];
+        }
+
+        // 2. Rodné číslo match
+        if (!schoolReg) {
+          const [rcRows] = await pool.query(
+            'SELECT * FROM school_registrations WHERE childRodneCislo = ? OR REPLACE(childRodneCislo, "/", "") = ? OR REPLACE(childRodneCislo, "/", "") = ? LIMIT 1',
+            [vs, cleanVs, vs]
+          );
+          if ((rcRows as any[]).length > 0) {
+            schoolReg = (rcRows as any[])[0];
+          }
+        }
+      }
+
+      // 3. Match from message
+      if (!schoolReg && message) {
+        const [allRegs] = await pool.query('SELECT * FROM school_registrations');
+        for (const r of (allRegs as any[])) {
+          if (r.variableSymbol && r.variableSymbol.length >= 4 && message.includes(r.variableSymbol)) {
+            schoolReg = r;
+            break;
+          }
+          if (r.childRodneCislo) {
+            const cleanRc = r.childRodneCislo.replace(/\D/g, '');
+            if (cleanRc.length >= 6 && message.replace(/\D/g, '').includes(cleanRc)) {
+              schoolReg = r;
+              break;
+            }
+          }
+          const surname = (r.childSurname || (r.childName ? r.childName.trim().split(' ').pop() : '') || '').trim().toLowerCase();
+          if (surname && surname.length >= 3 && message.toLowerCase().includes(surname)) {
+            schoolReg = r;
+            break;
+          }
+        }
+      }
+
+      if (schoolReg) {
+        matchedType = 'school';
+        matchedId = String(schoolReg.id);
+        const childFullName = [schoolReg.childName, schoolReg.childSurname].filter(Boolean).join(' ').trim();
+        matchedName = `${childFullName} (${schoolReg.parentName || 'Rodič'})`;
+
+        if (schoolReg.status !== 'approved') {
+          // Parse current history
+          let historyArr: any[] = [];
+          try {
+            historyArr = typeof schoolReg.history === 'string' ? JSON.parse(schoolReg.history) : (schoolReg.history || []);
+          } catch (e) {
+            historyArr = [];
+          }
+          historyArr.push({
+            date: new Date().toISOString(),
+            message: `Platba ${amountVal} Kč přijata z účtu ${senderAccount || 'banky'} (Raiffeisenbank). Přihláška schválena a potvrzení o úhradě odesláno na e-mail.`
+          });
+
+          await pool.query(
+            'UPDATE school_registrations SET status = "approved", paidUntil = DATE_ADD(NOW(), INTERVAL 6 MONTH), history = ? WHERE id = ?',
+            [JSON.stringify(historyArr), schoolReg.id]
+          );
+          newMatched++;
+          console.log(`[RB Auto-Match] Přihláška na kroužek ${schoolReg.id} (${childFullName}) označena jako ZAPLACENO / SCHVÁLENO (VS: ${vs || schoolReg.variableSymbol})`);
+
+          // Fetch school details
+          let schoolName = '';
+          if (schoolReg.schoolId) {
+            const [scRows] = await pool.query('SELECT name, city FROM schools WHERE id = ?', [schoolReg.schoolId]);
+            if ((scRows as any[]).length > 0) {
+              const sc = (scRows as any[])[0];
+              schoolName = `${sc.name} (${sc.city})`;
+            }
+          }
+
+          // Generate 1:1 PDF confirmation
+          try {
+            const pdfBuffer = await generateSchoolPaymentPdf({
+              paymentDate: bookingDate,
+              senderAccount: senderAccount || '',
+              parentName: schoolReg.parentName || senderName || 'Zákonný zástupce',
+              childName: schoolReg.childName,
+              childSurname: schoolReg.childSurname,
+              childBirthDate: schoolReg.childBirthDate,
+              childRodneCislo: schoolReg.childRodneCislo,
+              amount: amountVal || 1700,
+              period: null, // defaults to únor [year] - květen [year]
+              issueDate: bookingDate || new Date()
+            });
+
+            // Send confirmation email with PDF attached
+            if (sendEmailFn && schoolReg.parentEmail) {
+              const safeName = (childFullName || 'krouzek').replace(/[^a-zA-Z0-9_-]/g, '_');
+              const formattedAmt = (amountVal || 1700).toLocaleString('cs-CZ');
+              const emailHtml = `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
+                  <div style="background-color: #002B49; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Olymp Dance Olomouc</h1>
+                    <p style="color: #4ade80; margin: 6px 0 0 0; font-size: 15px; font-weight: bold;">Platba byla úspěšně přijata</p>
                   </div>
-                  <div style="padding: 24px; border: 1px solid #e2e8f0; border-radius: 0 0 12px 12px; background: #fff;">
-                    <p>Vážený rodiči <strong>${reg.parentName}</strong>,</p>
-                    <p>potvrzujeme přijetí platby za letní tábor ve výši <strong>${amountVal} Kč</strong> pro dítě <strong>${reg.childName}</strong>.</p>
-                    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 16px; border-radius: 8px; margin: 16px 0;">
-                      <p style="margin: 4px 0;"><strong>Stav přihlášky:</strong> <span style="color: #16a34a; font-weight: bold;">Potvrzeno a zaplaceno</span></p>
-                      <p style="margin: 4px 0;"><strong>Dítě:</strong> ${reg.childName}</p>
+                  <div style="background-color: #ffffff; padding: 32px 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
+                    <p style="font-size: 16px;">Vážený rodiči, <strong>${schoolReg.parentName || 'paní / pane'}</strong>,</p>
+                    <p>potvrzujeme, že jsme z bankovního účtu v pořádku přijali platbu kurzovného za taneční kroužek pro Vaše dítě <strong>${childFullName}</strong>.</p>
+                    
+                    <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 18px; margin: 20px 0;">
+                      <h3 style="margin: 0 0 10px 0; color: #166534; font-size: 16px;">✅ Detaily platby a kroužku</h3>
+                      <p style="margin: 4px 0; font-size: 14px;"><strong>Účastník:</strong> ${childFullName}</p>
+                      ${schoolName ? `<p style="margin: 4px 0; font-size: 14px;"><strong>Kroužek / Škola:</strong> ${schoolName}</p>` : ''}
+                      <p style="margin: 4px 0; font-size: 14px;"><strong>Uhrazená částka:</strong> <span style="color: #16a34a; font-weight: bold;">${formattedAmt} Kč</span></p>
+                      <p style="margin: 4px 0; font-size: 14px;"><strong>Variabilní symbol:</strong> ${vs || schoolReg.variableSymbol}</p>
+                      <p style="margin: 4px 0; font-size: 14px;"><strong>Stav přihlášky:</strong> <span style="color: #16a34a; font-weight: bold;">Zaplaceno / Schváleno</span></p>
                     </div>
-                    <p style="margin-top: 24px; color: #64748b; font-size: 13px;">Tým Olymp Dance Olomouc</p>
+
+                    <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 16px; margin: 20px 0;">
+                      <h4 style="margin: 0 0 8px 0; color: #1e40af; font-size: 15px;">📄 Oficiální potvrzení o platbě v příloze</h4>
+                      <p style="margin: 0; font-size: 13px; color: #1e3a8a;">
+                        V příloze tohoto e-mailu naleznete oficiální <strong>Potvrzení o přijetí platby (PDF)</strong> s razítkem a podpisem statutárního zástupce TK Olymp Olomouc, které můžete přímo předložit své zdravotní pojišťovně pro čerpání finančního příspěvku nebo zaměstnavateli pro proplacení z FKSP.
+                      </p>
+                    </div>
+
+                    <p style="font-size: 14px; color: #475569;">
+                      Ve Školním portálu na našem webu můžete kdykoliv sledovat docházku z tréninků, omlouvat případnou nepřítomnost a stáhnout si toto potvrzení kdykoliv znovu.
+                    </p>
+
+                    <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
+                    <p style="font-size: 13px; color: #94a3b8; text-align: center; margin: 0;">
+                      Taneční klub Olymp Olomouc, z. s. • Jiráskova 25, Olomouc • info@olympdance.cz • +420 722 017 700
+                    </p>
                   </div>
                 </div>
               `;
-              sendEmailFn(reg.parentEmail, `Potvrzení o zaplacení tábora (${reg.childName}) - Olymp Dance`, campHtml).catch(console.error);
+
+              sendEmailFn(
+                schoolReg.parentEmail,
+                `Potvrzení o přijetí platby – Taneční kroužek (${childFullName}) - Olymp Dance`,
+                emailHtml,
+                [{
+                  filename: `Potvrzeni_o_prijeti_platby_${safeName}.pdf`,
+                  content: pdfBuffer,
+                  contentType: 'application/pdf'
+                }]
+              ).catch(console.error);
             }
+          } catch (pdfErr: any) {
+            console.error('[RB Auto-Match] Chyba při generování PDF pro kroužek:', pdfErr);
           }
+        } else {
+          alreadyMatched++;
         }
       }
     }
@@ -599,7 +775,7 @@ export const syncRbPayments = async (
       unmatched++;
     }
 
-    // Insert log record
+    // Insert or update log record
     try {
       await pool.query(`
         INSERT INTO bank_payments_log 
@@ -608,7 +784,12 @@ export const syncRbPayments = async (
         ON DUPLICATE KEY UPDATE 
           matchedType = VALUES(matchedType),
           matchedId = VALUES(matchedId),
-          matchedName = VALUES(matchedName)
+          matchedName = VALUES(matchedName),
+          status = VALUES(status),
+          variableSymbol = VALUES(variableSymbol),
+          senderAccount = VALUES(senderAccount),
+          senderName = VALUES(senderName),
+          message = VALUES(message)
       `, [
         txId,
         bookingDate,
@@ -662,7 +843,7 @@ export const processSinglePayment = async (
     message?: string;
     bookingDate?: string;
   },
-  sendEmailFn?: (to: string, subject: string, html: string) => Promise<boolean>
+  sendEmailFn?: SendEmailFn
 ) => {
   const vs = (paymentData.variableSymbol || '').trim();
   const message = (paymentData.message || '').trim();
@@ -678,140 +859,273 @@ export const processSinglePayment = async (
   let matchedName = '';
 
   // 1. Merch orders
-  if (vs) {
-    const [merchRows] = await pool.query('SELECT * FROM merch_orders WHERE variableSymbol = ?', [vs]);
-    if ((merchRows as any[]).length > 0) {
-      const order = (merchRows as any[])[0];
-      matchedType = 'merch';
-      matchedId = String(order.id);
-      matchedName = `${order.userName} - ${order.productName}`;
-      await pool.query('UPDATE merch_orders SET status = "paid" WHERE id = ?', [order.id]);
+  if (vs || message) {
+    let merchOrder: any = null;
+    if (vs) {
+      const cleanVs = vs.replace(/^0+/, '') || vs;
+      const [merchRows] = await pool.query(
+        'SELECT * FROM merch_orders WHERE variableSymbol = ? OR variableSymbol = ? OR TRIM(LEADING "0" FROM variableSymbol) = ? LIMIT 1',
+        [vs, cleanVs, cleanVs]
+      );
+      if ((merchRows as any[]).length > 0) {
+        merchOrder = (merchRows as any[])[0];
+      }
+    }
 
-      if (sendEmailFn && order.userEmail) {
+    if (!merchOrder && message) {
+      const [allMerch] = await pool.query('SELECT * FROM merch_orders WHERE status = "pending"');
+      for (const m of (allMerch as any[])) {
+        if (m.variableSymbol && message.includes(m.variableSymbol)) {
+          merchOrder = m;
+          break;
+        }
+      }
+    }
+
+    if (merchOrder) {
+      matchedType = 'merch';
+      matchedId = String(merchOrder.id);
+      matchedName = `${merchOrder.userName} - ${merchOrder.productName}`;
+      await pool.query('UPDATE merch_orders SET status = "paid" WHERE id = ?', [merchOrder.id]);
+
+      if (sendEmailFn && merchOrder.userEmail) {
         const buyerHtml = `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b;">
-            <div style="background-color: #002B49; padding: 20px; border-radius: 12px 12px 0 0; text-align: center;">
-              <h1 style="color: #ffffff; margin: 0; font-size: 22px;">Olymp Dance Olomouc</h1>
-              <p style="color: #4ade80; margin: 6px 0 0 0; font-weight: bold;">Platba byla úspěšně přijata</p>
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
+            <div style="background-color: #002B49; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Olymp Dance Olomouc</h1>
+              <p style="color: #4ade80; margin: 6px 0 0 0; font-size: 15px; font-weight: bold;">Platba byla úspěšně přijata</p>
             </div>
-            <div style="padding: 24px; border: 1px solid #e2e8f0; border-radius: 0 0 12px 12px; background: #fff;">
-              <p>Dobrý den, <strong>${order.userName}</strong>,</p>
-              <p>potvrzujeme přijetí Vaší platby ve výši <strong>${amountVal} Kč</strong> (VS: ${vs}) za objednávku klubového merche:</p>
-              <div style="background: #f8fafc; padding: 16px; border-radius: 8px; margin: 16px 0;">
-                <p style="margin: 4px 0;"><strong>Produkt:</strong> ${order.productName}</p>
-                <p style="margin: 4px 0;"><strong>Stav objednávky:</strong> <span style="color: #16a34a; font-weight: bold;">Zaplaceno</span></p>
+            <div style="background-color: #ffffff; padding: 32px 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
+              <p style="font-size: 16px;">Dobrý den, <strong>${merchOrder.userName}</strong>,</p>
+              <p>potvrzujeme, že jsme v pořádku obdrželi Vaši platbu ve výši <strong>${amountVal || merchOrder.totalPrice} Kč</strong> za objednávku klubového merche:</p>
+              
+              <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 18px; margin: 20px 0;">
+                <h3 style="margin: 0 0 10px 0; color: #166534; font-size: 16px;">✅ Detaily objednávky</h3>
+                <p style="margin: 4px 0; font-size: 14px;"><strong>Položka:</strong> ${merchOrder.productName}</p>
+                <p style="margin: 4px 0; font-size: 14px;"><strong>Velikost / Varianta:</strong> ${merchOrder.size || 'Univerzální'} (${merchOrder.quantity} ks)</p>
+                <p style="margin: 4px 0; font-size: 14px;"><strong>Částka:</strong> <span style="color: #16a34a; font-weight: bold;">${amountVal || merchOrder.totalPrice} Kč</span></p>
+                <p style="margin: 4px 0; font-size: 14px;"><strong>Variabilní symbol:</strong> ${merchOrder.variableSymbol || vs}</p>
+                <p style="margin: 4px 0; font-size: 14px;"><strong>Stav:</strong> <span style="color: #16a34a; font-weight: bold;">Zaplaceno</span></p>
               </div>
-              <p>Objednávku nyní připravíme k předání.</p>
-              <p style="margin-top: 24px; color: #64748b; font-size: 13px;">Tým Olymp Dance Olomouc</p>
+
+              <p style="font-size: 14px; color: #475569;">
+                Objednávku nyní kompletujeme a připravujeme k předání (na tréninku dítěte nebo osobně v sále Olymp Dance dle domluvy).
+              </p>
+              <p style="font-size: 14px; color: #475569;">
+                Děkujeme za podporu našeho tanečního klubu!
+              </p>
+
+              <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
+              <p style="font-size: 13px; color: #94a3b8; text-align: center; margin: 0;">
+                Taneční klub Olymp Olomouc • info@olympdance.cz • +420 722 017 700
+              </p>
             </div>
           </div>
         `;
-        sendEmailFn(order.userEmail, `Platba přijata: Objednávka merche (${order.productName}) - Olymp Dance`, buyerHtml).catch(console.error);
+        sendEmailFn(merchOrder.userEmail, `Platba přijata: Objednávka merche (${merchOrder.productName}) - Olymp Dance`, buyerHtml).catch(console.error);
       }
     }
   }
 
-  // 2. School registrations
+  // 2. Camp registrations (Tábory) - mark paid in admin, NO automated email
   if (matchedType === 'unmatched' && (vs || message)) {
-    let schoolQuery = '';
-    let queryParams: any[] = [];
-
+    let campReg: any = null;
     if (vs) {
-      schoolQuery = 'SELECT * FROM school_registrations WHERE variableSymbol = ? OR id = ? OR childRodneCislo LIKE ?';
-      queryParams = [vs, vs, `%${vs}%`];
-    } else if (message) {
-      schoolQuery = 'SELECT * FROM school_registrations WHERE (? LIKE CONCAT("%", variableSymbol, "%") AND variableSymbol IS NOT NULL AND LENGTH(variableSymbol) >= 4) OR (? LIKE CONCAT("%", childSurname, "%") AND ? LIKE CONCAT("%", childName, "%"))';
-      queryParams = [message, message, message];
-    }
-
-    if (schoolQuery) {
-      const [regRows] = await pool.query(schoolQuery, queryParams);
-      if ((regRows as any[]).length > 0) {
-        const reg = (regRows as any[])[0];
-        matchedType = 'school';
-        matchedId = String(reg.id);
-        matchedName = `${reg.childName} ${reg.childSurname || ''} (${reg.parentName})`;
-
-        await pool.query('UPDATE school_registrations SET status = "approved" WHERE id = ?', [reg.id]);
-        console.log(`[Auto-Match] Kroužek ${reg.id} označen jako ZAPLACENO (VS: ${vs || reg.variableSymbol})`);
-
-        if (sendEmailFn && reg.parentEmail) {
-          const parentHtml = `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b;">
-              <div style="background-color: #002B49; padding: 20px; border-radius: 12px 12px 0 0; text-align: center;">
-                <h1 style="color: #ffffff; margin: 0; font-size: 22px;">Olymp Dance Olomouc</h1>
-                <p style="color: #4ade80; margin: 6px 0 0 0; font-weight: bold;">Platba kurzovného přijata</p>
-              </div>
-              <div style="padding: 24px; border: 1px solid #e2e8f0; border-radius: 0 0 12px 12px; background: #fff;">
-                <p>Vážený rodiči <strong>${reg.parentName}</strong>,</p>
-                <p>potvrzujeme přijetí platby kurzovného ve výši <strong>${amountVal} Kč</strong> pro dítě <strong>${reg.childName} ${reg.childSurname || ''}</strong>.</p>
-                <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 16px; border-radius: 8px; margin: 16px 0;">
-                  <p style="margin: 4px 0;"><strong>Stav přihlášky:</strong> <span style="color: #16a34a; font-weight: bold;">Schváleno / Zaplaceno</span></p>
-                  <p style="margin: 4px 0;"><strong>Dítě:</strong> ${reg.childName} ${reg.childSurname || ''}</p>
-                  <p style="margin: 4px 0;"><strong>Variabilní symbol:</strong> ${vs || reg.variableSymbol || 'Spárováno'}</p>
-                </div>
-                <p>V klientském portálu máte nyní k dispozici kompletní docházku a potvrzení o platbě pro pojišťovnu.</p>
-                <p style="margin-top: 24px; color: #64748b; font-size: 13px;">Tým Olymp Dance Olomouc</p>
-              </div>
-            </div>
-          `;
-          sendEmailFn(reg.parentEmail, `Potvrzení o zaplacení kroužku (${reg.childName}) - Olymp Dance`, parentHtml).catch(console.error);
-        }
-      }
-    }
-  }
-
-  // 3. Camp registrations
-  if (matchedType === 'unmatched' && (vs || message)) {
-    let campQuery = '';
-    let campParams: any[] = [];
-
-    if (vs) {
-      campQuery = 'SELECT * FROM registrations WHERE variableSymbol = ? OR id = ?';
-      campParams = [vs, vs];
-    } else if (message) {
-      campQuery = 'SELECT * FROM registrations WHERE (? LIKE CONCAT("%", variableSymbol, "%") AND variableSymbol IS NOT NULL AND LENGTH(variableSymbol) >= 4) OR (? LIKE CONCAT("%", childName, "%"))';
-      campParams = [message, message];
-    }
-
-    if (campQuery) {
-      const [campRows] = await pool.query(campQuery, campParams);
+      const cleanVs = vs.replace(/^0+/, '') || vs;
+      const [campRows] = await pool.query(
+        'SELECT * FROM registrations WHERE variableSymbol = ? OR variableSymbol = ? OR TRIM(LEADING "0" FROM variableSymbol) = ? OR id = ? LIMIT 1',
+        [vs, cleanVs, cleanVs, vs]
+      );
       if ((campRows as any[]).length > 0) {
-        const reg = (campRows as any[])[0];
-        matchedType = 'camp';
-        matchedId = String(reg.id);
-        matchedName = `${reg.childName} (${reg.parentName})`;
+        campReg = (campRows as any[])[0];
+      }
+    }
 
-        await pool.query('UPDATE registrations SET status = "approved" WHERE id = ?', [reg.id]);
-        console.log(`[Auto-Match] Tábor ${reg.id} označen jako ZAPLACENO (VS: ${vs || reg.variableSymbol})`);
+    if (!campReg && message) {
+      const [allCamps] = await pool.query('SELECT * FROM registrations WHERE status != "approved"');
+      for (const c of (allCamps as any[])) {
+        if (c.variableSymbol && message.includes(c.variableSymbol)) {
+          campReg = c;
+          break;
+        }
+        if (c.childName && message.toLowerCase().includes(c.childName.toLowerCase())) {
+          campReg = c;
+          break;
+        }
+      }
+    }
 
-        if (sendEmailFn && reg.parentEmail) {
-          const campHtml = `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b;">
-              <div style="background-color: #002B49; padding: 20px; border-radius: 12px 12px 0 0; text-align: center;">
-                <h1 style="color: #ffffff; margin: 0; font-size: 22px;">Olymp Dance Olomouc</h1>
-                <p style="color: #4ade80; margin: 6px 0 0 0; font-weight: bold;">Platba tábora přijata</p>
-              </div>
-              <div style="padding: 24px; border: 1px solid #e2e8f0; border-radius: 0 0 12px 12px; background: #fff;">
-                <p>Vážený rodiči <strong>${reg.parentName}</strong>,</p>
-                <p>potvrzujeme přijetí platby za letní tábor ve výši <strong>${amountVal} Kč</strong> pro účastníka <strong>${reg.childName}</strong>.</p>
-                <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 16px; border-radius: 8px; margin: 16px 0;">
-                  <p style="margin: 4px 0;"><strong>Stav přihlášky:</strong> <span style="color: #16a34a; font-weight: bold;">Schváleno / Zaplaceno</span></p>
-                  <p style="margin: 4px 0;"><strong>Účastník:</strong> ${reg.childName}</p>
-                  <p style="margin: 4px 0;"><strong>Variabilní symbol:</strong> ${vs || reg.variableSymbol || 'Spárováno'}</p>
+    if (campReg) {
+      matchedType = 'camp';
+      matchedId = String(campReg.id);
+      matchedName = `${campReg.childName} (${campReg.parentName || 'Rodič'})`;
+
+      await pool.query('UPDATE registrations SET status = "approved" WHERE id = ?', [campReg.id]);
+      console.log(`[Auto-Match] Tábor ${campReg.id} označen jako ZAPLACENO / SCHVÁLENO (VS: ${vs || campReg.variableSymbol})`);
+      // NOTE: NO email sent for camps as requested by user.
+    }
+  }
+
+  // 3. School registrations (Kroužky)
+  if (matchedType === 'unmatched' && (vs || message)) {
+    let schoolReg: any = null;
+
+    if (vs) {
+      const cleanVs = vs.replace(/^0+/, '') || vs;
+      // 1. Direct variableSymbol or ID
+      const [regRows] = await pool.query(
+        'SELECT * FROM school_registrations WHERE variableSymbol = ? OR variableSymbol = ? OR TRIM(LEADING "0" FROM variableSymbol) = ? OR id = ? LIMIT 1',
+        [vs, cleanVs, cleanVs, vs]
+      );
+      if ((regRows as any[]).length > 0) {
+        schoolReg = (regRows as any[])[0];
+      }
+
+      // 2. Rodné číslo match
+      if (!schoolReg) {
+        const [rcRows] = await pool.query(
+          'SELECT * FROM school_registrations WHERE childRodneCislo = ? OR REPLACE(childRodneCislo, "/", "") = ? OR REPLACE(childRodneCislo, "/", "") = ? LIMIT 1',
+          [vs, cleanVs, vs]
+        );
+        if ((rcRows as any[]).length > 0) {
+          schoolReg = (rcRows as any[])[0];
+        }
+      }
+    }
+
+    // 3. Match from message
+    if (!schoolReg && message) {
+      const [allRegs] = await pool.query('SELECT * FROM school_registrations');
+      for (const r of (allRegs as any[])) {
+        if (r.variableSymbol && r.variableSymbol.length >= 4 && message.includes(r.variableSymbol)) {
+          schoolReg = r;
+          break;
+        }
+        if (r.childRodneCislo) {
+          const cleanRc = r.childRodneCislo.replace(/\D/g, '');
+          if (cleanRc.length >= 6 && message.replace(/\D/g, '').includes(cleanRc)) {
+            schoolReg = r;
+            break;
+          }
+        }
+        const surname = (r.childSurname || (r.childName ? r.childName.trim().split(' ').pop() : '') || '').trim().toLowerCase();
+        if (surname && surname.length >= 3 && message.toLowerCase().includes(surname)) {
+          schoolReg = r;
+          break;
+        }
+      }
+    }
+
+    if (schoolReg) {
+      matchedType = 'school';
+      matchedId = String(schoolReg.id);
+      const childFullName = [schoolReg.childName, schoolReg.childSurname].filter(Boolean).join(' ').trim();
+      matchedName = `${childFullName} (${schoolReg.parentName || 'Rodič'})`;
+
+      if (schoolReg.status !== 'approved') {
+        let historyArr: any[] = [];
+        try {
+          historyArr = typeof schoolReg.history === 'string' ? JSON.parse(schoolReg.history) : (schoolReg.history || []);
+        } catch (e) {
+          historyArr = [];
+        }
+        historyArr.push({
+          date: new Date().toISOString(),
+          message: `Platba ${amountVal} Kč přijata z účtu ${senderAccount || 'banky'}. Přihláška schválena a potvrzení o úhradě odesláno na e-mail.`
+        });
+
+        await pool.query(
+          'UPDATE school_registrations SET status = "approved", paidUntil = DATE_ADD(NOW(), INTERVAL 6 MONTH), history = ? WHERE id = ?',
+          [JSON.stringify(historyArr), schoolReg.id]
+        );
+        console.log(`[Auto-Match] Přihláška na kroužek ${schoolReg.id} (${childFullName}) označena jako ZAPLACENO / SCHVÁLENO (VS: ${vs || schoolReg.variableSymbol})`);
+
+        // Fetch school details
+        let schoolName = '';
+        if (schoolReg.schoolId) {
+          const [scRows] = await pool.query('SELECT name, city FROM schools WHERE id = ?', [schoolReg.schoolId]);
+          if ((scRows as any[]).length > 0) {
+            const sc = (scRows as any[])[0];
+            schoolName = `${sc.name} (${sc.city})`;
+          }
+        }
+
+        // Generate 1:1 PDF confirmation
+        try {
+          const pdfBuffer = await generateSchoolPaymentPdf({
+            paymentDate: bookingDate,
+            senderAccount: senderAccount || '',
+            parentName: schoolReg.parentName || senderName || 'Zákonný zástupce',
+            childName: schoolReg.childName,
+            childSurname: schoolReg.childSurname,
+            childBirthDate: schoolReg.childBirthDate,
+            childRodneCislo: schoolReg.childRodneCislo,
+            amount: amountVal || 1700,
+            period: null,
+            issueDate: bookingDate || new Date()
+          });
+
+          // Send confirmation email with PDF attached
+          if (sendEmailFn && schoolReg.parentEmail) {
+            const safeName = (childFullName || 'krouzek').replace(/[^a-zA-Z0-9_-]/g, '_');
+            const formattedAmt = (amountVal || 1700).toLocaleString('cs-CZ');
+            const emailHtml = `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
+                <div style="background-color: #002B49; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
+                  <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Olymp Dance Olomouc</h1>
+                  <p style="color: #4ade80; margin: 6px 0 0 0; font-size: 15px; font-weight: bold;">Platba byla úspěšně přijata</p>
                 </div>
-                <p>V klientském portálu máte nyní k dispozici kompletní informace a potvrzení o platbě pro pojišťovnu nebo zaměstnavatele.</p>
-                <p style="margin-top: 24px; color: #64748b; font-size: 13px;">Tým Olymp Dance Olomouc</p>
+                <div style="background-color: #ffffff; padding: 32px 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
+                  <p style="font-size: 16px;">Vážený rodiči, <strong>${schoolReg.parentName || 'paní / pane'}</strong>,</p>
+                  <p>potvrzujeme, že jsme z bankovního účtu v pořádku přijali platbu kurzovného za taneční kroužek pro Vaše dítě <strong>${childFullName}</strong>.</p>
+                  
+                  <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 18px; margin: 20px 0;">
+                    <h3 style="margin: 0 0 10px 0; color: #166534; font-size: 16px;">✅ Detaily platby a kroužku</h3>
+                    <p style="margin: 4px 0; font-size: 14px;"><strong>Účastník:</strong> ${childFullName}</p>
+                    ${schoolName ? `<p style="margin: 4px 0; font-size: 14px;"><strong>Kroužek / Škola:</strong> ${schoolName}</p>` : ''}
+                    <p style="margin: 4px 0; font-size: 14px;"><strong>Uhrazená částka:</strong> <span style="color: #16a34a; font-weight: bold;">${formattedAmt} Kč</span></p>
+                    <p style="margin: 4px 0; font-size: 14px;"><strong>Variabilní symbol:</strong> ${vs || schoolReg.variableSymbol}</p>
+                    <p style="margin: 4px 0; font-size: 14px;"><strong>Stav přihlášky:</strong> <span style="color: #16a34a; font-weight: bold;">Zaplaceno / Schváleno</span></p>
+                  </div>
+
+                  <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 16px; margin: 20px 0;">
+                    <h4 style="margin: 0 0 8px 0; color: #1e40af; font-size: 15px;">📄 Oficiální potvrzení o platbě v příloze</h4>
+                    <p style="margin: 0; font-size: 13px; color: #1e3a8a;">
+                      V příloze tohoto e-mailu naleznete oficiální <strong>Potvrzení o přijetí platby (PDF)</strong> s razítkem a podpisem statutárního zástupce TK Olymp Olomouc, které můžete přímo předložit své zdravotní pojišťovně pro čerpání finančního příspěvku nebo zaměstnavateli pro proplacení z FKSP.
+                    </p>
+                  </div>
+
+                  <p style="font-size: 14px; color: #475569;">
+                    Ve Školním portálu na našem webu můžete kdykoliv sledovat docházku z tréninků, omlouvat případnou nepřítomnost a stáhnout si toto potvrzení kdykoliv znovu.
+                  </p>
+
+                  <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
+                  <p style="font-size: 13px; color: #94a3b8; text-align: center; margin: 0;">
+                    Taneční klub Olymp Olomouc, z. s. • Jiráskova 25, Olomouc • info@olympdance.cz • +420 722 017 700
+                  </p>
+                </div>
               </div>
-            </div>
-          `;
-          sendEmailFn(reg.parentEmail, `Potvrzení o zaplacení tábora (${reg.childName}) - Olymp Dance`, campHtml).catch(console.error);
+            `;
+
+            sendEmailFn(
+              schoolReg.parentEmail,
+              `Potvrzení o přijetí platby – Taneční kroužek (${childFullName}) - Olymp Dance`,
+              emailHtml,
+              [{
+                filename: `Potvrzeni_o_prijeti_platby_${safeName}.pdf`,
+                content: pdfBuffer,
+                contentType: 'application/pdf'
+              }]
+            ).catch(console.error);
+          }
+        } catch (pdfErr: any) {
+          console.error('[Auto-Match] Chyba při generování PDF pro kroužek:', pdfErr);
         }
       }
     }
   }
 
-  // Insert log record
+  // Insert or update log record
   try {
     await pool.query(`
       INSERT INTO bank_payments_log 
@@ -821,7 +1135,11 @@ export const processSinglePayment = async (
         matchedType = VALUES(matchedType),
         matchedId = VALUES(matchedId),
         matchedName = VALUES(matchedName),
-        status = VALUES(status)
+        status = VALUES(status),
+        variableSymbol = VALUES(variableSymbol),
+        senderAccount = VALUES(senderAccount),
+        senderName = VALUES(senderName),
+        message = VALUES(message)
     `, [
       txId,
       bookingDate,
@@ -846,7 +1164,7 @@ export const processSinglePayment = async (
     matchedId,
     matchedName,
     message: matchedType !== 'unmatched' 
-      ? `Platba úspěšně spárována s: ${matchedName} (${matchedType === 'school' ? 'kroužek' : matchedType === 'camp' ? 'tábor' : 'merch'}) a potvrzovací e-mail byl odeslán.` 
+      ? `Platba úspěšně spárována s: ${matchedName} (${matchedType === 'school' ? 'kroužek' : matchedType === 'camp' ? 'tábor' : 'merch'}).${matchedType === 'school' ? ' Vygenerováno oficiální PDF potvrzení a odesláno na e-mail rodiče.' : matchedType === 'merch' ? ' Potvrzovací e-mail byl odeslán zákazníkovi.' : ' Označeno jako zaplaceno v adminu.'}` 
       : `Platba nebyla nalezena (VS: ${vs || 'neuveden'}, zpráva: ${message || 'prázdná'}). Byla zaznamenána jako nespárovaná.`
   };
 };

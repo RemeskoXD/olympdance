@@ -19,7 +19,6 @@ const Merch: React.FC = () => {
   const [userName, setUserName] = useState('');
   const [userEmail, setUserEmail] = useState('');
   const [userPhone, setUserPhone] = useState('');
-  const [deliveryMethod, setDeliveryMethod] = useState<'personal' | 'shipping'>('personal');
   const [deliveryNote, setDeliveryNote] = useState('');
 
   const copyToClipboard = (text: string, field: string) => {
@@ -49,9 +48,9 @@ const Merch: React.FC = () => {
       const numericPrice = parseInt(selectedProduct.price.replace(/\D/g, ''), 10) || 450;
       const total = numericPrice * quantity;
 
-      const fullNote = deliveryMethod === 'personal'
-        ? `Osobní odběr na tréninku. ${deliveryNote ? 'Poznámka: ' + deliveryNote : ''}`
-        : `Zaslání na adresu / Zásilkovna. ${deliveryNote ? 'Adresa / Poznámka: ' + deliveryNote : ''}`;
+      const fullNote = deliveryNote 
+        ? `Osobní odběr na tréninku: ${deliveryNote}` 
+        : 'Osobní odběr na tréninku';
 
       const created = await addMerchOrder({
         productId: selectedProduct.id,
@@ -317,32 +316,23 @@ const Merch: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">Způsob doručení</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setDeliveryMethod('personal')}
-                    className={`p-2.5 rounded-xl border text-xs font-bold transition-all text-left ${deliveryMethod === 'personal' ? 'bg-blue-50 border-brand-blue text-brand-blue' : 'bg-gray-50 border-gray-200 text-gray-600'}`}
-                  >
-                    🤝 Osobní odběr na tréninku
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDeliveryMethod('shipping')}
-                    className={`p-2.5 rounded-xl border text-xs font-bold transition-all text-left ${deliveryMethod === 'shipping' ? 'bg-blue-50 border-brand-blue text-brand-blue' : 'bg-gray-50 border-gray-200 text-gray-600'}`}
-                  >
-                    📦 Zaslání na adresu
-                  </button>
+                <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">Způsob předání</label>
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-3">
+                  <span className="text-xl">🤝</span>
+                  <div>
+                    <span className="text-xs font-bold text-emerald-900 block">Osobní odběr na tréninku / v klubu</span>
+                    <span className="text-[11px] text-emerald-700 block mt-0.5">Merch předáme dítěti přímo na tréninku tanečního kroužku nebo v tanečním sále v Olomouci.</span>
+                  </div>
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">
-                  {deliveryMethod === 'personal' ? 'Poznámka (např. škola dítěte)' : 'Doručovací adresa / Zásilkovna'}
+                  Poznámka k předání (např. škola dítěte, kroužek nebo jméno lektora)
                 </label>
                 <textarea 
                   rows={2}
-                  placeholder={deliveryMethod === 'personal' ? 'Uveďte jméno dítěte nebo školu, kde zboží předáme' : 'Ulice, město, PSČ nebo název pobočky Zásilkovny'}
+                  placeholder="Uveďte jméno dítěte, školu / kroužek, kam dochází, nebo den tréninku..."
                   value={deliveryNote} 
                   onChange={e => setDeliveryNote(e.target.value)}
                   className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-blue outline-none"

@@ -6,7 +6,7 @@ import {
   AlertCircle, Mail, Users, Check, X as XIcon, Calendar, Info, LayoutDashboard, DollarSign, 
   Users as UsersIcon, Download, Printer, Search, Filter, ShieldCheck, ArrowLeft, ArrowRight, 
   UserCheck, CheckSquare, Square, ChevronRight, Sparkles, MapPin, Building2, Phone, RotateCcw,
-  CreditCard, Tag, Upload
+  CreditCard, Tag, Upload, Send, RefreshCw
 } from 'lucide-react';
 import { School, Camp, Product, Registration, User, SchoolRegistration, MerchOrder } from '../types';
 import { exportSchoolRegistrationsToCsv, exportCampRegistrationsToCsv } from '../utils/exportCsv';
@@ -565,6 +565,303 @@ const DashboardManager: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Email / SMTP Diagnostika a Nastavení (Coolify & Gmail) */}
+      <EmailConfigSection />
+    </div>
+  );
+};
+
+const EmailConfigSection: React.FC = () => {
+  const [smtpUser, setSmtpUser] = useState('');
+  const [smtpPass, setSmtpPass] = useState('');
+  const [smtpHost, setSmtpHost] = useState('smtp.gmail.com');
+  const [smtpPort, setSmtpPort] = useState('465');
+  const [smtpSecure, setSmtpSecure] = useState('true');
+  const [status, setStatus] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [testEmail, setTestEmail] = useState('ludvikremesekwork@gmail.com');
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string; details?: any } | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const fetchStatus = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/smtp/status');
+      if (res.ok) {
+        const data = await res.json();
+        setStatus(data);
+        if (data.user) setSmtpUser(data.user);
+        if (data.host) setSmtpHost(data.host);
+        if (data.port) setSmtpPort(String(data.port));
+        if (data.secure !== undefined) setSmtpSecure(String(data.secure));
+      }
+    } catch (e) {
+      console.error('Failed to fetch SMTP status:', e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStatus();
+  }, []);
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    setSaveSuccess(false);
+    setTestResult(null);
+    try {
+      const payload: any = {
+        smtpUser: smtpUser.trim(),
+        smtpHost: smtpHost.trim(),
+        smtpPort: smtpPort.trim(),
+        smtpSecure: smtpSecure
+      };
+      if (smtpPass.trim()) {
+        payload.smtpPass = smtpPass.trim();
+      }
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        setSaveSuccess(true);
+        setSmtpPass('');
+        await fetchStatus();
+        setTimeout(() => setSaveSuccess(false), 4000);
+      }
+    } catch (err) {
+      console.error('Save error:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSendTestEmail = async () => {
+    if (!testEmail || !testEmail.includes('@')) return;
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch('/api/test-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ testEmail: testEmail.trim() })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setTestResult({
+          success: true,
+          message: data.message || `Testovací e-mail byl úspěšně odeslán na ${testEmail}!`
+        });
+      } else {
+        setTestResult({
+          success: false,
+          message: data.error || 'Odeslání testovacího e-mailu selhalo.',
+          details: data.config
+        });
+      }
+    } catch (err: any) {
+      setTestResult({
+        success: false,
+        message: `Chyba spojení se serverem: ${err.message}`
+      });
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <Mail className="text-brand-blue" size={22} />
+            <h3 className="text-lg font-bold text-gray-900">E-mailové notifikace & SMTP (Coolify / Gmail)</h3>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Správa odchozích e-mailů (přihlášky dětí s QR platbou, obnova hesel, kontaktní formulář, objednávky merche).
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {isLoading ? (
+            <span className="text-xs text-gray-400 flex items-center">
+              <RefreshCw size={12} className="animate-spin mr-1" /> Ověřuji...
+            </span>
+          ) : status?.isConfigured ? (
+            <span className="px-3 py-1 bg-green-50 text-green-700 border border-green-200 rounded-full text-xs font-bold flex items-center">
+              <Check size={13} className="mr-1" /> SMTP Aktivní ({status.source === 'env' ? 'ENV proměnné' : 'Databáze'})
+            </span>
+          ) : (
+            <span className="px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-full text-xs font-bold flex items-center">
+              <AlertCircle size={13} className="mr-1" /> SMTP Nenastaveno
+            </span>
+          )}
+          <button
+            onClick={fetchStatus}
+            className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100"
+            title="Obnovit stav"
+          >
+            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+          </button>
+        </div>
+      </div>
+
+      {/* Diagnostic notification on Coolify */}
+      <div className="bg-blue-50/70 border border-blue-200/80 rounded-xl p-4 text-xs text-blue-900 space-y-1.5">
+        <p className="font-bold flex items-center gap-1.5">
+          <Info size={15} className="text-brand-blue" />
+          Jak zprovoznit odesílání e-mailů na Coolify:
+        </p>
+        <ul className="list-disc list-inside space-y-1 text-blue-800 ml-1">
+          <li><strong>Odesílatel Gmail:</strong> V Google účtu zapněte <em>Dvoufázové ověření</em> a vytvořte <em>Heslo aplikace (App Password)</em> pro Mail.</li>
+          <li><strong>Zadání údajů:</strong> Můžete je zadat buď níže přímo do formuláře (uloží se bezpečně do databáze), nebo v Coolify jako proměnné prostředí <code className="bg-white px-1.5 py-0.5 rounded text-blue-950 font-mono font-bold">SMTP_USER</code> a <code className="bg-white px-1.5 py-0.5 rounded text-blue-950 font-mono font-bold">SMTP_PASS</code>.</li>
+          <li><strong>Síťové nastavení:</strong> Server automaticky používá <strong>IPv4</strong> a zkouší port <strong>465 (SSL)</strong> a při blokaci port <strong>587 (STARTTLS)</strong>.</li>
+        </ul>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Settings form */}
+        <form onSubmit={handleSaveSettings} className="space-y-4 bg-gray-50/60 p-4 rounded-xl border border-gray-200/80">
+          <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">Konfigurace SMTP spojení</h4>
+          
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">E-mail odesílatele (Gmail / SMTP User)</label>
+            <input
+              type="text"
+              value={smtpUser}
+              onChange={e => setSmtpUser(e.target.value)}
+              placeholder="např. klub@olympdance.cz nebo olympdance@gmail.com"
+              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-mono outline-none focus:border-brand-blue"
+            />
+          </div>
+
+          <div>
+            <div className="flex justify-between items-center mb-1">
+              <label className="text-xs font-semibold text-gray-700">Heslo aplikace (App Password)</label>
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="text-[11px] text-brand-blue hover:underline font-medium"
+              >
+                {showPassword ? 'Skrýt' : 'Zobrazit'}
+              </button>
+            </div>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={smtpPass}
+              onChange={e => setSmtpPass(e.target.value)}
+              placeholder={status?.hasPass ? '•••••••••••••••• (heslo je uloženo, zadejte pro změnu)' : '16místné heslo aplikace od Google'}
+              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-mono outline-none focus:border-brand-blue"
+            />
+            <p className="text-[11px] text-gray-400 mt-1">U Gmailu nepoužívejte hlavní heslo k účtu, ale 16místné heslo aplikace bez mezer.</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">SMTP Server</label>
+              <input
+                type="text"
+                value={smtpHost}
+                onChange={e => setSmtpHost(e.target.value)}
+                placeholder="smtp.gmail.com"
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-mono outline-none focus:border-brand-blue"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Port</label>
+              <select
+                value={smtpPort}
+                onChange={e => {
+                  setSmtpPort(e.target.value);
+                  setSmtpSecure(e.target.value === '465' ? 'true' : 'false');
+                }}
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-mono outline-none focus:border-brand-blue"
+              >
+                <option value="465">465 (SSL/TLS - doporučeno)</option>
+                <option value="587">587 (STARTTLS)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="pt-2 flex items-center justify-between">
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="px-4 py-2 bg-gray-900 text-white font-bold rounded-xl text-xs hover:bg-black transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            >
+              {isSaving ? <RefreshCw size={13} className="animate-spin" /> : <Save size={13} />}
+              Uložit konfiguraci do databáze
+            </button>
+            {saveSuccess && (
+              <span className="text-xs text-green-600 font-bold flex items-center gap-1 animate-fade-in">
+                <Check size={14} /> Uloženo v pořádku
+              </span>
+            )}
+          </div>
+        </form>
+
+        {/* Live Test Tool */}
+        <div className="space-y-4 bg-gray-50/60 p-4 rounded-xl border border-gray-200/80 flex flex-col justify-between">
+          <div>
+            <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Okamžitý test odeslání</h4>
+            <p className="text-xs text-gray-500 mb-3">
+              Ověří spojení z běžícího kontejneru na Coolify a odešle zkušební e-mail na zadanou adresu.
+            </p>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-gray-700">Cílová e-mailová adresa pro test</label>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={testEmail}
+                  onChange={e => setTestEmail(e.target.value)}
+                  placeholder="vas-email@gmail.com"
+                  className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:border-brand-blue"
+                />
+                <button
+                  type="button"
+                  onClick={handleSendTestEmail}
+                  disabled={isTesting || !testEmail}
+                  className="px-4 py-2 bg-brand-blue text-white font-bold rounded-xl text-xs hover:bg-blue-900 transition-colors flex items-center gap-1.5 disabled:opacity-50 shrink-0"
+                >
+                  {isTesting ? (
+                    <>
+                      <RefreshCw size={13} className="animate-spin" />
+                      Testuji...
+                    </>
+                  ) : (
+                    <>
+                      <Send size={13} />
+                      Odeslat test
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {testResult && (
+            <div className={`p-3 rounded-xl border text-xs ${testResult.success ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+              <div className="font-bold flex items-center gap-1.5 mb-1">
+                {testResult.success ? <Check size={14} className="text-green-600" /> : <AlertCircle size={14} className="text-red-600" />}
+                {testResult.success ? 'Test úspěšný!' : 'Odeslání se nezdařilo'}
+              </div>
+              <p className="leading-relaxed">{testResult.message}</p>
+            </div>
+          )}
+
+          <div className="text-[11px] text-gray-400 pt-2 border-t border-gray-200">
+            Při úspěšném testu máte 100% jistotu, že přihlášky, generovaná PDF potvrzení a e-shopy zákazníkům dorazí.
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
@@ -937,22 +1234,74 @@ const CampManager: React.FC = () => {
 const GalleryManager: React.FC = () => {
   const { galleryImages, addGalleryImage, deleteGalleryImage } = useData();
   const [newImageUrl, setNewImageUrl] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const galleryFileRef = React.useRef<HTMLInputElement>(null);
 
-  const handleAdd = (e: React.FormEvent) => {
+  const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newImageUrl) return;
-    addGalleryImage(newImageUrl);
+    await addGalleryImage(newImageUrl);
     setNewImageUrl('');
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+      if (!res.ok) throw new Error('Chyba při nahrávání obrázku');
+      const data = await res.json();
+      const finalUrl = data.url || `/uploads/${data.filename}`;
+      await addGalleryImage(finalUrl);
+    } catch (err: any) {
+      alert('Chyba při nahrávání fotky: ' + err.message);
+    } finally {
+      setIsUploading(false);
+      if (galleryFileRef.current) galleryFileRef.current.value = '';
+    }
   };
 
   return (
     <div className="grid lg:grid-cols-3 gap-8">
       {/* Form */}
       <div className="lg:col-span-1">
-        <div className="bg-white p-6 rounded-2xl shadow-md sticky top-24">
-          <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-             <Plus size={20} className="mr-2 text-brand-red" /> Přidat fotku
-          </h3>
+        <div className="bg-white p-6 rounded-2xl shadow-md sticky top-24 space-y-6">
+          <div>
+            <h3 className="text-lg font-bold text-gray-900 mb-2 flex items-center">
+              <Plus size={20} className="mr-2 text-brand-red" /> Nahrát fotku ze zařízení
+            </h3>
+            <p className="text-xs text-gray-500 mb-3">Fotka se uloží přímo do databáze a neztratí se ani po restartu serveru.</p>
+            <input 
+              type="file" 
+              ref={galleryFileRef} 
+              onChange={handleFileUpload} 
+              className="hidden" 
+              accept="image/*"
+            />
+            <button 
+              type="button"
+              onClick={() => galleryFileRef.current?.click()}
+              disabled={isUploading}
+              className="w-full py-3 px-4 border-2 border-dashed border-gray-300 rounded-xl text-sm font-bold text-gray-700 hover:border-brand-blue hover:text-brand-blue transition-colors flex items-center justify-center disabled:opacity-50 shadow-sm"
+            >
+              <Upload size={16} className="mr-2 text-brand-blue" />
+              {isUploading ? 'Ukládám do databáze...' : 'Vybrat fotku z počítače / mobilu'}
+            </button>
+          </div>
+
+          <div className="relative flex py-1 items-center">
+            <div className="flex-grow border-t border-gray-200"></div>
+            <span className="flex-shrink mx-3 text-gray-400 text-xs uppercase font-bold tracking-wider">Nebo vložit odkaz</span>
+            <div className="flex-grow border-t border-gray-200"></div>
+          </div>
+
           <form onSubmit={handleAdd} className="space-y-3">
              <label className="block text-sm text-gray-600 mb-1">
                 URL adresa obrázku (např. z Facebooku, Instagramu nebo webu)
@@ -970,7 +1319,7 @@ const GalleryManager: React.FC = () => {
                 </div>
             )}
             <button className="w-full bg-brand-blue text-white font-bold py-2 rounded-lg hover:bg-blue-700 transition-colors">
-              Uložit fotku
+              Uložit fotku z URL
             </button>
           </form>
         </div>
@@ -1314,13 +1663,13 @@ const MerchManager: React.FC = () => {
                   <p className="text-xs text-gray-500 mb-4">{selectedOrderForQr.userName} • {selectedOrderForQr.productName}</p>
                   
                   <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(`SPD*1.0*ACC:CZ6555000000000287413002*AM:${selectedOrderForQr.totalPrice.toFixed(2)}*CC:CZK*X-VS:${selectedOrderForQr.variableSymbol}*MSG:${encodeURIComponent(`Merch ${selectedOrderForQr.productName}`)}`)}`}
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(`SPD*1.0*ACC:CZ0855000000001806875329*AM:${selectedOrderForQr.totalPrice.toFixed(2)}*CC:CZK*X-VS:${selectedOrderForQr.variableSymbol}*MSG:${encodeURIComponent(`Merch ${selectedOrderForQr.productName}`)}`)}`}
                     alt="QR kód"
                     className="w-48 h-48 mx-auto mb-4 border border-gray-200 rounded-xl p-2 bg-white"
                   />
 
                   <div className="text-left text-xs bg-gray-50 p-3 rounded-xl space-y-1 mb-4">
-                    <div><strong>Číslo účtu:</strong> 287413002/5500</div>
+                    <div><strong>Číslo účtu:</strong> 1806875329/5500 (Raiffeisenbank)</div>
                     <div><strong>Částka:</strong> {selectedOrderForQr.totalPrice} Kč</div>
                     <div><strong>Variabilní symbol:</strong> {selectedOrderForQr.variableSymbol}</div>
                     <div><strong>Stav:</strong> {selectedOrderForQr.status}</div>
@@ -3183,6 +3532,7 @@ const SchoolRegistrationManager: React.FC = () => {
       {insuranceReg && (
         <InsuranceConfirmationModal
           data={{
+            id: insuranceReg.id,
             childName: insuranceReg.childName,
             childBirthDate: insuranceReg.childBirthDate,
             parentName: insuranceReg.parentName,

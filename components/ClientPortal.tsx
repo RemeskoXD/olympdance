@@ -19,6 +19,35 @@ const ClientPortal: React.FC = () => {
   const [showInsuranceModal, setShowInsuranceModal] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentUser) return;
+
+    setIsUploadingDoc(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+      if (!res.ok) throw new Error('Chyba při nahrávání souboru');
+      const data = await res.json();
+      const newDocUrl = data.url || `/uploads/${data.filename}`;
+      const newDocs = [...(currentUser.documents || []), newDocUrl];
+      
+      await updateRegistration(currentUser.id, { documents: newDocs });
+      setCurrentUser({ ...currentUser, documents: newDocs });
+    } catch (err: any) {
+      alert('Nepodařilo se nahrát dokument: ' + err.message);
+    } finally {
+      setIsUploadingDoc(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
@@ -242,32 +271,75 @@ const ClientPortal: React.FC = () => {
                           <p className="text-xs text-gray-500">Získejte příspěvek na tábor od vaší pojišťovny (až 1 500 Kč)</p>
                         </div>
                       </div>
-                      <button
-                        onClick={() => setShowInsuranceModal(true)}
-                        className="bg-brand-blue hover:bg-blue-700 text-white text-xs sm:text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm flex items-center shrink-0 w-full sm:w-auto justify-center"
-                      >
-                        <FileText size={14} className="mr-1.5" />
-                        Zobrazit doklad
-                      </button>
+                      <div className="flex flex-wrap items-center gap-2 shrink-0 w-full sm:w-auto">
+                        {currentUser.status === 'approved' && (
+                          <a
+                            href={`/api/registrations/${currentUser.id}/confirmation-pdf`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold px-3.5 py-2 rounded-xl transition-colors shadow-sm flex items-center justify-center flex-1 sm:flex-initial"
+                            title="Stáhnout oficiální PDF potvrzení o přijetí platby s razítkem 1:1"
+                          >
+                            <FileText size={14} className="mr-1.5" />
+                            Oficiální PDF (1:1)
+                          </a>
+                        )}
+                        <button
+                          onClick={() => setShowInsuranceModal(true)}
+                          className="bg-brand-blue hover:bg-blue-700 text-white text-xs sm:text-sm font-bold px-3.5 py-2 rounded-xl transition-colors shadow-sm flex items-center justify-center flex-1 sm:flex-initial"
+                        >
+                          <FileText size={14} className="mr-1.5" />
+                          Zobrazit doklad
+                        </button>
+                      </div>
                     </div>
 
                     <div className="space-y-4">
                       <h5 className="font-bold text-sm text-gray-700">Dokumenty:</h5>
-                      {currentUser.documents.length > 0 ? (
+                      {currentUser.documents && currentUser.documents.length > 0 ? (
                         <div className="space-y-2">
-                          {currentUser.documents.map((doc, i) => (
-                            <div key={i} className="flex items-center justify-between bg-white p-3 rounded-lg border border-gray-200 text-sm">
-                              <span className="flex items-center"><FileText size={14} className="mr-2 text-gray-400" /> {doc}</span>
-                              <button className="text-brand-blue hover:text-blue-700"><Download size={14} /></button>
-                            </div>
-                          ))}
+                          {currentUser.documents.map((doc, i) => {
+                            const docUrl = doc.startsWith('/') || doc.startsWith('http') ? doc : `/uploads/${doc}`;
+                            const docName = doc.split('/').pop() || doc;
+                            return (
+                              <div key={i} className="flex items-center justify-between bg-white p-3 rounded-lg border border-gray-200 text-sm">
+                                <span className="flex items-center truncate mr-2" title={docName}>
+                                  <FileText size={14} className="mr-2 text-brand-blue shrink-0" />
+                                  <span className="truncate">{docName}</span>
+                                </span>
+                                <a
+                                  href={docUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  download
+                                  className="text-brand-blue hover:text-blue-700 p-1 rounded-md hover:bg-blue-50 transition-colors shrink-0"
+                                  title="Stáhnout dokument"
+                                >
+                                  <Download size={16} />
+                                </a>
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : (
                         <p className="text-sm text-gray-400 italic">Žádné dokumenty nebyly nahrány.</p>
                       )}
                       
-                      <button className="w-full mt-2 py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-brand-blue hover:text-brand-blue transition-colors flex items-center justify-center">
-                        <LogIn size={14} className="mr-2" /> Nahrát další dokument
+                      <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        onChange={handleDocUpload} 
+                        className="hidden" 
+                        accept=".pdf,image/*,.doc,.docx"
+                      />
+                      <button 
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploadingDoc}
+                        className="w-full mt-2 py-2.5 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-brand-blue hover:text-brand-blue transition-colors flex items-center justify-center font-medium disabled:opacity-50"
+                      >
+                        <LogIn size={14} className="mr-2" />
+                        {isUploadingDoc ? 'Nahrávám dokument do databáze...' : 'Nahrát další dokument (PDF, foto posudku)'}
                       </button>
                     </div>
 
