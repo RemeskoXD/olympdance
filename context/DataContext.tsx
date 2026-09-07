@@ -159,7 +159,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshSettings = async () => {
     try {
       const response = await fetch('/api/settings', { cache: 'no-store' });
-      if (response.ok) {
+      const contentType = response.headers.get('content-type') || '';
+      if (response.ok && contentType.includes('application/json')) {
         const data = await response.json();
         if (data.isMerchEnabled !== undefined) setIsMerchEnabled(Boolean(data.isMerchEnabled));
         if (data.isTanecniExpresEnabled !== undefined) setIsTanecniExpresEnabled(Boolean(data.isTanecniExpresEnabled));
@@ -169,7 +170,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (data.campGeneralInfo !== undefined) setCampGeneralInfo(data.campGeneralInfo);
       }
     } catch (e) {
-      console.error('Failed to fetch settings from MySQL:', e);
+      console.warn('Failed to fetch settings from MySQL:', e);
     }
   };
 

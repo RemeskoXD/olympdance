@@ -48,26 +48,48 @@ const SchoolPortal: React.FC = () => {
     e.preventDefault();
     setIsLoggingIn(true);
     setError('');
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPass = password.trim();
+
     try {
       const res = await fetch('/api/portal/school-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email: cleanEmail, password: cleanPass })
       });
-      const data = await res.json();
-      if (!res.ok || !data.registration) {
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        const data = await res.json();
+        if (data.registration) {
+          setCurrentUser(data.registration);
+          setUserRegistrations(data.registrations || [data.registration]);
+          setIsLoggedIn(true);
+          setError('');
+          setIsLoggingIn(false);
+          return;
+        }
+      } else if (res.status === 401 && contentType.includes('application/json')) {
+        const data = await res.json();
         setError(data.error || 'Nesprávný email nebo heslo.');
+        setIsLoggingIn(false);
         return;
       }
-      setCurrentUser(data.registration);
-      setUserRegistrations(data.registrations || [data.registration]);
+    } catch {
+      // Backend not reachable, fallback to local school registrations
+    }
+
+    const matchedRegs = schoolRegistrations.filter(r => 
+      r.parentEmail.trim().toLowerCase() === cleanEmail && r.password === cleanPass
+    );
+    if (matchedRegs.length > 0) {
+      setCurrentUser(matchedRegs[0]);
+      setUserRegistrations(matchedRegs);
       setIsLoggedIn(true);
       setError('');
-    } catch {
-      setError('Chyba při komunikaci se serverem.');
-    } finally {
-      setIsLoggingIn(false);
+    } else {
+      setError('Nesprávný email nebo heslo.');
     }
+    setIsLoggingIn(false);
   };
 
   const handleLogout = () => {
