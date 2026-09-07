@@ -3,26 +3,74 @@ import { useData } from '../context/DataContext';
 import SeoAudit from './SeoAudit';
 
 const Webmaster: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return localStorage.getItem('olymp_admin_auth') === 'true';
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'editor' | 'seo'>('editor');
-  const { siteContent, updateSiteContent } = useData();
+  const { siteContent, updateSiteContent, refreshData } = useData();
 
   // Local state for the form so we can save it on submit
   const [formData, setFormData] = useState(siteContent);
   const [isSaving, setIsSaving] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (username === 'admin' && password === 'admin123') {
-      setIsAuthenticated(true);
-      localStorage.setItem('olymp_admin_auth', 'true');
-    } else {
-      alert('Nesprávné jméno nebo heslo');
+  React.useEffect(() => {
+    const token = localStorage.getItem('olymp_admin_token');
+    if (token) {
+      fetch('/api/admin/verify', {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(res => {
+        if (res.ok) {
+          setIsAuthenticated(true);
+        } else {
+          handleLogout();
+        }
+      }).catch(() => {});
     }
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.token) {
+        setLoginError(data.error || 'Nesprávné jméno nebo heslo');
+        setIsLoading(false);
+        return;
+      }
+      if (data.user?.role !== 'admin') {
+        setLoginError('Přístup povolen pouze administrátorovi.');
+        setIsLoading(false);
+        return;
+      }
+      localStorage.setItem('olymp_admin_token', data.token);
+      localStorage.setItem('olymp_admin_user', JSON.stringify(data.user));
+      localStorage.setItem('olymp_admin_auth', 'true');
+      localStorage.setItem('olymp_admin_user_id', data.user.id);
+      setIsAuthenticated(true);
+      setPassword('');
+      await refreshData();
+    } catch (err) {
+      setLoginError('Chyba při komunikaci se serverem');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('olymp_admin_token');
+    localStorage.removeItem('olymp_admin_user');
+    localStorage.removeItem('olymp_admin_auth');
+    localStorage.removeItem('olymp_admin_user_id');
+    setIsAuthenticated(false);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -44,7 +92,7 @@ const Webmaster: React.FC = () => {
         <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold text-gray-900">Webmaster Login</h1>
-            <p className="text-gray-500 mt-2">Přihlášení pro úpravu textů webu</p>
+            <p className="text-gray-500 mt-2">Zabezpečené přihlášení pro úpravu textů webu</p>
           </div>
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
@@ -67,11 +115,15 @@ const Webmaster: React.FC = () => {
                 required
               />
             </div>
+            {loginError && (
+              <p className="text-sm text-red-600 bg-red-50 p-2 rounded border border-red-200">{loginError}</p>
+            )}
             <button
               type="submit"
-              className="w-full bg-brand-blue text-white py-3 rounded-lg font-bold hover:bg-blue-800 transition-colors"
+              disabled={isLoading}
+              className="w-full bg-brand-blue text-white py-3 rounded-lg font-bold hover:bg-blue-800 transition-colors disabled:opacity-50"
             >
-              Přihlásit se
+              {isLoading ? 'Ověřuji...' : 'Přihlásit se'}
             </button>
           </form>
         </div>
@@ -85,10 +137,7 @@ const Webmaster: React.FC = () => {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-900">Nástroje pro Webmastera</h1>
           <button 
-            onClick={() => {
-              localStorage.removeItem('olymp_admin_auth');
-              setIsAuthenticated(false);
-            }}
+            onClick={handleLogout}
             className="text-gray-500 hover:text-red-600 transition-colors"
           >
             Odhlásit

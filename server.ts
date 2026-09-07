@@ -10,6 +10,7 @@ import { SCHOOLS, CAMPS, GALLERY_IMAGES, PRODUCTS } from './constants.ts';
 import { getRbConfig, testRbConnection, syncRbPayments, getRbLogs, processSinglePayment } from './rbService.ts';
 import { generateSchoolPaymentPdf } from './pdfGenerator.ts';
 import dns from 'dns';
+import crypto from 'crypto';
 
 // Enforce IPv4 lookup order first so Docker/Coolify containers do not hang on IPv6 DNS queries
 try {
@@ -20,15 +21,113 @@ try {
   console.warn('Could not set IPv4 default DNS resolution order:', e);
 }
 
+// Security & Authentication Configuration
+const AUTH_SECRET = process.env.AUTH_SECRET || 'olymp_dance_sec_jwt_key_2026_salt_!@#$';
+const MASTER_ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'Martin').trim();
+const MASTER_ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || '2026OLtanecjeTOP.*').trim();
+
+// Cryptographically secure HMAC-SHA256 Token generator & validator
+function signToken(payload: Record<string, any>, expiresInHours = 168): string {
+  const exp = Math.floor(Date.now() / 1000) + (expiresInHours * 3600);
+  const data = JSON.stringify({ ...payload, exp });
+  const b64Data = Buffer.from(data).toString('base64url');
+  const signature = crypto.createHmac('sha256', AUTH_SECRET).update(b64Data).digest('base64url');
+  return `${b64Data}.${signature}`;
+}
+
+function verifyToken(token: string): any | null {
+  if (!token || typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 2) return null;
+  const [b64Data, signature] = parts;
+  const expectedSignature = crypto.createHmac('sha256', AUTH_SECRET).update(b64Data).digest('base64url');
+  if (Buffer.byteLength(signature) !== Buffer.byteLength(expectedSignature)) return null;
+  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
+    return null;
+  }
+  try {
+    const payload = JSON.parse(Buffer.from(b64Data, 'base64url').toString('utf8'));
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+      return null;
+    }
+    return payload;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Anti-Brute-Force Rate Limiting (max 5 failed attempts per 15 minutes per IP)
+const failedLoginAttempts = new Map<string, { count: number; lockedUntil: number }>();
+
+function isIpLocked(ip: string): boolean {
+  const record = failedLoginAttempts.get(ip);
+  if (!record) return false;
+  if (Date.now() > record.lockedUntil) {
+    failedLoginAttempts.delete(ip);
+    return false;
+  }
+  return record.count >= 5;
+}
+
+function recordFailedLogin(ip: string) {
+  const now = Date.now();
+  const record = failedLoginAttempts.get(ip);
+  if (!record || now > record.lockedUntil) {
+    failedLoginAttempts.set(ip, { count: 1, lockedUntil: now + 15 * 60 * 1000 });
+  } else {
+    record.count += 1;
+    if (record.count >= 5) {
+      record.lockedUntil = now + 15 * 60 * 1000; // 15 min lock
+    }
+  }
+}
+
+function clearFailedLogin(ip: string) {
+  failedLoginAttempts.delete(ip);
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-// Middleware
+// Security Headers & Core Middleware
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+  // Extract auth token if provided in Authorization header
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    const decoded = verifyToken(token);
+    if (decoded) {
+      (req as any).user = decoded;
+    }
+  }
+  next();
+});
+
 app.use(cors());
 app.use(express.json());
+
+// Auth Guard Middlewares
+const requireAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (!(req as any).user) {
+    return res.status(401).json({ error: 'Neautorizovaný přístup. Přihlaste se prosím.' });
+  }
+  next();
+};
+
+const requireAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const user = (req as any).user;
+  if (!user || user.role !== 'admin') {
+    return res.status(403).json({ error: 'Přístup odepřen. Vyžadována oprávnění administrátora.' });
+  }
+  next();
+};
 
 // Ensure uploads directory exists
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
@@ -193,18 +292,22 @@ app.get('/api/data', async (req, res) => {
     });
     
     const currentSettings = (settings as any[])[0] || {};
+    const user = (req as any).user;
+    const isPrivileged = Boolean(user && (user.role === 'admin' || user.role === 'trainer'));
 
     res.json({
       schools: parsedSchools,
       camps,
       galleryImages,
       products: parsedProducts,
-      registrations: parsedRegistrations,
-      schoolRegistrations: parsedSchoolRegistrations,
-      users: parsedUsers,
-      excuses,
-      attendance: parsedAttendance,
-      merchOrders: merchOrders || [],
+      // PRIVACY & SECURITY: Personal client registrations, birth numbers, phones and internal users 
+      // are strictly protected and only returned to authenticated administrators/trainers!
+      registrations: isPrivileged ? parsedRegistrations : [],
+      schoolRegistrations: isPrivileged ? parsedSchoolRegistrations : [],
+      users: isPrivileged ? parsedUsers : [],
+      excuses: isPrivileged ? excuses : [],
+      attendance: isPrivileged ? parsedAttendance : [],
+      merchOrders: isPrivileged ? (merchOrders || []) : [],
       isMerchEnabled: currentSettings.isMerchEnabled === undefined ? true : Boolean(currentSettings.isMerchEnabled),
       isTanecniExpresEnabled: currentSettings.isTanecniExpresEnabled === undefined ? true : Boolean(currentSettings.isTanecniExpresEnabled),
       isCampsEnabled: currentSettings.isCampsEnabled === undefined ? true : Boolean(currentSettings.isCampsEnabled),
@@ -239,6 +342,150 @@ app.get('/api/data', async (req, res) => {
   }
 });
 
+// ==========================================
+// AUTHENTICATION & SECURITY ENDPOINTS
+// ==========================================
+
+// Server-authoritative Admin & Trainer Login with anti-brute-force protection
+app.post('/api/admin/login', async (req, res) => {
+  const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+  
+  if (isIpLocked(clientIp)) {
+    return res.status(429).json({ 
+      error: 'Příliš mnoho neúspěšných pokusů o přihlášení. Z bezpečnostních důvodů je přístup dočasně zablokován na 15 minut.' 
+    });
+  }
+
+  const { username, password } = req.body;
+  if (!username || !password) {
+    recordFailedLogin(clientIp);
+    return res.status(400).json({ error: 'Zadejte uživatelské jméno a heslo.' });
+  }
+
+  const cleanUser = String(username).trim();
+  const cleanPass = String(password).trim();
+
+  // 1. Check Master Admin Credentials (Martin / 2026OLtanecjeTOP.*)
+  const isMasterUser = cleanUser.toLowerCase() === MASTER_ADMIN_USERNAME.toLowerCase() || cleanUser === MASTER_ADMIN_USERNAME;
+  const isMasterPass = cleanPass === MASTER_ADMIN_PASSWORD;
+
+  if (isMasterUser && isMasterPass) {
+    clearFailedLogin(clientIp);
+    const userPayload = {
+      id: 'superadmin',
+      username: 'Martin',
+      role: 'admin',
+      name: 'Martin (Hlavní administrátor)'
+    };
+    const token = signToken(userPayload, 168); // 7 days validity
+    return res.json({ success: true, token, user: userPayload });
+  }
+
+  // 2. Check Staff / Trainers in MySQL users table
+  try {
+    const [rows] = await pool.query('SELECT * FROM users WHERE LOWER(username) = LOWER(?) LIMIT 1', [cleanUser]);
+    const matched = (rows as any[])[0];
+    if (matched && matched.password === cleanPass) {
+      clearFailedLogin(clientIp);
+      let schoolIds: string[] = [];
+      if (matched.schoolIds) {
+        schoolIds = typeof matched.schoolIds === 'string' ? JSON.parse(matched.schoolIds) : (Array.isArray(matched.schoolIds) ? matched.schoolIds : []);
+      } else if (matched.schoolId) {
+        schoolIds = [matched.schoolId];
+      }
+      const userPayload = {
+        id: matched.id,
+        username: matched.username,
+        role: matched.role || 'trainer',
+        name: matched.name || matched.username,
+        schoolIds,
+        schoolId: matched.schoolId || (schoolIds.length > 0 ? schoolIds[0] : undefined)
+      };
+      const token = signToken(userPayload, 168);
+      return res.json({ success: true, token, user: userPayload });
+    }
+  } catch (err) {
+    console.error('Database error during login verification:', err);
+  }
+
+  recordFailedLogin(clientIp);
+  return res.status(401).json({ error: 'Špatné uživatelské jméno nebo heslo.' });
+});
+
+// Verify active session token
+app.get('/api/admin/verify', (req, res) => {
+  const user = (req as any).user;
+  if (!user) {
+    return res.status(401).json({ valid: false, error: 'Platnost přihlášení vypršela.' });
+  }
+  res.json({ valid: true, user });
+});
+
+// Client Portal secure login for Camp registrations
+app.post('/api/portal/camp-login', async (req, res) => {
+  try {
+    const rawIdent = req.body.identifier || req.body.email;
+    const { password } = req.body;
+    if (!rawIdent || !password) {
+      return res.status(400).json({ error: 'Zadejte e-mail nebo variabilní symbol a heslo.' });
+    }
+    const cleanIdent = String(rawIdent).trim().toLowerCase();
+    const cleanPass = String(password).trim();
+
+    const [rows] = await pool.query(
+      'SELECT * FROM registrations WHERE (LOWER(parentEmail) = ? OR variableSymbol = ?) AND password = ?',
+      [cleanIdent, cleanIdent, cleanPass]
+    );
+    const results = (rows as any[]).map(r => ({
+      ...r,
+      documents: typeof r.documents === 'string' ? JSON.parse(r.documents) : (r.documents || [])
+    }));
+
+    if (results.length === 0) {
+      return res.status(401).json({ error: 'Nesprávný e-mail / variabilní symbol nebo heslo.' });
+    }
+
+    const token = signToken({ type: 'camp_portal', email: results[0].parentEmail, id: results[0].id }, 72);
+    res.json({ success: true, token, registration: results[0], registrations: results });
+  } catch (error) {
+    console.error('Camp portal login error:', error);
+    res.status(500).json({ error: 'Chyba při přihlašování do portálu' });
+  }
+});
+
+// Client Portal secure login for School registrations
+app.post('/api/portal/school-login', async (req, res) => {
+  try {
+    const rawIdent = req.body.identifier || req.body.email;
+    const { password } = req.body;
+    if (!rawIdent || !password) {
+      return res.status(400).json({ error: 'Zadejte e-mail nebo variabilní symbol a heslo.' });
+    }
+    const cleanIdent = String(rawIdent).trim().toLowerCase();
+    const cleanPass = String(password).trim();
+
+    const [rows] = await pool.query(
+      'SELECT * FROM school_registrations WHERE (LOWER(parentEmail) = ? OR variableSymbol = ?) AND password = ?',
+      [cleanIdent, cleanIdent, cleanPass]
+    );
+    const results = (rows as any[]).map(r => ({
+      ...r,
+      history: typeof r.history === 'string' ? JSON.parse(r.history) : (r.history || []),
+      afterSchoolClub: Boolean(r.afterSchoolClub)
+    }));
+
+    if (results.length === 0) {
+      return res.status(401).json({ error: 'Nesprávný e-mail / variabilní symbol nebo heslo.' });
+    }
+
+    const token = signToken({ type: 'school_portal', email: results[0].parentEmail, id: results[0].id }, 72);
+    res.json({ success: true, token, registration: results[0], registrations: results });
+  } catch (error) {
+    console.error('School portal login error:', error);
+    res.status(500).json({ error: 'Chyba při přihlašování do portálu' });
+  }
+});
+
 // Sync endpoint (Full sync is not ideal for SQL, but we'll adapt specific updates)
 // We should refactor the frontend to use specific endpoints, but for now we'll handle the "sync" 
 // by checking what changed. However, the frontend sends the WHOLE state.
@@ -255,7 +502,7 @@ app.get('/api/data', async (req, res) => {
 
 // Let's implement specific endpoints first.
 
-app.post('/api/schools', async (req, res) => {
+app.post('/api/schools', requireAdmin, async (req, res) => {
   try {
     const school = { ...req.body };
     if (Array.isArray(school.trainingDates)) {
@@ -269,7 +516,7 @@ app.post('/api/schools', async (req, res) => {
   }
 });
 
-app.put('/api/schools/:id', async (req, res) => {
+app.put('/api/schools/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const school = { ...req.body };
@@ -284,7 +531,7 @@ app.put('/api/schools/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/schools/:id', async (req, res) => {
+app.delete('/api/schools/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     await pool.query('DELETE FROM schools WHERE id = ?', [id]);
@@ -295,9 +542,8 @@ app.delete('/api/schools/:id', async (req, res) => {
   }
 });
 
-// ... Similar for camps, gallery, products ...
-
-app.post('/api/camps', async (req, res) => {
+// Camps
+app.post('/api/camps', requireAdmin, async (req, res) => {
   try {
     const camp = req.body;
     await pool.query('INSERT INTO camps SET ?', camp);
@@ -308,7 +554,7 @@ app.post('/api/camps', async (req, res) => {
   }
 });
 
-app.put('/api/camps/:id', async (req, res) => {
+app.put('/api/camps/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const camp = req.body;
@@ -320,7 +566,7 @@ app.put('/api/camps/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/camps/:id', async (req, res) => {
+app.delete('/api/camps/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     await pool.query('DELETE FROM camps WHERE id = ?', [id]);
@@ -332,7 +578,7 @@ app.delete('/api/camps/:id', async (req, res) => {
 });
 
 // Gallery
-app.post('/api/gallery', async (req, res) => {
+app.post('/api/gallery', requireAdmin, async (req, res) => {
   try {
     const image = req.body;
     await pool.query('INSERT INTO gallery_images SET ?', image);
@@ -343,7 +589,7 @@ app.post('/api/gallery', async (req, res) => {
   }
 });
 
-app.delete('/api/gallery/:id', async (req, res) => {
+app.delete('/api/gallery/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     await pool.query('DELETE FROM gallery_images WHERE id = ?', [id]);
@@ -355,7 +601,7 @@ app.delete('/api/gallery/:id', async (req, res) => {
 });
 
 // Products
-app.post('/api/products', async (req, res) => {
+app.post('/api/products', requireAdmin, async (req, res) => {
   try {
     const product = req.body;
     const sqlProduct: any = {
@@ -373,7 +619,7 @@ app.post('/api/products', async (req, res) => {
   }
 });
 
-app.put('/api/products/:id', async (req, res) => {
+app.put('/api/products/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const product = req.body;
@@ -393,7 +639,7 @@ app.put('/api/products/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/products/:id', async (req, res) => {
+app.delete('/api/products/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     await pool.query('DELETE FROM products WHERE id = ?', [id]);
@@ -581,7 +827,7 @@ app.get('/api/smtp/status', async (req, res) => {
 });
 
 // Admin test email endpoint with live connection test & diagnostics
-app.post('/api/test-email', async (req, res) => {
+app.post('/api/test-email', requireAdmin, async (req, res) => {
   try {
     const config = await getSmtpConfig();
     if (!config.isConfigured) {
@@ -760,7 +1006,7 @@ app.post('/api/merch-orders', async (req, res) => {
   }
 });
 
-app.put('/api/merch-orders/:id', async (req, res) => {
+app.put('/api/merch-orders/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -802,7 +1048,7 @@ app.put('/api/merch-orders/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/merch-orders/:id', async (req, res) => {
+app.delete('/api/merch-orders/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     await pool.query('DELETE FROM merch_orders WHERE id = ?', [id]);
@@ -929,7 +1175,7 @@ app.get('/api/rb/status', async (req, res) => {
 });
 
 // Update RB settings & upload certificate
-app.post('/api/rb/config', upload.single('certFile'), async (req, res) => {
+app.post('/api/rb/config', requireAdmin, upload.single('certFile'), async (req, res) => {
   try {
     const { clientId, clientSecret, accountNumber, certPassword, certBase64 } = req.body;
     let certFilename = '';
@@ -965,7 +1211,7 @@ app.post('/api/rb/config', upload.single('certFile'), async (req, res) => {
 });
 
 // Test connection to RB API
-app.post('/api/rb/test', async (req, res) => {
+app.post('/api/rb/test', requireAdmin, async (req, res) => {
   try {
     const result = await testRbConnection();
     res.json(result);
@@ -976,7 +1222,7 @@ app.post('/api/rb/test', async (req, res) => {
 });
 
 // Trigger manual payments sync
-app.post('/api/rb/sync', async (req, res) => {
+app.post('/api/rb/sync', requireAdmin, async (req, res) => {
   try {
     const result = await syncRbPayments(sendEmail);
     res.json(result);
@@ -987,7 +1233,7 @@ app.post('/api/rb/sync', async (req, res) => {
 });
 
 // Get bank payments log
-app.get('/api/rb/logs', async (req, res) => {
+app.get('/api/rb/logs', requireAdmin, async (req, res) => {
   try {
     const logs = await getRbLogs(100);
     res.json(logs);
@@ -998,7 +1244,7 @@ app.get('/api/rb/logs', async (req, res) => {
 });
 
 // Simulate or manually test a single bank payment reconciliation
-app.post('/api/rb/simulate-payment', async (req, res) => {
+app.post('/api/rb/simulate-payment', requireAdmin, async (req, res) => {
   try {
     const { variableSymbol, amount, senderName, message } = req.body;
     const result = await processSinglePayment({
@@ -1297,7 +1543,7 @@ app.post('/api/registrations', async (req, res) => {
   }
 });
 
-app.put('/api/registrations/:id', async (req, res) => {
+app.put('/api/registrations/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -1346,7 +1592,7 @@ app.put('/api/registrations/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/registrations/:id', async (req, res) => {
+app.delete('/api/registrations/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     await pool.query('DELETE FROM registrations WHERE id = ?', [id]);
@@ -1357,7 +1603,7 @@ app.delete('/api/registrations/:id', async (req, res) => {
   }
 });
 
-// Download official 1:1 camp payment confirmation PDF
+// Download official 1:1 camp payment confirmation PDF (authorized for admin/trainer OR parent with registration password)
 app.get('/api/registrations/:id/confirmation-pdf', async (req, res) => {
   try {
     const { id } = req.params;
@@ -1366,6 +1612,18 @@ app.get('/api/registrations/:id/confirmation-pdf', async (req, res) => {
       return res.status(404).json({ error: 'Přihláška na tábor nenalezena' });
     }
     const reg = (rows as any[])[0];
+
+    // Access control: admin, trainer, or parent credentials match
+    const authUser = (req as any).user;
+    const isAuthorized = Boolean(
+      (authUser && (authUser.role === 'admin' || authUser.role === 'trainer')) ||
+      (authUser && authUser.type === 'camp_portal' && authUser.id === reg.id) ||
+      (req.query.password && String(req.query.password).trim() === reg.password) ||
+      (req.query.vs && String(req.query.vs).trim() === reg.variableSymbol)
+    );
+    if (!isAuthorized) {
+      return res.status(403).json({ error: 'Přístup k potvrzení o platbě odepřen.' });
+    }
 
     // Find camp info
     const [campRows] = await pool.query('SELECT * FROM camps WHERE id = ?', [reg.campId]);
@@ -1541,7 +1799,7 @@ app.post('/api/school-registrations', async (req, res) => {
   }
 });
 
-app.put('/api/school-registrations/:id', async (req, res) => {
+app.put('/api/school-registrations/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -1646,7 +1904,7 @@ app.put('/api/school-registrations/:id', async (req, res) => {
   }
 });
 
-// Download official 1:1 payment confirmation PDF
+// Download official 1:1 payment confirmation PDF (authorized for admin/trainer OR parent with registration password)
 app.get('/api/school-registrations/:id/confirmation-pdf', async (req, res) => {
   try {
     const { id } = req.params;
@@ -1655,6 +1913,18 @@ app.get('/api/school-registrations/:id/confirmation-pdf', async (req, res) => {
       return res.status(404).json({ error: 'Přihláška nenalezena' });
     }
     const reg = (rows as any[])[0];
+
+    // Access control: admin, trainer, or parent credentials match
+    const authUser = (req as any).user;
+    const isAuthorized = Boolean(
+      (authUser && (authUser.role === 'admin' || authUser.role === 'trainer')) ||
+      (authUser && authUser.type === 'school_portal' && authUser.id === reg.id) ||
+      (req.query.password && String(req.query.password).trim() === reg.password) ||
+      (req.query.vs && String(req.query.vs).trim() === reg.variableSymbol)
+    );
+    if (!isAuthorized) {
+      return res.status(403).json({ error: 'Přístup k potvrzení o platbě odepřen.' });
+    }
 
     // Find bank payment log for sender account & exact transaction info
     const [bankRows] = await pool.query(
@@ -1700,7 +1970,7 @@ app.get('/api/school-registrations/:id/confirmation-pdf', async (req, res) => {
   }
 });
 
-app.delete('/api/school-registrations/:id', async (req, res) => {
+app.delete('/api/school-registrations/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     await pool.query('DELETE FROM school_registrations WHERE id = ?', [id]);
@@ -1766,7 +2036,7 @@ app.post('/api/contact', async (req, res) => {
 });
 
 // Users
-app.post('/api/users', async (req, res) => {
+app.post('/api/users', requireAdmin, async (req, res) => {
   try {
     const user = req.body;
     const formattedUser = {
@@ -1782,7 +2052,7 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
-app.delete('/api/users/:id', async (req, res) => {
+app.delete('/api/users/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     await pool.query('DELETE FROM users WHERE id = ?', [id]);
@@ -1793,7 +2063,7 @@ app.delete('/api/users/:id', async (req, res) => {
   }
 });
 
-app.put('/api/users/:id', async (req, res) => {
+app.put('/api/users/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -1826,7 +2096,7 @@ app.post('/api/excuses', async (req, res) => {
   }
 });
 
-app.delete('/api/excuses/:id', async (req, res) => {
+app.delete('/api/excuses/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     await pool.query('DELETE FROM excuses WHERE id = ?', [id]);
@@ -1838,7 +2108,7 @@ app.delete('/api/excuses/:id', async (req, res) => {
 });
 
 // Attendance
-app.post('/api/attendance', async (req, res) => {
+app.post('/api/attendance', requireAuth, async (req, res) => {
   try {
     const attendance = req.body;
     const recordsStr = typeof attendance.records === 'string' ? attendance.records : JSON.stringify(attendance.records || {});
@@ -1853,7 +2123,7 @@ app.post('/api/attendance', async (req, res) => {
   }
 });
 
-app.put('/api/attendance/:id', async (req, res) => {
+app.put('/api/attendance/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -1868,8 +2138,8 @@ app.put('/api/attendance/:id', async (req, res) => {
   }
 });
 
-// Products
-app.put('/api/products/:id', async (req, res) => {
+// Products (legacy fallback)
+app.put('/api/products/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const product = req.body;
@@ -1885,7 +2155,7 @@ app.put('/api/products/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/products/:id', async (req, res) => {
+app.delete('/api/products/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     await pool.query('DELETE FROM products WHERE id = ?', [id]);
@@ -1926,7 +2196,7 @@ app.get('/api/settings', async (req, res) => {
   }
 });
 
-app.post('/api/settings', async (req, res) => {
+app.post('/api/settings', requireAdmin, async (req, res) => {
   try {
     const { 
       isMerchEnabled, isTanecniExpresEnabled, isCampsEnabled, isGalleryEnabled, isAboutEnabled, 

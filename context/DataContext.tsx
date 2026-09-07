@@ -112,7 +112,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Fetch all core application data from MySQL database
   const refreshData = async () => {
     try {
-      const response = await fetch('/api/data', { cache: 'no-store' });
+      const token = localStorage.getItem('olymp_admin_token');
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const response = await fetch('/api/data', { 
+        cache: 'no-store',
+        headers
+      });
       const contentType = response.headers.get('content-type') || '';
       
       if (response.ok && contentType.includes('application/json')) {
@@ -190,9 +198,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Standardized API helper that ensures strict persistence in MySQL
   const apiCall = async (endpoint: string, method: string, body?: any) => {
+    const token = localStorage.getItem('olymp_admin_token');
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
     const response = await fetch(endpoint, {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
 

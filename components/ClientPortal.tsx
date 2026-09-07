@@ -20,6 +20,7 @@ const ClientPortal: React.FC = () => {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -55,15 +56,28 @@ const ClientPortal: React.FC = () => {
     setTimeout(() => setCopiedField(null), 2000);
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = registrations.find(r => r.parentEmail === email && r.password === password);
-    if (user) {
-      setCurrentUser(user);
+    setIsLoggingIn(true);
+    setError('');
+    try {
+      const res = await fetch('/api/portal/camp-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.registration) {
+        setError(data.error || 'Nesprávný email nebo heslo.');
+        return;
+      }
+      setCurrentUser(data.registration);
       setIsLoggedIn(true);
       setError('');
-    } else {
-      setError('Nesprávný email nebo heslo.');
+    } catch {
+      setError('Chyba při komunikaci se serverem.');
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 

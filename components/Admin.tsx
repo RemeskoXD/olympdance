@@ -17,63 +17,90 @@ import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { RbBankManager } from './RbBankManager';
 
 const Admin: React.FC = () => {
-  const { users, addUser, updateUser, deleteUser, schools, schoolRegistrations, attendance, excuses, updateAttendance } = useData();
+  const { users, addUser, updateUser, deleteUser, schools, schoolRegistrations, attendance, excuses, updateAttendance, refreshData } = useData();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'schools' | 'camps' | 'gallery' | 'merch' | 'registrations' | 'school_registrations' | 'users' | 'attendance' | 'rb_bank'>('dashboard');
 
-  // Check for persisted login on mount
+  // Check for persisted login on mount and verify token
   useEffect(() => {
-    const storedUserId = localStorage.getItem('olymp_admin_user_id');
-    const storedAuth = localStorage.getItem('olymp_admin_auth');
-    if (storedAuth === 'true' && storedUserId) {
-      if (storedUserId === 'superadmin') {
-         setIsAuthenticated(true);
-         setCurrentUser({ id: 'superadmin', username: 'admin', role: 'admin', name: 'Hlavní administrátor' });
-      } else {
-         const user = users.find(u => u.id === storedUserId);
-         if (user) {
-             setIsAuthenticated(true);
-             setCurrentUser(user);
-             if (user.role === 'trainer') {
-                 setActiveTab('attendance');
-             }
-         }
+    const token = localStorage.getItem('olymp_admin_token');
+    const storedUserStr = localStorage.getItem('olymp_admin_user');
+    if (token && storedUserStr) {
+      try {
+        const user = JSON.parse(storedUserStr);
+        setIsAuthenticated(true);
+        setCurrentUser(user);
+        if (user.role === 'trainer') {
+          setActiveTab('attendance');
+        }
+        // Verify token with backend
+        fetch('/api/admin/verify', {
+          headers: { Authorization: `Bearer ${token}` }
+        }).then(res => {
+          if (!res.ok) {
+            handleLogout();
+          } else {
+            refreshData();
+          }
+        }).catch(() => {});
+      } catch {
+        handleLogout();
       }
     }
-  }, [users]);
+  }, []);
 
-  // Login handler
-  const handleLogin = (e: React.FormEvent) => {
+  // Login handler using secure backend API
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (username === 'admin' && password === 'admin123') { 
-      setIsAuthenticated(true);
-      setCurrentUser({ id: 'superadmin', username: 'admin', role: 'admin', name: 'Hlavní administrátor' });
-      localStorage.setItem('olymp_admin_auth', 'true');
-      localStorage.setItem('olymp_admin_user_id', 'superadmin');
-    } else {
-      const user = users.find(u => u.username === username && u.password === password);
-      if (user) {
-          setIsAuthenticated(true);
-          setCurrentUser(user);
-          localStorage.setItem('olymp_admin_auth', 'true');
-          localStorage.setItem('olymp_admin_user_id', user.id);
-          if (user.role === 'trainer') {
-              setActiveTab('attendance');
-          }
-      } else {
-          alert('Špatné jméno nebo heslo');
+    setLoginError('');
+    setIsLoading(true);
+
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.token) {
+        setLoginError(data.error || 'Neplatné přihlašovací údaje');
+        setIsLoading(false);
+        return;
       }
+
+      localStorage.setItem('olymp_admin_token', data.token);
+      localStorage.setItem('olymp_admin_user', JSON.stringify(data.user));
+      localStorage.setItem('olymp_admin_auth', 'true');
+      localStorage.setItem('olymp_admin_user_id', data.user.id);
+      setIsAuthenticated(true);
+      setCurrentUser(data.user);
+      if (data.user.role === 'trainer') {
+        setActiveTab('attendance');
+      }
+      setPassword('');
+      await refreshData();
+    } catch (err) {
+      console.error('Login error:', err);
+      setLoginError('Chyba při komunikaci se serverem.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
     setCurrentUser(null);
+    localStorage.removeItem('olymp_admin_token');
+    localStorage.removeItem('olymp_admin_user');
     localStorage.removeItem('olymp_admin_auth');
     localStorage.removeItem('olymp_admin_user_id');
+    refreshData();
   };
 
   if (!isAuthenticated) {
@@ -85,7 +112,7 @@ const Admin: React.FC = () => {
                 <Lock size={32} />
             </div>
             <h2 className="text-2xl font-bold text-gray-900">Administrace</h2>
-            <p className="text-gray-500 text-sm mt-2">Přístup pouze pro správce</p>
+            <p className="text-gray-500 text-sm mt-2">Zabezpečený přístup pouze pro správce</p>
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
@@ -110,12 +137,23 @@ const Admin: React.FC = () => {
                   required
                 />
             </div>
-            <button type="submit" className="w-full bg-brand-blue text-white font-bold py-3 rounded-xl hover:bg-blue-800 transition-colors">
-              Přihlásit se
+            {loginError && (
+              <div className="p-3 bg-red-50 text-red-700 text-sm rounded-lg flex items-center gap-2 border border-red-200">
+                <AlertCircle size={16} className="shrink-0" />
+                <span>{loginError}</span>
+              </div>
+            )}
+            <button 
+              type="submit" 
+              disabled={isLoading}
+              className="w-full bg-brand-blue text-white font-bold py-3 rounded-xl hover:bg-blue-800 transition-colors disabled:opacity-50"
+            >
+              {isLoading ? 'Ověřuji...' : 'Přihlásit se'}
             </button>
           </form>
-          <div className="mt-6 text-center text-xs text-gray-400">
-            Tip: Přístup pro hlavního správce (admin / admin123)
+          <div className="mt-6 text-center text-xs text-gray-400 flex items-center justify-center gap-1">
+            <ShieldCheck size={14} className="text-green-600" />
+            <span>Systém chráněn šifrovaným tokenem a ochranou proti útokům</span>
           </div>
         </div>
       </div>

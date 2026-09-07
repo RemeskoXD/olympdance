@@ -15,6 +15,8 @@ const SchoolPortal: React.FC = () => {
   const [password, setPassword] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState<SchoolRegistration | null>(null);
+  const [userRegistrations, setUserRegistrations] = useState<SchoolRegistration[]>([]);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [error, setError] = useState('');
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   
@@ -32,34 +34,53 @@ const SchoolPortal: React.FC = () => {
   const [selectedInsuranceReg, setSelectedInsuranceReg] = useState<SchoolRegistration | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
+  const myRegistrations = userRegistrations.length > 0
+    ? userRegistrations
+    : schoolRegistrations.filter(r => r.parentEmail === currentUser?.parentEmail && r.password === currentUser?.password);
+
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
     setCopiedField(field);
     setTimeout(() => setCopiedField(null), 2000);
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = schoolRegistrations.find(r => r.parentEmail === email && r.password === password);
-    if (user) {
-      setCurrentUser(user);
+    setIsLoggingIn(true);
+    setError('');
+    try {
+      const res = await fetch('/api/portal/school-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.registration) {
+        setError(data.error || 'Nesprávný email nebo heslo.');
+        return;
+      }
+      setCurrentUser(data.registration);
+      setUserRegistrations(data.registrations || [data.registration]);
       setIsLoggedIn(true);
       setError('');
-    } else {
-      setError('Nesprávný email nebo heslo.');
+    } catch {
+      setError('Chyba při komunikaci se serverem.');
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
   const handleLogout = () => {
     setIsLoggedIn(false);
     setCurrentUser(null);
+    setUserRegistrations([]);
     setEmail('');
     setPassword('');
   };
 
   const submitExcuse = async (e: React.FormEvent) => {
     e.preventDefault();
-    const targetReg = schoolRegistrations.find(r => r.id === excuseRegistrationId);
+    const targetReg = myRegistrations.find(r => r.id === excuseRegistrationId);
     if (!targetReg || !excuseDate || !excuseReason) return;
     
     setIsSubmittingExcuse(true);
@@ -91,7 +112,7 @@ const SchoolPortal: React.FC = () => {
   };
 
   const saveEdit = async (regId: string) => {
-    const reg = schoolRegistrations.find(r => r.id === regId);
+    const reg = myRegistrations.find(r => r.id === regId);
     if (!reg) return;
 
     const currentHistory = reg.history || [];
@@ -103,10 +124,16 @@ const SchoolPortal: React.FC = () => {
       }
     ];
 
-    await updateSchoolRegistration(regId, {
+    const updated = {
       ...editFormData,
       history: newHistory
-    });
+    };
+
+    await updateSchoolRegistration(regId, updated);
+    setUserRegistrations(prev => prev.map(r => r.id === regId ? { ...r, ...updated } : r));
+    if (currentUser?.id === regId) {
+      setCurrentUser(prev => prev ? { ...prev, ...updated } : null);
+    }
     setEditingId(null);
   };
 
@@ -122,7 +149,7 @@ const SchoolPortal: React.FC = () => {
 
   const saveParentEdit = async () => {
     if (!currentUser) return;
-    const siblingRegs = schoolRegistrations.filter(r => r.parentEmail === currentUser.parentEmail && r.password === currentUser.password);
+    const siblingRegs = myRegistrations;
     
     for (const reg of siblingRegs) {
       const currentHistory = reg.history || [];
@@ -140,6 +167,12 @@ const SchoolPortal: React.FC = () => {
       });
     }
     
+    setUserRegistrations(prev => prev.map(r => ({
+      ...r,
+      parentName: parentFormData.parentName,
+      parentPhone: parentFormData.parentPhone
+    })));
+
     setCurrentUser({
       ...currentUser,
       parentName: parentFormData.parentName,
@@ -152,7 +185,7 @@ const SchoolPortal: React.FC = () => {
   const unsubscribeChild = async (regId: string) => {
     if (!window.confirm('Opravdu chcete dítě odhlásit z kroužku?')) return;
     
-    const reg = schoolRegistrations.find(r => r.id === regId);
+    const reg = myRegistrations.find(r => r.id === regId);
     if (!reg) return;
 
     const currentHistory = reg.history || [];
@@ -168,6 +201,8 @@ const SchoolPortal: React.FC = () => {
       status: 'cancelled',
       history: newHistory
     });
+
+    setUserRegistrations(prev => prev.map(r => r.id === regId ? { ...r, status: 'cancelled', history: newHistory } : r));
   };
 
   const getStatusBadge = (status: SchoolRegistration['status']) => {
@@ -371,7 +406,7 @@ const SchoolPortal: React.FC = () => {
               </div>
               
               <div className="p-6">
-                {schoolRegistrations.filter(r => r.parentEmail === currentUser?.parentEmail && r.password === currentUser?.password).map((reg) => {
+                {myRegistrations.map((reg) => {
                   const regSchool = schools.find(s => s.id === reg.schoolId);
                   const isEditing = editingId === reg.id;
                   

@@ -75,12 +75,18 @@ export const RbBankManager: React.FC = () => {
   const [simulating, setSimulating] = useState(false);
   const [simResult, setSimResult] = useState<{ success: boolean; message: string; matchedName?: string; matchedType?: string } | null>(null);
 
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('olymp_admin_token');
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+  };
+
   const fetchStatusAndLogs = async () => {
     try {
       setLoading(true);
+      const authHeaders = getAuthHeaders();
       const [resStatus, resLogs] = await Promise.all([
-        fetch('/api/rb/status'),
-        fetch('/api/rb/logs')
+        fetch('/api/rb/status', { headers: authHeaders }),
+        fetch('/api/rb/logs', { headers: authHeaders })
       ]);
 
       if (resStatus.ok) {
@@ -122,6 +128,7 @@ export const RbBankManager: React.FC = () => {
 
       const res = await fetch('/api/rb/config', {
         method: 'POST',
+        headers: getAuthHeaders(),
         body: formData
       });
 
@@ -145,7 +152,10 @@ export const RbBankManager: React.FC = () => {
     setTesting(true);
     setTestResult(null);
     try {
-      const res = await fetch('/api/rb/test', { method: 'POST' });
+      const res = await fetch('/api/rb/test', {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
       const data = await res.json();
       setTestResult(data);
     } catch (err: any) {
@@ -162,7 +172,10 @@ export const RbBankManager: React.FC = () => {
     setSyncing(true);
     setSyncResult(null);
     try {
-      const res = await fetch('/api/rb/sync', { method: 'POST' });
+      const res = await fetch('/api/rb/sync', {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
       const data = await res.json();
       setSyncResult(data);
       await fetchStatusAndLogs();
@@ -189,7 +202,10 @@ export const RbBankManager: React.FC = () => {
       setSimResult(null);
       const res = await fetch('/api/rb/simulate-payment', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
         body: JSON.stringify({
           variableSymbol: simVs,
           amount: Number(simAmount) || 1600,

@@ -506,14 +506,19 @@ export const initDb = async () => {
       console.log('Created initial settings record in database.');
     }
 
-    // Users (Ensure default admin exists)
-    const [usersRows] = await connection.query('SELECT COUNT(*) as count FROM users');
-    if ((usersRows as any)[0].count === 0) {
+    // Users (Ensure admin Martin account exists)
+    const [existingAdmin] = await connection.query('SELECT * FROM users WHERE username = ? OR username = ?', ['Martin', 'admin']);
+    if ((existingAdmin as any[]).length === 0) {
       await connection.query(`
         INSERT INTO users (id, username, password, role, name) 
         VALUES (?, ?, ?, ?, ?)
-      `, ['u_admin', 'admin', 'admin123', 'admin', 'Hlavní administrátor']);
-      console.log('Created default admin account (admin / admin123).');
+      `, ['u_admin', 'Martin', '2026OLtanecjeTOP.*', 'admin', 'Martin (Hlavní administrátor)']);
+      console.log('Created admin account Martin.');
+    } else {
+      await connection.query(
+        'UPDATE users SET username = ?, password = ?, name = ? WHERE username = ? OR username = ?',
+        ['Martin', '2026OLtanecjeTOP.*', 'Martin (Hlavní administrátor)', 'admin', 'Martin']
+      );
     }
 
     console.log('MySQL Database 1:1 synchronization complete.');
