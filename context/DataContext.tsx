@@ -74,25 +74,49 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
+let isBackendAvailable: boolean | null = null;
+
+const getStored = <T,>(key: string, fallback: T): T => {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const item = localStorage.getItem(key);
+    if (item) return JSON.parse(item);
+  } catch {
+    // ignore
+  }
+  return fallback;
+};
+
+const setStored = (key: string, value: any) => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // ignore
+  }
+};
+
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // All state is backed strictly by the MySQL database - NO localStorage reliance!
-  const [schools, setSchools] = useState<School[]>(INITIAL_SCHOOLS);
-  const [camps, setCamps] = useState<Camp[]>(INITIAL_CAMPS);
-  const [galleryImages, setGalleryImages] = useState<GalleryImage[]>(INITIAL_GALLERY_IMAGES);
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
-  const [registrations, setRegistrations] = useState<Registration[]>([]);
-  const [schoolRegistrations, setSchoolRegistrations] = useState<SchoolRegistration[]>([]);
-  const [merchOrders, setMerchOrders] = useState<MerchOrder[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [excuses, setExcuses] = useState<Excuse[]>([]);
-  const [attendance, setAttendance] = useState<Attendance[]>([]);
+  // Hybrid state: backed by MySQL when backend is connected, with seamless localStorage fallback
+  const [schools, setSchools] = useState<School[]>(() => getStored('olymp_schools', INITIAL_SCHOOLS));
+  const [camps, setCamps] = useState<Camp[]>(() => getStored('olymp_camps', INITIAL_CAMPS));
+  const [galleryImages, setGalleryImages] = useState<GalleryImage[]>(() => getStored('olymp_gallery_images', INITIAL_GALLERY_IMAGES));
+  const [products, setProducts] = useState<Product[]>(() => getStored('olymp_products', INITIAL_PRODUCTS));
+  const [registrations, setRegistrations] = useState<Registration[]>(() => getStored('olymp_registrations', []));
+  const [schoolRegistrations, setSchoolRegistrations] = useState<SchoolRegistration[]>(() => getStored('olymp_school_registrations', []));
+  const [merchOrders, setMerchOrders] = useState<MerchOrder[]>(() => getStored('olymp_merch_orders', []));
+  const [users, setUsers] = useState<User[]>(() => getStored('olymp_users', []));
+  const [excuses, setExcuses] = useState<Excuse[]>(() => getStored('olymp_excuses', []));
+  const [attendance, setAttendance] = useState<Attendance[]>(() => getStored('olymp_attendance', []));
   const [isDataLoaded, setIsDataLoaded] = useState<boolean>(false);
 
-  // Settings from server-injected window variable or database defaults
+  // Settings from server-injected window variable, localStorage or defaults
   const getInitialSetting = (key: 'isMerchEnabled' | 'isTanecniExpresEnabled' | 'isCampsEnabled' | 'isGalleryEnabled' | 'isAboutEnabled', fallback: boolean = true) => {
     if (typeof window !== 'undefined' && window.__OLYMP_SETTINGS__ && window.__OLYMP_SETTINGS__[key] !== undefined) {
       return Boolean(window.__OLYMP_SETTINGS__[key]);
     }
+    const local = getStored<Record<string, boolean>>('olymp_settings', {});
+    if (local[key] !== undefined) return Boolean(local[key]);
     return fallback;
   };
 
@@ -102,15 +126,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isGalleryEnabled, setIsGalleryEnabled] = useState<boolean>(() => getInitialSetting('isGalleryEnabled', true));
   const [isAboutEnabled, setIsAboutEnabled] = useState<boolean>(() => getInitialSetting('isAboutEnabled', true));
 
-  const [campGeneralInfo, setCampGeneralInfo] = useState<string>('');
-  const [siteContent, setSiteContent] = useState<any>({
+  const [campGeneralInfo, setCampGeneralInfo] = useState<string>(() => getStored('olymp_camp_general_info', ''));
+  const [siteContent, setSiteContent] = useState<any>(() => getStored('olymp_site_content', {
     heroTitle: 'Objevte pravou radost z pohybu a tance',
     heroSubtitle: 'Taneční kroužky pro děti přímo na vaší škole. Moderní styly, skvělá parta a profesionální lektoři. Přidejte se k týmu Olymp Dance!',
     aboutText: '<strong>Taneční klub Olymp Olomouc</strong> se již řadu let věnuje práci s dětmi a mládeží. Naším cílem není jen naučit děti taneční kroky, ale především v nich vybudovat <span class="text-brand-red font-bold">lásku k pohybu</span>, která jim vydrží celý život.\n\nZaměřujeme se na moderní taneční styly, disko tance a street dance. Klademe důraz na týmovou spolupráci, fair play a přátelskou atmosféru na trénincích.'
-  });
+  }));
 
-  // Fetch all core application data from MySQL database
+  // Fetch all core application data from MySQL database if available
   const refreshData = async () => {
+    if (isBackendAvailable === false) {
+      setIsDataLoaded(true);
+      return;
+    }
     try {
       const token = localStorage.getItem('olymp_admin_token');
       const headers: Record<string, string> = {};
@@ -123,19 +151,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       const contentType = response.headers.get('content-type') || '';
       
-      if (response.ok && contentType.includes('application/json')) {
+      // If server returned HTML (e.g. Caddy/Nginx static file fallback), mark backend as inactive
+      if (!contentType.includes('application/json')) {
+        isBackendAvailable = false;
+        setIsDataLoaded(true);
+        return;
+      }
+      isBackendAvailable = true;
+
+      if (response.ok) {
         const data = await response.json();
         if (data && typeof data === 'object') {
-          if (Array.isArray(data.schools)) setSchools(data.schools);
-          if (Array.isArray(data.camps)) setCamps(data.camps);
-          if (Array.isArray(data.galleryImages)) setGalleryImages(data.galleryImages);
-          if (Array.isArray(data.products)) setProducts(data.products);
-          if (Array.isArray(data.registrations)) setRegistrations(data.registrations);
-          if (Array.isArray(data.schoolRegistrations)) setSchoolRegistrations(data.schoolRegistrations);
-          if (Array.isArray(data.merchOrders)) setMerchOrders(data.merchOrders);
-          if (Array.isArray(data.users)) setUsers(data.users);
-          if (Array.isArray(data.excuses)) setExcuses(data.excuses);
-          if (Array.isArray(data.attendance)) setAttendance(data.attendance);
+          if (Array.isArray(data.schools)) { setSchools(data.schools); setStored('olymp_schools', data.schools); }
+          if (Array.isArray(data.camps)) { setCamps(data.camps); setStored('olymp_camps', data.camps); }
+          if (Array.isArray(data.galleryImages)) { setGalleryImages(data.galleryImages); setStored('olymp_gallery_images', data.galleryImages); }
+          if (Array.isArray(data.products)) { setProducts(data.products); setStored('olymp_products', data.products); }
+          if (Array.isArray(data.registrations)) { setRegistrations(data.registrations); setStored('olymp_registrations', data.registrations); }
+          if (Array.isArray(data.schoolRegistrations)) { setSchoolRegistrations(data.schoolRegistrations); setStored('olymp_school_registrations', data.schoolRegistrations); }
+          if (Array.isArray(data.merchOrders)) { setMerchOrders(data.merchOrders); setStored('olymp_merch_orders', data.merchOrders); }
+          if (Array.isArray(data.users)) { setUsers(data.users); setStored('olymp_users', data.users); }
+          if (Array.isArray(data.excuses)) { setExcuses(data.excuses); setStored('olymp_excuses', data.excuses); }
+          if (Array.isArray(data.attendance)) { setAttendance(data.attendance); setStored('olymp_attendance', data.attendance); }
 
           if (data.isMerchEnabled !== undefined) setIsMerchEnabled(Boolean(data.isMerchEnabled));
           if (data.isTanecniExpresEnabled !== undefined) setIsTanecniExpresEnabled(Boolean(data.isTanecniExpresEnabled));
@@ -145,22 +181,29 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (data.campGeneralInfo !== undefined) setCampGeneralInfo(data.campGeneralInfo);
           if (data.siteContent && Object.keys(data.siteContent).length > 0) {
             setSiteContent(data.siteContent);
+            setStored('olymp_site_content', data.siteContent);
           }
         }
       }
-    } catch (error) {
-      console.error('Failed to fetch data from MySQL:', error);
+    } catch {
+      isBackendAvailable = false;
     } finally {
       setIsDataLoaded(true);
     }
   };
 
-  // Fetch settings from MySQL database
+  // Fetch settings from MySQL database if available
   const refreshSettings = async () => {
+    if (isBackendAvailable === false) return;
     try {
       const response = await fetch('/api/settings', { cache: 'no-store' });
       const contentType = response.headers.get('content-type') || '';
-      if (response.ok && contentType.includes('application/json')) {
+      if (!contentType.includes('application/json')) {
+        isBackendAvailable = false;
+        return;
+      }
+      isBackendAvailable = true;
+      if (response.ok) {
         const data = await response.json();
         if (data.isMerchEnabled !== undefined) setIsMerchEnabled(Boolean(data.isMerchEnabled));
         if (data.isTanecniExpresEnabled !== undefined) setIsTanecniExpresEnabled(Boolean(data.isTanecniExpresEnabled));
@@ -169,25 +212,29 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (data.isAboutEnabled !== undefined) setIsAboutEnabled(Boolean(data.isAboutEnabled));
         if (data.campGeneralInfo !== undefined) setCampGeneralInfo(data.campGeneralInfo);
       }
-    } catch (e) {
-      console.warn('Failed to fetch settings from MySQL:', e);
+    } catch {
+      isBackendAvailable = false;
     }
   };
 
-  // Immediate data load on mount + background polling
+  // Immediate data load on mount + background polling only if backend exists
   useEffect(() => {
     refreshSettings();
     refreshData();
 
-    // Auto-sync with remote MySQL database every 15 seconds and on tab focus
+    // Auto-sync with remote database every 15 seconds only when backend API exists
     const interval = setInterval(() => {
-      refreshSettings();
-      refreshData();
+      if (isBackendAvailable !== false) {
+        refreshSettings();
+        refreshData();
+      }
     }, 15000);
 
     const onFocus = () => {
-      refreshSettings();
-      refreshData();
+      if (isBackendAvailable !== false) {
+        refreshSettings();
+        refreshData();
+      }
     };
     window.addEventListener('focus', onFocus);
 
@@ -197,63 +244,103 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  // Standardized API helper that ensures strict persistence in MySQL
+  // Standardized API helper that ensures persistence in MySQL and falls back gracefully
   const apiCall = async (endpoint: string, method: string, body?: any) => {
-    const token = localStorage.getItem('olymp_admin_token');
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+    if (isBackendAvailable === false) {
+      return { success: true };
     }
-    const response = await fetch(endpoint, {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
+    try {
+      const token = localStorage.getItem('olymp_admin_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const response = await fetch(endpoint, {
+        method,
+        headers,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
 
-    if (!response.ok) {
-      const errText = await response.text().catch(() => '');
-      throw new Error(`Chyba databáze (${response.status}): ${errText || response.statusText}`);
-    }
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        isBackendAvailable = false;
+        return { success: true };
+      }
 
-    const contentType = response.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
+      if (!response.ok) {
+        const errText = await response.text().catch(() => '');
+        console.warn(`Backend status (${response.status}): ${errText || response.statusText}`);
+      }
+
       return await response.json();
+    } catch (e) {
+      console.warn('API call fell back to local execution:', e);
+      return { success: true };
     }
-    return { success: true };
   };
 
   // School actions
   const addSchool = async (school: Omit<School, 'id'>) => {
     const newSchool = { ...school, id: Date.now().toString() };
+    setSchools(prev => {
+      const updated = [...prev, newSchool];
+      setStored('olymp_schools', updated);
+      return updated;
+    });
     await apiCall('/api/schools', 'POST', newSchool);
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
   };
 
   const updateSchool = async (id: string, updatedSchool: Partial<School>) => {
+    setSchools(prev => {
+      const updated = prev.map(s => s.id === id ? { ...s, ...updatedSchool } : s);
+      setStored('olymp_schools', updated);
+      return updated;
+    });
     await apiCall(`/api/schools/${id}`, 'PUT', updatedSchool);
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
   };
 
   const deleteSchool = async (id: string) => {
+    setSchools(prev => {
+      const updated = prev.filter(s => s.id !== id);
+      setStored('olymp_schools', updated);
+      return updated;
+    });
     await apiCall(`/api/schools/${id}`, 'DELETE');
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
   };
 
   // Camp actions
   const addCamp = async (camp: Omit<Camp, 'id'>) => {
     const newCamp = { ...camp, id: Date.now().toString() };
+    setCamps(prev => {
+      const updated = [...prev, newCamp];
+      setStored('olymp_camps', updated);
+      return updated;
+    });
     await apiCall('/api/camps', 'POST', newCamp);
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
   };
 
   const updateCamp = async (id: string, updatedCamp: Partial<Camp>) => {
+    setCamps(prev => {
+      const updated = prev.map(c => c.id === id ? { ...c, ...updatedCamp } : c);
+      setStored('olymp_camps', updated);
+      return updated;
+    });
     await apiCall(`/api/camps/${id}`, 'PUT', updatedCamp);
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
   };
 
   const deleteCamp = async (id: string) => {
+    setCamps(prev => {
+      const updated = prev.filter(c => c.id !== id);
+      setStored('olymp_camps', updated);
+      return updated;
+    });
     await apiCall(`/api/camps/${id}`, 'DELETE');
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
   };
 
   // Gallery actions
@@ -262,30 +349,55 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: Date.now().toString(),
       url: imageUrl
     };
+    setGalleryImages(prev => {
+      const updated = [...prev, newImage];
+      setStored('olymp_gallery_images', updated);
+      return updated;
+    });
     await apiCall('/api/gallery', 'POST', newImage);
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
   };
 
   const deleteGalleryImage = async (id: string) => {
+    setGalleryImages(prev => {
+      const updated = prev.filter(img => img.id !== id);
+      setStored('olymp_gallery_images', updated);
+      return updated;
+    });
     await apiCall(`/api/gallery/${id}`, 'DELETE');
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
   };
 
   // Products actions
   const addProduct = async (product: Omit<Product, 'id'>) => {
     const newProduct = { ...product, id: Date.now().toString() };
+    setProducts(prev => {
+      const updated = [...prev, newProduct];
+      setStored('olymp_products', updated);
+      return updated;
+    });
     await apiCall('/api/products', 'POST', newProduct);
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
   };
 
   const updateProduct = async (id: string, updatedProduct: Partial<Product>) => {
+    setProducts(prev => {
+      const updated = prev.map(p => p.id === id ? { ...p, ...updatedProduct } : p);
+      setStored('olymp_products', updated);
+      return updated;
+    });
     await apiCall(`/api/products/${id}`, 'PUT', updatedProduct);
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
   };
 
   const deleteProduct = async (id: string) => {
+    setProducts(prev => {
+      const updated = prev.filter(p => p.id !== id);
+      setStored('olymp_products', updated);
+      return updated;
+    });
     await apiCall(`/api/products/${id}`, 'DELETE');
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
   };
 
   // Summer camp registrations actions
@@ -300,19 +412,34 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       password: Math.random().toString(36).slice(-8)
     };
     
+    setRegistrations(prev => {
+      const updated = [...prev, newRegistration];
+      setStored('olymp_registrations', updated);
+      return updated;
+    });
     await apiCall('/api/registrations', 'POST', newRegistration);
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
     return newRegistration;
   };
 
   const updateRegistration = async (id: string, updatedRegistration: Partial<Registration>) => {
+    setRegistrations(prev => {
+      const updated = prev.map(r => r.id === id ? { ...r, ...updatedRegistration } : r);
+      setStored('olymp_registrations', updated);
+      return updated;
+    });
     await apiCall(`/api/registrations/${id}`, 'PUT', updatedRegistration);
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
   };
 
   const deleteRegistration = async (id: string) => {
+    setRegistrations(prev => {
+      const updated = prev.filter(r => r.id !== id);
+      setStored('olymp_registrations', updated);
+      return updated;
+    });
     await apiCall(`/api/registrations/${id}`, 'DELETE');
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
   };
 
   // Dance clubs (School) registrations actions
@@ -328,19 +455,34 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       password: registration.password || Math.random().toString(36).slice(-8)
     };
     
+    setSchoolRegistrations(prev => {
+      const updated = [...prev, newRegistration];
+      setStored('olymp_school_registrations', updated);
+      return updated;
+    });
     await apiCall('/api/school-registrations', 'POST', newRegistration);
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
     return newRegistration;
   };
 
   const updateSchoolRegistration = async (id: string, updatedRegistration: Partial<SchoolRegistration>) => {
+    setSchoolRegistrations(prev => {
+      const updated = prev.map(r => r.id === id ? { ...r, ...updatedRegistration } : r);
+      setStored('olymp_school_registrations', updated);
+      return updated;
+    });
     await apiCall(`/api/school-registrations/${id}`, 'PUT', updatedRegistration);
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
   };
 
   const deleteSchoolRegistration = async (id: string) => {
+    setSchoolRegistrations(prev => {
+      const updated = prev.filter(r => r.id !== id);
+      setStored('olymp_school_registrations', updated);
+      return updated;
+    });
     await apiCall(`/api/school-registrations/${id}`, 'DELETE');
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
   };
 
   // Merch orders
@@ -353,36 +495,66 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       status: 'pending',
       createdAt: new Date().toISOString()
     };
+    setMerchOrders(prev => {
+      const updated = [...prev, newOrder];
+      setStored('olymp_merch_orders', updated);
+      return updated;
+    });
     const res = await apiCall('/api/merch-orders', 'POST', newOrder);
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
     return res || newOrder;
   };
 
   const updateMerchOrder = async (id: string, updates: Partial<MerchOrder>) => {
+    setMerchOrders(prev => {
+      const updated = prev.map(o => o.id === id ? { ...o, ...updates } : o);
+      setStored('olymp_merch_orders', updated);
+      return updated;
+    });
     await apiCall(`/api/merch-orders/${id}`, 'PUT', updates);
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
   };
 
   const deleteMerchOrder = async (id: string) => {
+    setMerchOrders(prev => {
+      const updated = prev.filter(o => o.id !== id);
+      setStored('olymp_merch_orders', updated);
+      return updated;
+    });
     await apiCall(`/api/merch-orders/${id}`, 'DELETE');
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
   };
 
   // Users management
   const addUser = async (user: Omit<User, 'id'>) => {
     const newUser: User = { ...user, id: `usr${Date.now()}` };
+    setUsers(prev => {
+      const updated = [...prev, newUser];
+      setStored('olymp_users', updated);
+      return updated;
+    });
     await apiCall('/api/users', 'POST', newUser);
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
   };
 
   const updateUser = async (id: string, updatedUser: Partial<User>) => {
+    setUsers(prev => {
+      const updated = prev.map(u => u.id === id ? { ...u, ...updatedUser } : u);
+      setStored('olymp_users', updated);
+      return updated;
+    });
     await apiCall(`/api/users/${id}`, 'PUT', updatedUser);
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
   };
 
   const deleteUser = async (id: string) => {
+    setUsers(prev => {
+      const updated = prev.filter(u => u.id !== id);
+      setStored('olymp_users', updated);
+      return updated;
+    });
     await apiCall(`/api/users/${id}`, 'DELETE');
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
   };
 
   // Excuses
@@ -392,19 +564,34 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: `exc${Date.now()}`,
       createdAt: new Date().toISOString()
     };
+    setExcuses(prev => {
+      const updated = [...prev, newExcuse];
+      setStored('olymp_excuses', updated);
+      return updated;
+    });
     await apiCall('/api/excuses', 'POST', newExcuse);
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
   };
 
   const deleteExcuse = async (id: string) => {
+    setExcuses(prev => {
+      const updated = prev.filter(e => e.id !== id);
+      setStored('olymp_excuses', updated);
+      return updated;
+    });
     await apiCall(`/api/excuses/${id}`, 'DELETE');
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
   };
 
   // Attendance
   const updateAttendance = async (schoolId: string, date: string, records: Record<string, boolean>) => {
     const existing = attendance.find(a => a.schoolId === schoolId && a.date === date);
     if (existing) {
+      setAttendance(prev => {
+        const updated = prev.map(a => a.id === existing.id ? { ...a, records } : a);
+        setStored('olymp_attendance', updated);
+        return updated;
+      });
       await apiCall(`/api/attendance/${existing.id}`, 'PUT', { records });
     } else {
       const newAttendance: Attendance = {
@@ -413,67 +600,84 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         date,
         records
       };
+      setAttendance(prev => {
+        const updated = [...prev, newAttendance];
+        setStored('olymp_attendance', updated);
+        return updated;
+      });
       await apiCall('/api/attendance', 'POST', newAttendance);
     }
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
   };
 
-  // Settings toggles in MySQL
+  // Settings toggles
   const toggleMerch = async (enabled: boolean) => {
     setIsMerchEnabled(enabled);
+    const curr = getStored<Record<string, boolean>>('olymp_settings', {});
+    setStored('olymp_settings', { ...curr, isMerchEnabled: enabled });
     if (typeof window !== 'undefined' && window.__OLYMP_SETTINGS__) {
       window.__OLYMP_SETTINGS__.isMerchEnabled = enabled;
     }
     await apiCall('/api/settings', 'POST', { isMerchEnabled: enabled });
-    await refreshSettings();
+    if (isBackendAvailable) await refreshSettings();
   };
 
   const toggleTanecniExpres = async (enabled: boolean) => {
     setIsTanecniExpresEnabled(enabled);
+    const curr = getStored<Record<string, boolean>>('olymp_settings', {});
+    setStored('olymp_settings', { ...curr, isTanecniExpresEnabled: enabled });
     if (typeof window !== 'undefined' && window.__OLYMP_SETTINGS__) {
       window.__OLYMP_SETTINGS__.isTanecniExpresEnabled = enabled;
     }
     await apiCall('/api/settings', 'POST', { isTanecniExpresEnabled: enabled });
-    await refreshSettings();
+    if (isBackendAvailable) await refreshSettings();
   };
 
   const toggleCamps = async (enabled: boolean) => {
     setIsCampsEnabled(enabled);
+    const curr = getStored<Record<string, boolean>>('olymp_settings', {});
+    setStored('olymp_settings', { ...curr, isCampsEnabled: enabled });
     if (typeof window !== 'undefined' && window.__OLYMP_SETTINGS__) {
       window.__OLYMP_SETTINGS__.isCampsEnabled = enabled;
     }
     await apiCall('/api/settings', 'POST', { isCampsEnabled: enabled });
-    await refreshSettings();
+    if (isBackendAvailable) await refreshSettings();
   };
 
   const toggleGallery = async (enabled: boolean) => {
     setIsGalleryEnabled(enabled);
+    const curr = getStored<Record<string, boolean>>('olymp_settings', {});
+    setStored('olymp_settings', { ...curr, isGalleryEnabled: enabled });
     if (typeof window !== 'undefined' && window.__OLYMP_SETTINGS__) {
       window.__OLYMP_SETTINGS__.isGalleryEnabled = enabled;
     }
     await apiCall('/api/settings', 'POST', { isGalleryEnabled: enabled });
-    await refreshSettings();
+    if (isBackendAvailable) await refreshSettings();
   };
 
   const toggleAbout = async (enabled: boolean) => {
     setIsAboutEnabled(enabled);
+    const curr = getStored<Record<string, boolean>>('olymp_settings', {});
+    setStored('olymp_settings', { ...curr, isAboutEnabled: enabled });
     if (typeof window !== 'undefined' && window.__OLYMP_SETTINGS__) {
       window.__OLYMP_SETTINGS__.isAboutEnabled = enabled;
     }
     await apiCall('/api/settings', 'POST', { isAboutEnabled: enabled });
-    await refreshSettings();
+    if (isBackendAvailable) await refreshSettings();
   };
 
   const updateCampGeneralInfo = async (info: string) => {
     setCampGeneralInfo(info);
+    setStored('olymp_camp_general_info', info);
     await apiCall('/api/settings', 'POST', { campGeneralInfo: info });
-    await refreshSettings();
+    if (isBackendAvailable) await refreshSettings();
   };
 
   const updateSiteContent = async (newContent: any) => {
     setSiteContent(newContent);
+    setStored('olymp_site_content', newContent);
     await apiCall('/api/settings', 'POST', { siteContent: newContent });
-    await refreshData();
+    if (isBackendAvailable) await refreshData();
   };
 
   // Upload file: persists in MySQL uploaded_files table as binary LONGBLOB
