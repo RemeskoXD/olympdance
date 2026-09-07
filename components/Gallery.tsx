@@ -5,6 +5,14 @@ import { useData } from '../context/DataContext';
 const Gallery: React.FC = () => {
   const { galleryImages } = useData();
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [failedKeys, setFailedKeys] = useState<Set<string>>(new Set());
+
+  const visibleImages = galleryImages.filter(img => 
+    img && 
+    img.url && 
+    !failedKeys.has(img.id || img.url) && 
+    !img.url.includes('photo-test-delete-verification')
+  );
 
   const openLightbox = (index: number) => {
     setSelectedIndex(index);
@@ -18,15 +26,15 @@ const Gallery: React.FC = () => {
 
   const nextImage = useCallback((e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (selectedIndex === null) return;
-    setSelectedIndex((prev) => (prev !== null && prev < galleryImages.length - 1 ? prev + 1 : 0));
-  }, [selectedIndex, galleryImages.length]);
+    if (selectedIndex === null || visibleImages.length === 0) return;
+    setSelectedIndex((prev) => (prev !== null && prev < visibleImages.length - 1 ? prev + 1 : 0));
+  }, [selectedIndex, visibleImages.length]);
 
   const prevImage = useCallback((e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (selectedIndex === null) return;
-    setSelectedIndex((prev) => (prev !== null && prev > 0 ? prev - 1 : galleryImages.length - 1));
-  }, [selectedIndex, galleryImages.length]);
+    if (selectedIndex === null || visibleImages.length === 0) return;
+    setSelectedIndex((prev) => (prev !== null && prev > 0 ? prev - 1 : visibleImages.length - 1));
+  }, [selectedIndex, visibleImages.length]);
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -54,11 +62,11 @@ const Gallery: React.FC = () => {
           </p>
         </div>
 
-        {galleryImages.length > 0 ? (
+        {visibleImages.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            {galleryImages.map((image, index) => (
+            {visibleImages.map((image, index) => (
               <div 
-                key={image.id} 
+                key={image.id || image.url} 
                 onClick={() => openLightbox(index)}
                 className="group relative aspect-[4/3] rounded-2xl overflow-hidden shadow-md sm:shadow-lg cursor-pointer bg-gray-100 transform transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
               >
@@ -66,6 +74,9 @@ const Gallery: React.FC = () => {
                   src={image.url} 
                   alt="Galerie" 
                   loading="lazy"
+                  onError={() => {
+                    setFailedKeys(prev => new Set(prev).add(image.id || image.url));
+                  }}
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                 />
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
@@ -91,7 +102,7 @@ const Gallery: React.FC = () => {
       </div>
 
       {/* Lightbox Overlay */}
-      {selectedIndex !== null && (
+      {selectedIndex !== null && visibleImages[selectedIndex] && (
         <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex items-center justify-center animate-fadeIn" onClick={closeLightbox}>
           
           {/* Close Button */}
@@ -123,12 +134,12 @@ const Gallery: React.FC = () => {
           {/* Image Container */}
           <div className="relative max-w-7xl max-h-screen p-3 sm:p-4 flex items-center justify-center w-full h-full" onClick={e => e.stopPropagation()}>
              <img 
-               src={galleryImages[selectedIndex].url} 
+               src={visibleImages[selectedIndex].url} 
                alt="Galerie detail" 
                className="max-w-full max-h-[85vh] sm:max-h-[90vh] object-contain rounded-lg shadow-2xl animate-scaleIn"
              />
              <div className="absolute bottom-4 sm:bottom-8 left-0 right-0 text-center text-white/80 text-xs sm:text-sm font-medium pointer-events-none">
-                {selectedIndex + 1} / {galleryImages.length}
+                {selectedIndex + 1} / {visibleImages.length}
              </div>
           </div>
         </div>

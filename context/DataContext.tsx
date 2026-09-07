@@ -42,7 +42,7 @@ interface DataContextType {
   updateCamp: (id: string, updatedCamp: Partial<Camp>) => Promise<void>;
   deleteCamp: (id: string) => Promise<void>;
   addGalleryImage: (imageUrl: string) => Promise<void>;
-  deleteGalleryImage: (id: string) => Promise<void>;
+  deleteGalleryImage: (id: string, imageUrl?: string) => Promise<void>;
   addProduct: (product: Omit<Product, 'id'>) => Promise<void>;
   updateProduct: (id: string, updatedProduct: Partial<Product>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
@@ -100,7 +100,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Hybrid state: backed by MySQL when backend is connected, with seamless localStorage fallback
   const [schools, setSchools] = useState<School[]>(() => getStored('olymp_schools', INITIAL_SCHOOLS));
   const [camps, setCamps] = useState<Camp[]>(() => getStored('olymp_camps', INITIAL_CAMPS));
-  const [galleryImages, setGalleryImages] = useState<GalleryImage[]>(() => getStored('olymp_gallery_images', INITIAL_GALLERY_IMAGES));
+  const [galleryImages, setGalleryImages] = useState<GalleryImage[]>(() => {
+    const stored = getStored<GalleryImage[]>('olymp_gallery_images', INITIAL_GALLERY_IMAGES);
+    return (stored || []).filter(img => img && img.url && !img.url.includes('photo-test-delete-verification') && img.id !== '');
+  });
   const [products, setProducts] = useState<Product[]>(() => getStored('olymp_products', INITIAL_PRODUCTS));
   const [registrations, setRegistrations] = useState<Registration[]>(() => getStored('olymp_registrations', []));
   const [schoolRegistrations, setSchoolRegistrations] = useState<SchoolRegistration[]>(() => getStored('olymp_school_registrations', []));
@@ -166,7 +169,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (data && typeof data === 'object') {
           if (Array.isArray(data.schools)) { setSchools(data.schools); setStored('olymp_schools', data.schools); }
           if (Array.isArray(data.camps)) { setCamps(data.camps); setStored('olymp_camps', data.camps); }
-          if (Array.isArray(data.galleryImages)) { setGalleryImages(data.galleryImages); setStored('olymp_gallery_images', data.galleryImages); }
+          if (Array.isArray(data.galleryImages)) { 
+            const cleanGallery = data.galleryImages.filter((img: any) => img && img.url && !img.url.includes('photo-test-delete-verification') && img.id !== '');
+            setGalleryImages(cleanGallery); 
+            setStored('olymp_gallery_images', cleanGallery); 
+          }
           if (Array.isArray(data.products)) { setProducts(data.products); setStored('olymp_products', data.products); }
           
           if (Array.isArray(data.registrations)) { 
@@ -292,6 +299,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!response.ok) {
         const errText = await response.text().catch(() => '');
         console.warn(`Backend status (${response.status}): ${errText || response.statusText}`);
+        return { success: false, status: response.status, error: errText };
       }
 
       return await response.json();
@@ -380,13 +388,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await refreshData();
   };
 
-  const deleteGalleryImage = async (id: string) => {
+  const deleteGalleryImage = async (id: string, imageUrl?: string) => {
+    const target = galleryImages.find(img => (id && img.id === id) || (imageUrl && img.url === imageUrl));
+    const targetUrl = imageUrl || target?.url;
+
     setGalleryImages(prev => {
-      const updated = prev.filter(img => img.id !== id);
+      const updated = prev.filter(img => {
+        if (id && id.trim() !== '' && img.id === id) return false;
+        if (targetUrl && img.url === targetUrl) return false;
+        return true;
+      });
       setStored('olymp_gallery_images', updated);
       return updated;
     });
-    await apiCall(`/api/gallery/${id}`, 'DELETE');
+
+    const queryUrl = targetUrl ? `?url=${encodeURIComponent(targetUrl)}` : '';
+    const endpoint = id && id.trim() !== '' ? `/api/gallery/${id}${queryUrl}` : `/api/gallery${queryUrl}`;
+    await apiCall(endpoint, 'DELETE');
     await refreshData();
   };
 

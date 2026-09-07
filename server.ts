@@ -100,7 +100,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const PORT = 3000;
 
 // Security Headers & Core Middleware
 app.use((req, res, next) => {
@@ -603,24 +603,50 @@ app.delete('/api/camps/:id', requireAdmin, async (req, res) => {
 app.post('/api/gallery', requireAdmin, async (req, res) => {
   try {
     const image = req.body;
-    await pool.query('INSERT INTO gallery_images SET ?', image);
-    res.json(image);
+    const id = (image.id && String(image.id).trim()) || `img_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const url = image.url;
+    if (!url) {
+      return res.status(400).json({ error: 'URL obrázku je povinné' });
+    }
+    const cleanImage = {
+      id,
+      url,
+      caption: image.caption || null
+    };
+    await pool.query(
+      'INSERT INTO gallery_images (id, url, caption) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE url = VALUES(url), caption = VALUES(caption)',
+      [cleanImage.id, cleanImage.url, cleanImage.caption]
+    );
+    res.json(cleanImage);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Database error' });
   }
 });
 
-app.delete('/api/gallery/:id', requireAdmin, async (req, res) => {
+const deleteGalleryHandler = async (req: express.Request, res: express.Response) => {
   try {
-    const { id } = req.params;
-    await pool.query('DELETE FROM gallery_images WHERE id = ?', [id]);
+    const id = typeof req.params.id === 'string' ? req.params.id : undefined;
+    const urlParam = (req.query.url || req.body?.url) as string | undefined;
+    
+    if (id && id !== 'undefined' && id !== 'null' && id.trim() !== '') {
+      await pool.query('DELETE FROM gallery_images WHERE id = ?', [id]);
+    }
+    if (urlParam) {
+      await pool.query('DELETE FROM gallery_images WHERE url = ?', [urlParam]);
+    }
+    // Clean up any corrupt or empty entries
+    await pool.query("DELETE FROM gallery_images WHERE id = '' OR id IS NULL OR url LIKE '%photo-test-delete%'");
+    
     res.json({ success: true });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Database error' });
   }
-});
+};
+
+app.delete('/api/gallery', requireAdmin, deleteGalleryHandler);
+app.delete('/api/gallery/:id', requireAdmin, deleteGalleryHandler);
 
 // Products
 app.post('/api/products', requireAdmin, async (req, res) => {
@@ -752,25 +778,22 @@ const generateQrPaymentUrl = (amount: number, vs: string, message: string) => {
   return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&margin=10&data=${encodeURIComponent(spayd)}`;
 };
 
-// Admin recipient list (both primary and requested test emails)
+// Admin recipient list (company notification mailbox)
 const getAdminEmails = async (): Promise<string[]> => {
   const emails = new Set<string>();
+  // Primary company notification mailbox requested by user: info@olympdance.cz
+  emails.add('info@olympdance.cz');
+
   if (process.env.ADMIN_EMAIL) {
     process.env.ADMIN_EMAIL.split(',').forEach(e => {
       const clean = e.trim();
       if (clean && clean.includes('@')) emails.add(clean);
     });
   }
-  const config = await getSmtpConfig();
-  if (config.user && config.user.includes('@')) {
-    emails.add(config.user);
-  }
-  // User explicitly asked for notifications
-  emails.add('ludvikremesekwork@gmail.com');
   return Array.from(emails);
 };
 
-const getAdminEmail = async () => (await getAdminEmails())[0] || 'ludvikremesekwork@gmail.com';
+const getAdminEmail = async () => 'info@olympdance.cz';
 
 // Helper to send email safely with IPv4 and auto-fallback (465 SSL <-> 587 STARTTLS)
 const sendEmail = async (
@@ -779,17 +802,24 @@ const sendEmail = async (
   html: string, 
   attachments?: Array<{ filename: string; content: any; contentType?: string }>
 ) => {
-  console.log(`[Email Dispatch] To: ${to} | Subject: "${subject}" | Attachments: ${attachments?.length || 0}`);
+  const cleanTo = (to || '').trim();
+  console.log(`[Email Dispatch] To: ${cleanTo} | Subject: "${subject}" | Attachments: ${attachments?.length || 0}`);
   
+  if (!cleanTo || !cleanTo.includes('@')) {
+    console.warn(`[Email Warning] Cannot send email - invalid recipient address: "${to}"`);
+    return null;
+  }
+
   const config = await getSmtpConfig();
   if (!config.isConfigured) {
-    console.log('[Email Simulation] SMTP credentials not set (neither in ENV nor in Database settings). To:', to, '| Subject:', subject, '| Attachments:', attachments?.length || 0);
+    console.log('[Email Simulation] SMTP credentials not set (neither in ENV nor in Database settings). To:', cleanTo, '| Subject:', subject, '| Attachments:', attachments?.length || 0);
     return null;
   }
 
   const mailOptions: any = {
     from: `"Olymp Dance" <${config.user}>`,
-    to,
+    replyTo: 'info@olympdance.cz',
+    to: cleanTo,
     subject,
     html,
   };
@@ -801,12 +831,12 @@ const sendEmail = async (
   try {
     const primaryTransporter = createTransporterFor(config.host, config.port, config.secure, config.user, config.pass);
     const info = await primaryTransporter.sendMail(mailOptions);
-    console.log('[Email Sent] Delivered to:', to, 'MessageId:', info?.messageId);
+    console.log('[Email Sent] Delivered to:', cleanTo, 'MessageId:', info?.messageId);
     return info;
   } catch (error: any) {
     console.warn(`[Email Warning] Primary SMTP connection failed (${config.host}:${config.port}, secure: ${config.secure}):`, error.message);
 
-    // 2. Fallback: If port 465 was blocked by VPS/Coolify host, try port 587 with STARTTLS (or vice-versa)
+    // 2. Fallback: If port 465 was blocked by VPS host, try port 587 with STARTTLS (or vice-versa)
     if (config.host.includes('gmail.com')) {
       const fallbackPort = config.port === 465 ? 587 : 465;
       const fallbackSecure = fallbackPort === 465;
@@ -814,14 +844,14 @@ const sendEmail = async (
       try {
         const fallbackTransporter = createTransporterFor(config.host, fallbackPort, fallbackSecure, config.user, config.pass);
         const info = await fallbackTransporter.sendMail(mailOptions);
-        console.log('[Email Sent via Fallback] Delivered to:', to, 'MessageId:', info?.messageId);
+        console.log('[Email Sent via Fallback] Delivered to:', cleanTo, 'MessageId:', info?.messageId);
         return info;
       } catch (fallbackError: any) {
         console.error('[Email Error] Fallback SMTP connection also failed:', fallbackError.message);
       }
     }
 
-    console.error('[Email Error] Failed sending email to:', to, error);
+    console.error('[Email Error] Failed sending email to:', cleanTo, error);
     // Don't rethrow to avoid breaking user response, but return null
     return null;
   }
@@ -855,13 +885,13 @@ app.post('/api/test-email', requireAdmin, async (req, res) => {
     if (!config.isConfigured) {
       return res.status(400).json({
         success: false,
-        error: 'V konfiguraci chybí SMTP uživatel nebo heslo. Zadejte je buď v Coolify (proměnné SMTP_USER a SMTP_PASS) nebo níže v Nastavení e-mailu.'
+        error: 'V konfiguraci chybí SMTP uživatel nebo heslo. Zadejte je buď jako proměnné prostředí (SMTP_USER a SMTP_PASS) nebo níže v Nastavení e-mailu.'
       });
     }
 
     const targetRecipient = (req.body && req.body.testEmail && req.body.testEmail.includes('@'))
       ? req.body.testEmail.trim()
-      : 'ludvikremesekwork@gmail.com';
+      : 'info@olympdance.cz';
 
     const testHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
@@ -999,27 +1029,41 @@ app.post('/api/merch-orders', async (req, res) => {
       </div>
     `;
 
-    sendEmail(fullOrder.userEmail, `Potvrzení objednávky merche (${fullOrder.productName}) - Olymp Dance`, buyerHtml).catch(console.error);
+    // Send confirmation to customer and notification to club admin
+    (async () => {
+      try {
+        const customerEmail = (fullOrder.userEmail || '').trim();
+        if (customerEmail && customerEmail.includes('@')) {
+          console.log(`[Merch Order] Sending confirmation email to customer: ${customerEmail}`);
+          await sendEmail(customerEmail, `Potvrzení objednávky merche (${fullOrder.productName}) - Olymp Dance`, buyerHtml);
+        } else {
+          console.warn('[Merch Order] Invalid customer email:', fullOrder.userEmail);
+        }
 
-    // Notification to admin
-    const adminRecipients = await getAdminEmails();
-    const adminHtml = `
-      <h2>Nová objednávka klubového merche</h2>
-      <p><strong>Zákazník:</strong> ${fullOrder.userName}</p>
-      <p><strong>Email:</strong> ${fullOrder.userEmail}</p>
-      <p><strong>Telefon:</strong> ${fullOrder.userPhone || 'Neuvedeno'}</p>
-      <hr />
-      <p><strong>Produkt:</strong> ${fullOrder.productName}</p>
-      <p><strong>Velikost:</strong> ${fullOrder.size}</p>
-      <p><strong>Počet kusů:</strong> ${fullOrder.quantity}</p>
-      <p><strong>Celková částka:</strong> ${fullOrder.totalPrice} Kč</p>
-      <p><strong>Variabilní symbol:</strong> ${vs}</p>
-      <p><strong>Způsob předání / poznámka:</strong> ${fullOrder.deliveryNote || 'Neuvedeno'}</p>
-    `;
+        // Notification to club admin (info@olympdance.cz)
+        const adminRecipients = await getAdminEmails();
+        const adminHtml = `
+          <h2>Nová objednávka klubového merche</h2>
+          <p><strong>Zákazník:</strong> ${fullOrder.userName}</p>
+          <p><strong>Email zákazníka:</strong> ${fullOrder.userEmail}</p>
+          <p><strong>Telefon:</strong> ${fullOrder.userPhone || 'Neuvedeno'}</p>
+          <hr />
+          <p><strong>Produkt:</strong> ${fullOrder.productName}</p>
+          <p><strong>Velikost:</strong> ${fullOrder.size}</p>
+          <p><strong>Počet kusů:</strong> ${fullOrder.quantity}</p>
+          <p><strong>Celková částka:</strong> ${fullOrder.totalPrice} Kč</p>
+          <p><strong>Variabilní symbol:</strong> ${vs}</p>
+          <p><strong>Způsob předání / poznámka:</strong> ${fullOrder.deliveryNote || 'Neuvedeno'}</p>
+        `;
 
-    for (const adm of adminRecipients) {
-      sendEmail(adm, `[Nová objednávka Merch] ${fullOrder.userName} - ${fullOrder.productName}`, adminHtml).catch(console.error);
-    }
+        for (const adm of adminRecipients) {
+          console.log(`[Merch Order] Sending notification email to club admin: ${adm}`);
+          await sendEmail(adm, `[Nová objednávka Merch] ${fullOrder.userName} - ${fullOrder.productName}`, adminHtml);
+        }
+      } catch (err) {
+        console.error('Failed to send merch order emails:', err);
+      }
+    })();
 
     res.json(fullOrder);
   } catch (error) {
@@ -1536,21 +1580,29 @@ app.post('/api/registrations', async (req, res) => {
     // Send emails in background
     (async () => {
       try {
-        await sendEmail(registration.parentEmail, `Potvrzení přihlášky na tábor (${registration.childName}) - Olymp Dance`, emailHtml);
+        const customerEmail = (registration.parentEmail || '').trim();
+        if (customerEmail && customerEmail.includes('@')) {
+          console.log(`[Camp Registration] Sending confirmation email to customer/parent: ${customerEmail}`);
+          await sendEmail(customerEmail, `Potvrzení přihlášky na tábor (${registration.childName}) - Olymp Dance`, emailHtml);
+        } else {
+          console.warn('[Camp Registration] Invalid parent email address:', registration.parentEmail);
+        }
         
-        // Also notify all admin recipients
+        // Also notify all admin recipients (info@olympdance.cz)
         const adminRecipients = await getAdminEmails();
         const adminHtml = `
           <h2>Nová přihláška na letní tábor</h2>
-          <p><strong>Dítě:</strong> ${registration.childName} (${registration.childBirthDate})</p>
+          <p><strong>Dítě:</strong> ${registration.childName} (${registration.childBirthDate || ''})</p>
           <p><strong>Tábor:</strong> ${campTitle}</p>
           <p><strong>Rodič:</strong> ${registration.parentName}</p>
-          <p><strong>Email:</strong> ${registration.parentEmail}</p>
+          <p><strong>Email zákazníka:</strong> ${registration.parentEmail}</p>
           <p><strong>Telefon:</strong> ${registration.parentPhone}</p>
-          <p><strong>Vygenerované heslo:</strong> ${registration.password}</p>
+          <p><strong>Vygenerované heslo do portálu:</strong> ${registration.password}</p>
           <p><strong>Variabilní symbol:</strong> ${variableSymbol}</p>
+          <p><strong>Částka:</strong> ${campPrice}</p>
         `;
         for (const adm of adminRecipients) {
+          console.log(`[Camp Registration] Sending notification email to club admin: ${adm}`);
           await sendEmail(adm, `[Nová registrace Tábor] ${registration.childName} - ${campTitle}`, adminHtml);
         }
       } catch (err) {
@@ -1790,9 +1842,15 @@ app.post('/api/school-registrations', async (req, res) => {
     // Send emails in background
     (async () => {
       try {
-        await sendEmail(registration.parentEmail, `Potvrzení přihlášky do tanečního kroužku (${registration.childName}) - Olymp Dance`, emailHtml);
+        const customerEmail = (registration.parentEmail || '').trim();
+        if (customerEmail && customerEmail.includes('@')) {
+          console.log(`[School Registration] Sending confirmation email to customer/parent: ${customerEmail}`);
+          await sendEmail(customerEmail, `Potvrzení přihlášky do tanečního kroužku (${registration.childName}) - Olymp Dance`, emailHtml);
+        } else {
+          console.warn('[School Registration] Invalid parent email address:', registration.parentEmail);
+        }
         
-        // Also notify all admin recipients
+        // Also notify all admin recipients (info@olympdance.cz)
         const adminRecipients = await getAdminEmails();
         const adminHtml = `
           <h2>Nová přihláška do tanečního kroužku</h2>
@@ -1801,12 +1859,13 @@ app.post('/api/school-registrations', async (req, res) => {
           <p><strong>Den a čas:</strong> ${school.day || ''} ${school.time || ''}</p>
           <p><strong>Vyzvedávání z družiny:</strong> ${registration.afterSchoolClub ? 'Ano' : 'Ne'}</p>
           <p><strong>Rodič:</strong> ${registration.parentName}</p>
-          <p><strong>Email:</strong> ${registration.parentEmail}</p>
+          <p><strong>Email zákazníka:</strong> ${registration.parentEmail}</p>
           <p><strong>Telefon:</strong> ${registration.parentPhone}</p>
-          <p><strong>Vygenerované heslo:</strong> ${registration.password}</p>
+          <p><strong>Vygenerované heslo do portálu:</strong> ${registration.password}</p>
           <p><strong>Variabilní symbol:</strong> ${vs}</p>
         `;
         for (const adm of adminRecipients) {
+          console.log(`[School Registration] Sending notification email to club admin: ${adm}`);
           await sendEmail(adm, `[Nová registrace Kroužek] ${registration.childName} - ${schoolName}`, adminHtml);
         }
       } catch (err) {

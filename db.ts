@@ -452,6 +452,11 @@ export const initDb = async () => {
       console.log(`Initial seed: ${CAMPS.length} camps inserted.`);
     }
 
+    // Clean up any corrupt or empty entries in gallery_images
+    try {
+      await connection.query("DELETE FROM gallery_images WHERE id = '' OR id IS NULL OR url LIKE '%photo-test-delete%'");
+    } catch (e) {}
+
     // Gallery: Seed initial ONLY if table is completely empty
     const [galleryCountRow] = await connection.query('SELECT COUNT(*) as count FROM gallery_images');
     if ((galleryCountRow as any[])[0]?.count === 0) {

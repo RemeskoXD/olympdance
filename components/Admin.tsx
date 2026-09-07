@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { 
-  Trash2, Plus, School as SchoolIcon, Tent, LogOut, Lock, Image as ImageIcon, Edit2, Save, X, 
+  Trash2, Plus, School as SchoolIcon, Tent, LogOut, Lock, Image as ImageIcon, ImageOff, Edit2, Save, X, 
   ShoppingBag, ToggleLeft, ToggleRight, FileText, CheckCircle as CheckCircleIcon, Clock, 
   AlertCircle, Mail, Users, Check, X as XIcon, Calendar, Info, LayoutDashboard, DollarSign, 
   Users as UsersIcon, Download, Printer, Search, Filter, ShieldCheck, ArrowLeft, ArrowRight, 
@@ -715,7 +715,7 @@ const DashboardManager: React.FC = () => {
         </div>
       </div>
 
-      {/* Email / SMTP Diagnostika a Nastavení (Coolify & Gmail) */}
+      {/* Email / SMTP Diagnostika a Nastavení */}
       <EmailConfigSection />
     </div>
   );
@@ -729,7 +729,7 @@ const EmailConfigSection: React.FC = () => {
   const [smtpSecure, setSmtpSecure] = useState('true');
   const [status, setStatus] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [testEmail, setTestEmail] = useState('ludvikremesekwork@gmail.com');
+  const [testEmail, setTestEmail] = useState('info@olympdance.cz');
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; details?: any } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -831,7 +831,7 @@ const EmailConfigSection: React.FC = () => {
         <div>
           <div className="flex items-center gap-2">
             <Mail className="text-brand-blue" size={22} />
-            <h3 className="text-lg font-bold text-gray-900">E-mailové notifikace & SMTP (Coolify / Gmail)</h3>
+            <h3 className="text-lg font-bold text-gray-900">E-mailové notifikace & SMTP (Gmail / Vlastní server)</h3>
           </div>
           <p className="text-xs text-gray-500 mt-1">
             Správa odchozích e-mailů (přihlášky dětí s QR platbou, obnova hesel, kontaktní formulář, objednávky merche).
@@ -862,15 +862,15 @@ const EmailConfigSection: React.FC = () => {
         </div>
       </div>
 
-      {/* Diagnostic notification on Coolify */}
+      {/* Nápověda k nastavení SMTP */}
       <div className="bg-blue-50/70 border border-blue-200/80 rounded-xl p-4 text-xs text-blue-900 space-y-1.5">
         <p className="font-bold flex items-center gap-1.5">
           <Info size={15} className="text-brand-blue" />
-          Jak zprovoznit odesílání e-mailů na Coolify:
+          Jak zprovoznit odesílání e-mailů:
         </p>
         <ul className="list-disc list-inside space-y-1 text-blue-800 ml-1">
           <li><strong>Odesílatel Gmail:</strong> V Google účtu zapněte <em>Dvoufázové ověření</em> a vytvořte <em>Heslo aplikace (App Password)</em> pro Mail.</li>
-          <li><strong>Zadání údajů:</strong> Můžete je zadat buď níže přímo do formuláře (uloží se bezpečně do databáze), nebo v Coolify jako proměnné prostředí <code className="bg-white px-1.5 py-0.5 rounded text-blue-950 font-mono font-bold">SMTP_USER</code> a <code className="bg-white px-1.5 py-0.5 rounded text-blue-950 font-mono font-bold">SMTP_PASS</code>.</li>
+          <li><strong>Zadání údajů:</strong> Můžete je zadat buď níže přímo do formuláře (uloží se bezpečně do databáze), nebo jako proměnné prostředí <code className="bg-white px-1.5 py-0.5 rounded text-blue-950 font-mono font-bold">SMTP_USER</code> a <code className="bg-white px-1.5 py-0.5 rounded text-blue-950 font-mono font-bold">SMTP_PASS</code>.</li>
           <li><strong>Síťové nastavení:</strong> Server automaticky používá <strong>IPv4</strong> a zkouší port <strong>465 (SSL)</strong> a při blokaci port <strong>587 (STARTTLS)</strong>.</li>
         </ul>
       </div>
@@ -961,7 +961,7 @@ const EmailConfigSection: React.FC = () => {
           <div>
             <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Okamžitý test odeslání</h4>
             <p className="text-xs text-gray-500 mb-3">
-              Ověří spojení z běžícího kontejneru na Coolify a odešle zkušební e-mail na zadanou adresu.
+              Ověří spojení ze serveru a odešle zkušební e-mail na zadanou adresu.
             </p>
 
             <div className="space-y-2">
@@ -1515,12 +1515,40 @@ const GalleryManager: React.FC = () => {
       {/* List */}
       <div className="lg:col-span-2">
          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            {galleryImages.map(img => (
-                <div key={img.id} className="relative group rounded-xl overflow-hidden shadow-sm border border-gray-100 aspect-square bg-gray-50">
-                    <img src={img.url} alt="Galerie" className="w-full h-full object-cover" />
+            {galleryImages.map(img => {
+              const itemKey = img.id || img.url;
+              return (
+                <div key={itemKey} className="relative group rounded-xl overflow-hidden shadow-sm border border-gray-100 aspect-square bg-gray-100 flex flex-col items-center justify-center">
+                    <img 
+                      src={img.url} 
+                      alt="Galerie" 
+                      className="w-full h-full object-cover" 
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        target.style.display = 'none';
+                        const parent = target.parentElement;
+                        if (parent) {
+                          const fallback = parent.querySelector('.img-fallback-label');
+                          if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                        }
+                      }}
+                    />
+                    
+                    {/* Fallback displayed if image URL fails to load */}
+                    <div className="img-fallback-label hidden flex-col items-center justify-center p-3 text-center text-gray-500 absolute inset-0 bg-gray-50">
+                      <ImageOff size={28} className="text-gray-400 mb-1" />
+                      <span className="text-[11px] font-medium text-gray-600">Nelze načíst</span>
+                      <button
+                        type="button"
+                        onClick={() => setDeletingId(itemKey)}
+                        className="mt-2 px-2.5 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        Smazat
+                      </button>
+                    </div>
                     
                     {/* Active In-Card Confirmation (Works 100% in iframes and mobile) */}
-                    {deletingId === img.id ? (
+                    {deletingId === itemKey ? (
                       <div className="absolute inset-0 bg-red-950/85 backdrop-blur-xs p-3 flex flex-col items-center justify-center text-center text-white animate-fade-in z-20">
                         <Trash2 size={24} className="text-red-300 mb-1" />
                         <p className="text-xs font-bold mb-2">Opravdu smazat tuto fotku?</p>
@@ -1529,7 +1557,7 @@ const GalleryManager: React.FC = () => {
                             type="button"
                             onClick={async () => {
                               try {
-                                await deleteGalleryImage(img.id);
+                                await deleteGalleryImage(img.id, img.url);
                               } finally {
                                 setDeletingId(null);
                               }
@@ -1551,7 +1579,7 @@ const GalleryManager: React.FC = () => {
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10">
                           <button 
                               type="button"
-                              onClick={() => setDeletingId(img.id)}
+                              onClick={() => setDeletingId(itemKey)}
                               className="p-2.5 bg-white text-red-600 rounded-full hover:bg-red-50 transition-transform hover:scale-110 shadow-md cursor-pointer"
                               title="Smazat fotku"
                           >
@@ -1560,7 +1588,8 @@ const GalleryManager: React.FC = () => {
                       </div>
                     )}
                 </div>
-            ))}
+              );
+            })}
          </div>
          {galleryImages.length === 0 && <p className="text-gray-500 text-center py-8">Žádné fotky v galerii.</p>}
       </div>
