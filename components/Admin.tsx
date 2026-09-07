@@ -412,8 +412,16 @@ const DashboardManager: React.FC = () => {
     isGalleryEnabled,
     toggleGallery,
     isAboutEnabled,
-    toggleAbout 
+    toggleAbout,
+    refreshData
   } = useData();
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Auto-refresh when Dashboard is opened
+  useEffect(() => {
+    refreshData();
+  }, []);
 
   // Calculate stats
   const totalSchoolKids = schoolRegistrations.filter(r => r.status !== 'cancelled').length;
@@ -471,8 +479,26 @@ const DashboardManager: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Přehled a Statistiky</h2>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Přehled a Statistiky</h2>
+          <p className="text-xs text-gray-500 mt-0.5">Živá data z centrální MySQL databáze</p>
+        </div>
+        <button
+          type="button"
+          onClick={async () => {
+            setIsRefreshing(true);
+            try {
+              await refreshData();
+            } finally {
+              setIsRefreshing(false);
+            }
+          }}
+          className="inline-flex items-center gap-2 px-3.5 py-2 bg-brand-blue hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-all cursor-pointer"
+        >
+          <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
+          {isRefreshing ? 'Načítám data...' : 'Aktualizovat z databáze'}
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -994,6 +1020,7 @@ const SchoolManager: React.FC = () => {
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: '', city: '', day: '', time: '', price: '', isKindergarten: false });
   const [datesModalSchool, setDatesModalSchool] = useState<School | null>(null);
+  const [schoolToDelete, setSchoolToDelete] = useState<School | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1134,9 +1161,10 @@ const SchoolManager: React.FC = () => {
                   <Edit2 size={18} />
                 </button>
                 <button 
-                  onClick={() => { if(confirm('Opravdu smazat?')) deleteSchool(school.id) }}
-                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  title="Smazat"
+                  type="button"
+                  onClick={() => setSchoolToDelete(school)}
+                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                  title="Smazat školu"
                 >
                   <Trash2 size={18} />
                 </button>
@@ -1157,6 +1185,22 @@ const SchoolManager: React.FC = () => {
           }}
         />
       )}
+
+      {schoolToDelete && (
+        <DeleteConfirmModal
+          isOpen={!!schoolToDelete}
+          onClose={() => setSchoolToDelete(null)}
+          onConfirm={async () => {
+            if (schoolToDelete) {
+              await deleteSchool(schoolToDelete.id);
+              setSchoolToDelete(null);
+            }
+          }}
+          title="Opravdu smazat školu?"
+          itemName={`${schoolToDelete.name} (${schoolToDelete.city})`}
+          description="Tato škola bude trvale smazána z nabídky i z centrální MySQL databáze."
+        />
+      )}
     </div>
   );
 };
@@ -1166,6 +1210,7 @@ const CampManager: React.FC = () => {
     const [isEditing, setIsEditing] = useState<string | null>(null);
     const [formData, setFormData] = useState({ title: '', date: '', price: '', description: '', image: 'https://images.unsplash.com/photo-1547153760-18fc86324498?auto=format&fit=crop&q=80&w=800', externalUrl: '', details: '' });
     const [generalInfo, setGeneralInfo] = useState(campGeneralInfo);
+    const [campToDelete, setCampToDelete] = useState<Camp | null>(null);
 
     // Update local state when context changes (initial load)
     useEffect(() => {
@@ -1334,8 +1379,10 @@ const CampManager: React.FC = () => {
                             <Edit2 size={20} />
                         </button>
                         <button 
-                            onClick={() => { if(confirm('Opravdu smazat?')) deleteCamp(camp.id) }}
-                            className="text-gray-400 hover:text-red-600 transition-colors"
+                            type="button"
+                            onClick={() => setCampToDelete(camp)}
+                            className="text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
+                            title="Smazat tábor"
                         >
                             <Trash2 size={20} />
                         </button>
@@ -1350,6 +1397,22 @@ const CampManager: React.FC = () => {
             {camps.length === 0 && <p className="text-gray-500 text-center py-8">Žádné tábory v seznamu.</p>}
             </div>
         </div>
+
+        {campToDelete && (
+          <DeleteConfirmModal
+            isOpen={!!campToDelete}
+            onClose={() => setCampToDelete(null)}
+            onConfirm={async () => {
+              if (campToDelete) {
+                await deleteCamp(campToDelete.id);
+                setCampToDelete(null);
+              }
+            }}
+            title="Opravdu smazat tábor?"
+            itemName={campToDelete.title}
+            description="Tento letní tábor bude trvale smazán ze systému i z centrální MySQL databáze."
+          />
+        )}
       </div>
     );
   };
@@ -1358,6 +1421,7 @@ const GalleryManager: React.FC = () => {
   const { galleryImages, addGalleryImage, deleteGalleryImage } = useData();
   const [newImageUrl, setNewImageUrl] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const galleryFileRef = React.useRef<HTMLInputElement>(null);
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -1452,16 +1516,49 @@ const GalleryManager: React.FC = () => {
       <div className="lg:col-span-2">
          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {galleryImages.map(img => (
-                <div key={img.id} className="relative group rounded-lg overflow-hidden shadow-sm border border-gray-100 aspect-square">
+                <div key={img.id} className="relative group rounded-xl overflow-hidden shadow-sm border border-gray-100 aspect-square bg-gray-50">
                     <img src={img.url} alt="Galerie" className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <button 
-                            onClick={() => { if(confirm('Opravdu smazat?')) deleteGalleryImage(img.id) }}
-                            className="p-2 bg-white text-red-600 rounded-full hover:bg-red-50 transition-colors"
-                        >
-                            <Trash2 size={20} />
-                        </button>
-                    </div>
+                    
+                    {/* Active In-Card Confirmation (Works 100% in iframes and mobile) */}
+                    {deletingId === img.id ? (
+                      <div className="absolute inset-0 bg-red-950/85 backdrop-blur-xs p-3 flex flex-col items-center justify-center text-center text-white animate-fade-in z-20">
+                        <Trash2 size={24} className="text-red-300 mb-1" />
+                        <p className="text-xs font-bold mb-2">Opravdu smazat tuto fotku?</p>
+                        <div className="flex gap-2 w-full max-w-[160px]">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                await deleteGalleryImage(img.id);
+                              } finally {
+                                setDeletingId(null);
+                              }
+                            }}
+                            className="flex-1 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm transition-colors cursor-pointer"
+                          >
+                            Smazat
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeletingId(null)}
+                            className="flex-1 py-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-medium rounded-lg transition-colors cursor-pointer"
+                          >
+                            Zrušit
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10">
+                          <button 
+                              type="button"
+                              onClick={() => setDeletingId(img.id)}
+                              className="p-2.5 bg-white text-red-600 rounded-full hover:bg-red-50 transition-transform hover:scale-110 shadow-md cursor-pointer"
+                              title="Smazat fotku"
+                          >
+                              <Trash2 size={20} />
+                          </button>
+                      </div>
+                    )}
                 </div>
             ))}
          </div>
@@ -1488,6 +1585,8 @@ const MerchManager: React.FC = () => {
     const [statusFilter, setStatusFilter] = useState<'ALL' | 'pending' | 'paid' | 'completed' | 'cancelled'>('ALL');
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedOrderForQr, setSelectedOrderForQr] = useState<MerchOrder | null>(null);
+    const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+    const [orderToDelete, setOrderToDelete] = useState<MerchOrder | null>(null);
   
     const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -1731,34 +1830,29 @@ const MerchManager: React.FC = () => {
                             <div className="flex items-center justify-end gap-1.5">
                               {order.status !== 'paid' && (
                                 <button
-                                  onClick={() => {
-                                    if (confirm(`Označit objednávku ${order.variableSymbol} (${order.userName}) jako ZAPLACENOU? Zákazníkovi odejde potvrzovací email.`)) {
-                                      updateMerchOrder(order.id, { status: 'paid' });
-                                    }
-                                  }}
+                                  type="button"
+                                  onClick={() => updateMerchOrder(order.id, { status: 'paid' })}
                                   title="Označit jako zaplaceno (odešle se email)"
-                                  className="px-2.5 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-colors"
+                                  className="px-2.5 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
                                 >
                                   Označit Zaplaceno
                                 </button>
                               )}
                               {order.status === 'paid' && (
                                 <button
+                                  type="button"
                                   onClick={() => updateMerchOrder(order.id, { status: 'completed' })}
                                   title="Označit jako předáno zákazníkovi"
-                                  className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors"
+                                  className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
                                 >
                                   Předat / Hotovo
                                 </button>
                               )}
                               <button
-                                onClick={() => {
-                                  if (confirm('Opravdu smazat tuto objednávku?')) {
-                                    deleteMerchOrder(order.id);
-                                  }
-                                }}
+                                type="button"
+                                onClick={() => setOrderToDelete(order)}
                                 title="Smazat objednávku"
-                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                               >
                                 <Trash2 size={16} />
                               </button>
@@ -2036,8 +2130,8 @@ const MerchManager: React.FC = () => {
 
                     <button 
                       type="button"
-                      onClick={() => { if(confirm(`Opravdu chcete smazat produkt "${prod.name}"?`)) deleteProduct(prod.id) }}
-                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-gray-200"
+                      onClick={() => setProductToDelete(prod)}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-gray-200 cursor-pointer"
                       title="Smazat produkt"
                     >
                       <Trash2 size={16} />
@@ -2048,6 +2142,38 @@ const MerchManager: React.FC = () => {
               {products.length === 0 && <p className="text-gray-500 text-center py-12 bg-white rounded-2xl border border-dashed border-gray-200">Žádné produkty v E-shopu.</p>}
             </div>
           </div>
+        )}
+
+        {productToDelete && (
+          <DeleteConfirmModal
+            isOpen={!!productToDelete}
+            onClose={() => setProductToDelete(null)}
+            onConfirm={async () => {
+              if (productToDelete) {
+                await deleteProduct(productToDelete.id);
+                setProductToDelete(null);
+              }
+            }}
+            title="Opravdu smazat produkt?"
+            itemName={productToDelete.name}
+            description="Tento produkt bude trvale smazán z E-shopu i z centrální MySQL databáze."
+          />
+        )}
+
+        {orderToDelete && (
+          <DeleteConfirmModal
+            isOpen={!!orderToDelete}
+            onClose={() => setOrderToDelete(null)}
+            onConfirm={async () => {
+              if (orderToDelete) {
+                await deleteMerchOrder(orderToDelete.id);
+                setOrderToDelete(null);
+              }
+            }}
+            title="Opravdu smazat objednávku?"
+            itemName={`VS ${orderToDelete.variableSymbol} (${orderToDelete.userName})`}
+            description="Tato objednávka bude trvale odstraněna ze systému i z centrální MySQL databáze."
+          />
         )}
       </div>
     );
@@ -2369,6 +2495,7 @@ const UserManager: React.FC = () => {
   const [isAdding, setIsAdding] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [schoolSearchTerm, setSchoolSearchTerm] = useState('');
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [formData, setFormData] = useState({ 
     username: '', 
     password: '', 
@@ -2434,11 +2561,6 @@ const UserManager: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (formData.role === 'trainer' && formData.schoolIds.length === 0) {
-      if (!confirm('Trenérovi nebyla přiřazena žádná škola. Chcete přesto pokračovat?')) {
-        return;
-      }
-    }
 
     const payload = {
       username: formData.username,
@@ -2722,12 +2844,9 @@ const UserManager: React.FC = () => {
                             <Edit2 size={16} />
                           </button>
                           <button 
-                            onClick={() => {
-                              if (confirm(`Opravdu chcete smazat uživatele ${user.name}?`)) {
-                                deleteUser(user.id);
-                              }
-                            }} 
-                            className="p-1.5 text-gray-400 hover:text-brand-red hover:bg-red-50 rounded-lg transition-colors"
+                            type="button"
+                            onClick={() => setUserToDelete(user)} 
+                            className="p-1.5 text-gray-400 hover:text-brand-red hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                             title="Smazat uživatele"
                           >
                             <Trash2 size={16} />
@@ -2742,6 +2861,22 @@ const UserManager: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {userToDelete && (
+        <DeleteConfirmModal
+          isOpen={!!userToDelete}
+          onClose={() => setUserToDelete(null)}
+          onConfirm={async () => {
+            if (userToDelete) {
+              await deleteUser(userToDelete.id);
+              setUserToDelete(null);
+            }
+          }}
+          title="Opravdu smazat uživatele?"
+          itemName={`${userToDelete.name} (@${userToDelete.username})`}
+          description="Tento uživatelský účet bude trvale odstraněn ze systému i z centrální MySQL databáze."
+        />
+      )}
     </div>
   );
 };
@@ -2813,9 +2948,7 @@ const AttendanceManager: React.FC<{ currentUser: User | null }> = ({ currentUser
 
   const handleResetAttendance = () => {
     if (!selectedSchoolId) return;
-    if (confirm('Opravdu chcete vyresetovat záznamy docházky pro tento den?')) {
-      updateAttendance(selectedSchoolId, selectedDate, {});
-    }
+    updateAttendance(selectedSchoolId, selectedDate, {});
   };
 
   // If no schools assigned at all

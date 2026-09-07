@@ -79,10 +79,8 @@ export const TrainingDatesModal: React.FC<TrainingDatesModalProps> = ({
 
   // Clear all dates
   const handleClearAll = () => {
-    if (confirm('Opravdu chcete vymazat všech 14 termínů?')) {
-      setDates(Array(14).fill(''));
-      setHasChanges(true);
-    }
+    setDates(Array(14).fill(''));
+    setHasChanges(true);
   };
 
   const handleSave = () => {

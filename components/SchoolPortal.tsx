@@ -33,6 +33,7 @@ const SchoolPortal: React.FC = () => {
   const [parentFormData, setParentFormData] = useState({ parentName: '', parentPhone: '' });
   const [selectedInsuranceReg, setSelectedInsuranceReg] = useState<SchoolRegistration | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [unsubscribingRegId, setUnsubscribingRegId] = useState<string | null>(null);
 
   const myRegistrations = userRegistrations.length > 0
     ? userRegistrations
@@ -205,8 +206,6 @@ const SchoolPortal: React.FC = () => {
   };
 
   const unsubscribeChild = async (regId: string) => {
-    if (!window.confirm('Opravdu chcete dítě odhlásit z kroužku?')) return;
-    
     const reg = myRegistrations.find(r => r.id === regId);
     if (!reg) return;
 
@@ -225,6 +224,7 @@ const SchoolPortal: React.FC = () => {
     });
 
     setUserRegistrations(prev => prev.map(r => r.id === regId ? { ...r, status: 'cancelled', history: newHistory } : r));
+    setUnsubscribingRegId(null);
   };
 
   const getStatusBadge = (status: SchoolRegistration['status']) => {
@@ -485,9 +485,33 @@ const SchoolPortal: React.FC = () => {
                             </label>
                           </div>
                           <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-                            <button onClick={() => unsubscribeChild(reg.id)} className="text-sm text-brand-red font-bold hover:underline">
-                              Odhlásit z kroužku
-                            </button>
+                            {unsubscribingRegId === reg.id ? (
+                              <div className="flex items-center gap-2 bg-red-50 p-1.5 rounded-lg border border-red-200">
+                                <span className="text-xs text-red-700 font-bold">Opravdu odhlásit?</span>
+                                <button
+                                  type="button"
+                                  onClick={() => unsubscribeChild(reg.id)}
+                                  className="px-2 py-0.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded transition-colors"
+                                >
+                                  Ano
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setUnsubscribingRegId(null)}
+                                  className="px-2 py-0.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs rounded transition-colors"
+                                >
+                                  Zrušit
+                                </button>
+                              </div>
+                            ) : (
+                              <button 
+                                type="button" 
+                                onClick={() => setUnsubscribingRegId(reg.id)} 
+                                className="text-sm text-brand-red font-bold hover:underline cursor-pointer"
+                              >
+                                Odhlásit z kroužku
+                              </button>
+                            )}
                             <div className="space-x-2">
                               <button onClick={() => setEditingId(null)} className="px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 rounded transition-colors">
                                 Zrušit

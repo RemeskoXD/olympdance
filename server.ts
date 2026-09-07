@@ -108,10 +108,16 @@ app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
 
-  // Extract auth token if provided in Authorization header
+  // Extract auth token if provided in Authorization header, custom header or query
   const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.substring(7);
+  let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : null;
+  if (!token && req.headers['x-admin-token']) {
+    token = String(req.headers['x-admin-token']).trim();
+  }
+  if (!token && req.query.token) {
+    token = String(req.query.token).trim();
+  }
+  if (token) {
     const decoded = verifyToken(token);
     if (decoded) {
       (req as any).user = decoded;
