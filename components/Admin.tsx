@@ -10,11 +10,15 @@ import {
 } from 'lucide-react';
 import { School, Camp, Product, Registration, User, SchoolRegistration, MerchOrder } from '../types';
 import { exportSchoolRegistrationsToCsv, exportCampRegistrationsToCsv } from '../utils/exportCsv';
+import { matchesSearch } from '../utils/search';
 import { AttendanceSheetModal } from './AttendanceSheetModal';
 import { TrainingDatesModal } from './TrainingDatesModal';
 import { InsuranceConfirmationModal } from './InsuranceConfirmationModal';
+import { StampManagerModal } from './StampManagerModal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { RbBankManager } from './RbBankManager';
+import { AdminImport } from './AdminImport';
+import { UploadCloud } from 'lucide-react';
 
 const Admin: React.FC = () => {
   const { users, addUser, updateUser, deleteUser, schools, schoolRegistrations, attendance, excuses, updateAttendance, refreshData } = useData();
@@ -24,7 +28,7 @@ const Admin: React.FC = () => {
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'schools' | 'camps' | 'gallery' | 'merch' | 'registrations' | 'school_registrations' | 'users' | 'attendance' | 'rb_bank'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'schools' | 'camps' | 'gallery' | 'merch' | 'registrations' | 'school_registrations' | 'users' | 'attendance' | 'rb_bank' | 'import_customers'>('dashboard');
 
   // Check for persisted login on mount and verify token
   useEffect(() => {
@@ -362,6 +366,17 @@ const Admin: React.FC = () => {
                 <CreditCard size={18} className="mr-2" />
                 Banka & Platby API
               </button>
+              <button
+                onClick={() => setActiveTab('import_customers')}
+                className={`flex items-center px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+                  activeTab === 'import_customers' 
+                  ? 'bg-brand-blue text-white shadow-md' 
+                  : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <UploadCloud size={18} className="mr-2" />
+                Import zákazníků
+              </button>
             </>
           )}
 
@@ -390,6 +405,7 @@ const Admin: React.FC = () => {
         {activeTab === 'users' && <UserManager />}
         {activeTab === 'attendance' && <AttendanceManager currentUser={currentUser} />}
         {activeTab === 'rb_bank' && <RbBankManager />}
+        {activeTab === 'import_customers' && <AdminImport />}
       </div>
     </div>
   );
@@ -711,303 +727,6 @@ const DashboardManager: React.FC = () => {
                 {schoolRegistrations.filter(r => r.status === 'pending_approval').length + registrations.filter(r => r.status === 'pending_approval').length}
               </span>
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Email / SMTP Diagnostika a Nastavení */}
-      <EmailConfigSection />
-    </div>
-  );
-};
-
-const EmailConfigSection: React.FC = () => {
-  const [smtpUser, setSmtpUser] = useState('');
-  const [smtpPass, setSmtpPass] = useState('');
-  const [smtpHost, setSmtpHost] = useState('smtp.gmail.com');
-  const [smtpPort, setSmtpPort] = useState('465');
-  const [smtpSecure, setSmtpSecure] = useState('true');
-  const [status, setStatus] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [testEmail, setTestEmail] = useState('info@olympdance.cz');
-  const [isTesting, setIsTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string; details?: any } | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-
-  const fetchStatus = async () => {
-    setIsLoading(true);
-    try {
-      const res = await fetch('/api/smtp/status');
-      if (res.ok) {
-        const data = await res.json();
-        setStatus(data);
-        if (data.user) setSmtpUser(data.user);
-        if (data.host) setSmtpHost(data.host);
-        if (data.port) setSmtpPort(String(data.port));
-        if (data.secure !== undefined) setSmtpSecure(String(data.secure));
-      }
-    } catch (e) {
-      console.error('Failed to fetch SMTP status:', e);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchStatus();
-  }, []);
-
-  const handleSaveSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSaving(true);
-    setSaveSuccess(false);
-    setTestResult(null);
-    try {
-      const payload: any = {
-        smtpUser: smtpUser.trim(),
-        smtpHost: smtpHost.trim(),
-        smtpPort: smtpPort.trim(),
-        smtpSecure: smtpSecure
-      };
-      if (smtpPass.trim()) {
-        payload.smtpPass = smtpPass.trim();
-      }
-      const res = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (res.ok) {
-        setSaveSuccess(true);
-        setSmtpPass('');
-        await fetchStatus();
-        setTimeout(() => setSaveSuccess(false), 4000);
-      }
-    } catch (err) {
-      console.error('Save error:', err);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleSendTestEmail = async () => {
-    if (!testEmail || !testEmail.includes('@')) return;
-    setIsTesting(true);
-    setTestResult(null);
-    try {
-      const res = await fetch('/api/test-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ testEmail: testEmail.trim() })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setTestResult({
-          success: true,
-          message: data.message || `Testovací e-mail byl úspěšně odeslán na ${testEmail}!`
-        });
-      } else {
-        setTestResult({
-          success: false,
-          message: data.error || 'Odeslání testovacího e-mailu selhalo.',
-          details: data.config
-        });
-      }
-    } catch (err: any) {
-      setTestResult({
-        success: false,
-        message: `Chyba spojení se serverem: ${err.message}`
-      });
-    } finally {
-      setIsTesting(false);
-    }
-  };
-
-  return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <Mail className="text-brand-blue" size={22} />
-            <h3 className="text-lg font-bold text-gray-900">E-mailové notifikace & SMTP (Gmail / Vlastní server)</h3>
-          </div>
-          <p className="text-xs text-gray-500 mt-1">
-            Správa odchozích e-mailů (přihlášky dětí s QR platbou, obnova hesel, kontaktní formulář, objednávky merche).
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {isLoading ? (
-            <span className="text-xs text-gray-400 flex items-center">
-              <RefreshCw size={12} className="animate-spin mr-1" /> Ověřuji...
-            </span>
-          ) : status?.isConfigured ? (
-            <span className="px-3 py-1 bg-green-50 text-green-700 border border-green-200 rounded-full text-xs font-bold flex items-center">
-              <Check size={13} className="mr-1" /> SMTP Aktivní ({status.source === 'env' ? 'ENV proměnné' : 'Databáze'})
-            </span>
-          ) : (
-            <span className="px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-full text-xs font-bold flex items-center">
-              <AlertCircle size={13} className="mr-1" /> SMTP Nenastaveno
-            </span>
-          )}
-          <button
-            onClick={fetchStatus}
-            className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100"
-            title="Obnovit stav"
-          >
-            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-          </button>
-        </div>
-      </div>
-
-      {/* Nápověda k nastavení SMTP */}
-      <div className="bg-blue-50/70 border border-blue-200/80 rounded-xl p-4 text-xs text-blue-900 space-y-1.5">
-        <p className="font-bold flex items-center gap-1.5">
-          <Info size={15} className="text-brand-blue" />
-          Jak zprovoznit odesílání e-mailů:
-        </p>
-        <ul className="list-disc list-inside space-y-1 text-blue-800 ml-1">
-          <li><strong>Odesílatel Gmail:</strong> V Google účtu zapněte <em>Dvoufázové ověření</em> a vytvořte <em>Heslo aplikace (App Password)</em> pro Mail.</li>
-          <li><strong>Zadání údajů:</strong> Můžete je zadat buď níže přímo do formuláře (uloží se bezpečně do databáze), nebo jako proměnné prostředí <code className="bg-white px-1.5 py-0.5 rounded text-blue-950 font-mono font-bold">SMTP_USER</code> a <code className="bg-white px-1.5 py-0.5 rounded text-blue-950 font-mono font-bold">SMTP_PASS</code>.</li>
-          <li><strong>Síťové nastavení:</strong> Server automaticky používá <strong>IPv4</strong> a zkouší port <strong>465 (SSL)</strong> a při blokaci port <strong>587 (STARTTLS)</strong>.</li>
-        </ul>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Settings form */}
-        <form onSubmit={handleSaveSettings} className="space-y-4 bg-gray-50/60 p-4 rounded-xl border border-gray-200/80">
-          <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">Konfigurace SMTP spojení</h4>
-          
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">E-mail odesílatele (Gmail / SMTP User)</label>
-            <input
-              type="text"
-              value={smtpUser}
-              onChange={e => setSmtpUser(e.target.value)}
-              placeholder="např. klub@olympdance.cz nebo olympdance@gmail.com"
-              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-mono outline-none focus:border-brand-blue"
-            />
-          </div>
-
-          <div>
-            <div className="flex justify-between items-center mb-1">
-              <label className="text-xs font-semibold text-gray-700">Heslo aplikace (App Password)</label>
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="text-[11px] text-brand-blue hover:underline font-medium"
-              >
-                {showPassword ? 'Skrýt' : 'Zobrazit'}
-              </button>
-            </div>
-            <input
-              type={showPassword ? 'text' : 'password'}
-              value={smtpPass}
-              onChange={e => setSmtpPass(e.target.value)}
-              placeholder={status?.hasPass ? '•••••••••••••••• (heslo je uloženo, zadejte pro změnu)' : '16místné heslo aplikace od Google'}
-              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-mono outline-none focus:border-brand-blue"
-            />
-            <p className="text-[11px] text-gray-400 mt-1">U Gmailu nepoužívejte hlavní heslo k účtu, ale 16místné heslo aplikace bez mezer.</p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">SMTP Server</label>
-              <input
-                type="text"
-                value={smtpHost}
-                onChange={e => setSmtpHost(e.target.value)}
-                placeholder="smtp.gmail.com"
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-mono outline-none focus:border-brand-blue"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">Port</label>
-              <select
-                value={smtpPort}
-                onChange={e => {
-                  setSmtpPort(e.target.value);
-                  setSmtpSecure(e.target.value === '465' ? 'true' : 'false');
-                }}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-mono outline-none focus:border-brand-blue"
-              >
-                <option value="465">465 (SSL/TLS - doporučeno)</option>
-                <option value="587">587 (STARTTLS)</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="pt-2 flex items-center justify-between">
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="px-4 py-2 bg-gray-900 text-white font-bold rounded-xl text-xs hover:bg-black transition-colors flex items-center gap-1.5 disabled:opacity-50"
-            >
-              {isSaving ? <RefreshCw size={13} className="animate-spin" /> : <Save size={13} />}
-              Uložit konfiguraci do databáze
-            </button>
-            {saveSuccess && (
-              <span className="text-xs text-green-600 font-bold flex items-center gap-1 animate-fade-in">
-                <Check size={14} /> Uloženo v pořádku
-              </span>
-            )}
-          </div>
-        </form>
-
-        {/* Live Test Tool */}
-        <div className="space-y-4 bg-gray-50/60 p-4 rounded-xl border border-gray-200/80 flex flex-col justify-between">
-          <div>
-            <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Okamžitý test odeslání</h4>
-            <p className="text-xs text-gray-500 mb-3">
-              Ověří spojení ze serveru a odešle zkušební e-mail na zadanou adresu.
-            </p>
-
-            <div className="space-y-2">
-              <label className="block text-xs font-semibold text-gray-700">Cílová e-mailová adresa pro test</label>
-              <div className="flex gap-2">
-                <input
-                  type="email"
-                  value={testEmail}
-                  onChange={e => setTestEmail(e.target.value)}
-                  placeholder="vas-email@gmail.com"
-                  className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:border-brand-blue"
-                />
-                <button
-                  type="button"
-                  onClick={handleSendTestEmail}
-                  disabled={isTesting || !testEmail}
-                  className="px-4 py-2 bg-brand-blue text-white font-bold rounded-xl text-xs hover:bg-blue-900 transition-colors flex items-center gap-1.5 disabled:opacity-50 shrink-0"
-                >
-                  {isTesting ? (
-                    <>
-                      <RefreshCw size={13} className="animate-spin" />
-                      Testuji...
-                    </>
-                  ) : (
-                    <>
-                      <Send size={13} />
-                      Odeslat test
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {testResult && (
-            <div className={`p-3 rounded-xl border text-xs ${testResult.success ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
-              <div className="font-bold flex items-center gap-1.5 mb-1">
-                {testResult.success ? <Check size={14} className="text-green-600" /> : <AlertCircle size={14} className="text-red-600" />}
-                {testResult.success ? 'Test úspěšný!' : 'Odeslání se nezdařilo'}
-              </div>
-              <p className="leading-relaxed">{testResult.message}</p>
-            </div>
-          )}
-
-          <div className="text-[11px] text-gray-400 pt-2 border-t border-gray-200">
-            Při úspěšném testu máte 100% jistotu, že přihlášky, generovaná PDF potvrzení a e-shopy zákazníkům dorazí.
           </div>
         </div>
       </div>
@@ -1707,12 +1426,11 @@ const MerchManager: React.FC = () => {
     const filteredOrders = useMemo(() => {
       return (merchOrders || []).filter(order => {
         const matchesStatus = statusFilter === 'ALL' || order.status === statusFilter;
-        const matchesSearch = !searchTerm || 
-          order.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          order.userEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          order.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (order.variableSymbol && order.variableSymbol.includes(searchTerm));
-        return matchesStatus && matchesSearch;
+        const matchesSearchQuery = matchesSearch(
+          [order.userName, order.userEmail, order.productName, order.variableSymbol, order.deliveryNote],
+          searchTerm
+        );
+        return matchesStatus && matchesSearchQuery;
       });
     }, [merchOrders, statusFilter, searchTerm]);
 
@@ -2216,8 +1934,45 @@ const RegistrationManager: React.FC = () => {
   const [campFilter, setCampFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [insuranceReg, setInsuranceReg] = useState<Registration | null>(null);
+  const [isStampModalOpen, setIsStampModalOpen] = useState(false);
   const [deletingReg, setDeletingReg] = useState<Registration | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [sendingEmailId, setSendingEmailId] = useState<string | null>(null);
+  const [sendSuccessMsg, setSendSuccessMsg] = useState<{ id: string; msg: string } | null>(null);
+
+  const handleMarkAsPaid = async (reg: Registration) => {
+    try {
+      await updateRegistration(reg.id, { status: 'approved' });
+      setSendSuccessMsg({ id: reg.id, msg: 'Označeno jako zaplaceno! Potvrzení s PDF bylo odesláno na e-mail rodiče a zpřístupněno v portálu.' });
+      setTimeout(() => setSendSuccessMsg(null), 5000);
+    } catch (err: any) {
+      alert('Chyba při označení přihlášky: ' + (err.message || err));
+    }
+  };
+
+  const handleResendEmail = async (reg: Registration) => {
+    setSendingEmailId(reg.id);
+    try {
+      const res = await fetch(`/api/registrations/${reg.id}/send-confirmation`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('olymp_admin_token') || ''}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSendSuccessMsg({ id: reg.id, msg: 'Potvrzení o zaplacení s PDF bylo úspěšně odesláno na e-mail rodiče!' });
+        setTimeout(() => setSendSuccessMsg(null), 5000);
+      } else {
+        alert(data.error || 'Odeslání potvrzení selhalo');
+      }
+    } catch (err: any) {
+      alert('Chyba spojení: ' + (err.message || err));
+    } finally {
+      setSendingEmailId(null);
+    }
+  };
 
   const handleConfirmDelete = async () => {
     if (!deletingReg) return;
@@ -2247,18 +2002,15 @@ const RegistrationManager: React.FC = () => {
     return registrations.filter(reg => {
       const camp = camps.find(c => c.id === reg.campId);
       const regVs = reg.variableSymbol || camp?.variableSymbol || '';
-      const matchesSearch = 
-        reg.childName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        reg.parentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        reg.parentEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        reg.parentPhone.includes(searchTerm) ||
-        regVs.includes(searchTerm) ||
-        (camp?.title || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearchQuery = matchesSearch(
+        [reg.childName, reg.parentName, reg.parentEmail, reg.parentPhone, regVs, camp?.title],
+        searchTerm
+      );
 
       const matchesCamp = campFilter === 'ALL' || reg.campId === campFilter;
       const matchesStatus = statusFilter === 'ALL' || reg.status === statusFilter;
 
-      return matchesSearch && matchesCamp && matchesStatus;
+      return matchesSearchQuery && matchesCamp && matchesStatus;
     });
   }, [registrations, camps, searchTerm, campFilter, statusFilter]);
 
@@ -2288,12 +2040,30 @@ const RegistrationManager: React.FC = () => {
           <h2 className="text-2xl font-bold text-gray-900">Správa přihlášek (Letní tábory)</h2>
           <p className="text-sm text-gray-500">Zobrazeno {filteredRegistrations.length} z {registrations.length} přihlášek</p>
         </div>
-        <button
-          onClick={handleExportCsv}
-          className="bg-brand-blue hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-xl text-sm transition-colors flex items-center shadow-sm self-start sm:self-auto"
-        >
-          <Download size={16} className="mr-2" /> Export do Excelu (CSV)
-        </button>
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={() => setIsStampModalOpen(true)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-xl text-sm transition-colors flex items-center shadow-sm"
+            title="Nahrát a spravovat originální razítko a podpis pro PDF"
+          >
+            <ImageIcon size={16} className="mr-2" /> Nahrát razítko & podpis
+          </button>
+          <a
+            href="/api/sample-confirmation-pdf"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-sm transition-colors flex items-center shadow-sm"
+            title="Otevřít oficiální vzor PDF s novým razítkem a podpisem"
+          >
+            <FileText size={16} className="mr-2" /> Vzor PDF potvrzení
+          </a>
+          <button
+            onClick={handleExportCsv}
+            className="bg-brand-blue hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-xl text-sm transition-colors flex items-center shadow-sm"
+          >
+            <Download size={16} className="mr-2" /> Export do Excelu (CSV)
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -2398,15 +2168,38 @@ const RegistrationManager: React.FC = () => {
                         {getStatusBadge(reg.status)}
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex flex-col gap-2">
+                        <div className="flex flex-col gap-2 min-w-[200px]">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <button 
-                              onClick={() => handleUpdateStatus(reg.id, 'approved')}
-                              className="p-1.5 bg-green-100 text-green-600 rounded hover:bg-green-200 transition-colors"
-                              title="Schválit"
-                            >
-                              <CheckCircleIcon size={16} />
-                            </button>
+                            {reg.status !== 'approved' ? (
+                              <button 
+                                onClick={() => handleMarkAsPaid(reg)}
+                                className="px-2.5 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-sm"
+                                title="Označit jako zaplaceno (odešle potvrzení s PDF na e-mail rodiče a zpřístupní stažení v portálu)"
+                              >
+                                <Check size={14} /> Zaplaceno / Schválit
+                              </button>
+                            ) : (
+                              <div className="flex items-center gap-1 flex-wrap">
+                                <a
+                                  href={`/api/registrations/${reg.id}/confirmation-pdf`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-md text-xs font-bold transition-colors flex items-center gap-1"
+                                  title="Stáhnout oficiální PDF potvrzení (1:1)"
+                                >
+                                  <FileText size={13} /> PDF
+                                </a>
+                                <button
+                                  onClick={() => handleResendEmail(reg)}
+                                  disabled={sendingEmailId === reg.id}
+                                  className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-brand-blue border border-blue-200 rounded-md text-xs font-bold transition-colors flex items-center gap-1 disabled:opacity-50"
+                                  title="Znovu odeslat potvrzení s PDF na e-mail rodiče"
+                                >
+                                  <Mail size={13} /> {sendingEmailId === reg.id ? 'Odesílám...' : 'Poslat e-mail'}
+                                </button>
+                              </div>
+                            )}
+
                             <button 
                               onClick={() => handleUpdateStatus(reg.id, 'action_required')}
                               className="p-1.5 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"
@@ -2439,6 +2232,12 @@ const RegistrationManager: React.FC = () => {
                               <Trash2 size={16} />
                             </button>
                           </div>
+
+                          {sendSuccessMsg && sendSuccessMsg.id === reg.id && (
+                            <div className="text-[11px] bg-emerald-50 text-emerald-800 p-2 rounded border border-emerald-200 font-medium animate-fadeIn">
+                              {sendSuccessMsg.msg}
+                            </div>
+                          )}
                           
                           {editingId === reg.id && (
                             <div className="mt-2 space-y-2 bg-gray-50 p-2 rounded border border-gray-200">
@@ -2488,6 +2287,7 @@ const RegistrationManager: React.FC = () => {
       {insuranceReg && (
         <InsuranceConfirmationModal
           data={{
+            id: insuranceReg.id,
             childName: insuranceReg.childName,
             childBirthDate: insuranceReg.childBirthDate,
             parentName: insuranceReg.parentName,
@@ -2504,6 +2304,12 @@ const RegistrationManager: React.FC = () => {
           onClose={() => setInsuranceReg(null)}
         />
       )}
+
+      {/* Stamp Manager Modal */}
+      <StampManagerModal
+        isOpen={isStampModalOpen}
+        onClose={() => setIsStampModalOpen(false)}
+      />
 
       {/* Delete Confirmation Modal */}
       <DeleteConfirmModal
@@ -2611,9 +2417,7 @@ const UserManager: React.FC = () => {
 
   const filteredSchoolsForPicker = useMemo(() => {
     return schools.filter(s => 
-      s.name.toLowerCase().includes(schoolSearchTerm.toLowerCase()) ||
-      s.city.toLowerCase().includes(schoolSearchTerm.toLowerCase()) ||
-      s.day.toLowerCase().includes(schoolSearchTerm.toLowerCase())
+      matchesSearch([s.name, s.city, s.day, s.time], schoolSearchTerm)
     );
   }, [schools, schoolSearchTerm]);
 
@@ -2947,9 +2751,7 @@ const AttendanceManager: React.FC<{ currentUser: User | null }> = ({ currentUser
   const filteredStudents = useMemo(() => {
     if (!studentSearchTerm.trim()) return students;
     return students.filter(s => 
-      s.childName.toLowerCase().includes(studentSearchTerm.toLowerCase()) ||
-      (s.childSurname && s.childSurname.toLowerCase().includes(studentSearchTerm.toLowerCase())) ||
-      s.parentName.toLowerCase().includes(studentSearchTerm.toLowerCase())
+      matchesSearch([s.childName, s.childSurname, s.parentName], studentSearchTerm)
     );
   }, [students, studentSearchTerm]);
 
@@ -3497,6 +3299,7 @@ const SchoolRegistrationManager: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedSchoolForSheet, setSelectedSchoolForSheet] = useState<School | null>(null);
   const [insuranceReg, setInsuranceReg] = useState<SchoolRegistration | null>(null);
+  const [isStampModalOpen, setIsStampModalOpen] = useState(false);
   const [deletingReg, setDeletingReg] = useState<SchoolRegistration | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -3528,19 +3331,15 @@ const SchoolRegistrationManager: React.FC = () => {
     return schoolRegistrations.filter(reg => {
       const school = schools.find(s => s.id === reg.schoolId);
       const regVs = reg.variableSymbol || '';
-      const matchesSearch = 
-        reg.childName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        reg.parentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        reg.parentEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        reg.parentPhone.includes(searchTerm) ||
-        regVs.includes(searchTerm) ||
-        (school?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (school?.city || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearchQuery = matchesSearch(
+        [reg.childName, reg.parentName, reg.parentEmail, reg.parentPhone, regVs, school?.name, school?.city],
+        searchTerm
+      );
 
       const matchesSchool = schoolFilter === 'ALL' || reg.schoolId === schoolFilter;
       const matchesStatus = statusFilter === 'ALL' || reg.status === statusFilter;
 
-      return matchesSearch && matchesSchool && matchesStatus;
+      return matchesSearchQuery && matchesSchool && matchesStatus;
     });
   }, [schoolRegistrations, schools, searchTerm, schoolFilter, statusFilter]);
 
@@ -3573,6 +3372,22 @@ const SchoolRegistrationManager: React.FC = () => {
           <p className="text-sm text-gray-500">Zobrazeno {filteredRegistrations.length} z {schoolRegistrations.length} přihlášek</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setIsStampModalOpen(true)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-xl text-sm transition-colors flex items-center shadow-sm"
+            title="Nahrát a spravovat originální razítko a podpis pro PDF"
+          >
+            <ImageIcon size={16} className="mr-2" /> Nahrát razítko & podpis
+          </button>
+          <a
+            href="/api/sample-confirmation-pdf"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-sm transition-colors flex items-center shadow-sm"
+            title="Otevřít oficiální vzor PDF s novým razítkem a podpisem"
+          >
+            <FileText size={16} className="mr-2" /> Vzor PDF potvrzení
+          </a>
           {schoolFilter !== 'ALL' && (
             <button
               onClick={() => {
@@ -3833,6 +3648,12 @@ const SchoolRegistrationManager: React.FC = () => {
           onClose={() => setInsuranceReg(null)}
         />
       )}
+
+      {/* Stamp Manager Modal */}
+      <StampManagerModal
+        isOpen={isStampModalOpen}
+        onClose={() => setIsStampModalOpen(false)}
+      />
 
       {/* Delete Confirmation Modal */}
       <DeleteConfirmModal

@@ -9,6 +9,8 @@ import pool, { initDb, isDbConfigured } from './db.ts';
 import { SCHOOLS, CAMPS, GALLERY_IMAGES, PRODUCTS } from './constants.ts';
 import { getRbConfig, testRbConnection, syncRbPayments, getRbLogs, processSinglePayment } from './rbService.ts';
 import { generateSchoolPaymentPdf } from './pdfGenerator.ts';
+import { syncCustomersToDatabase, generateCustomerEmailHtml, getImportQueueStats } from './importService.ts';
+import sharp from 'sharp';
 import dns from 'dns';
 import crypto from 'crypto';
 
@@ -238,6 +240,29 @@ app.get('/uploads/:filename', async (req, res) => {
   }
 
   return res.status(404).send('File not found');
+});
+
+// Serve official stamp & signature with database fallback so it is never lost on restart/redeploy
+app.get('/stamp-signature.png', async (req, res, next) => {
+  const localPath = path.join(process.cwd(), 'public', 'stamp-signature.png');
+  if (fs.existsSync(localPath)) {
+    return res.sendFile(localPath);
+  }
+
+  try {
+    const [rows] = await pool.query('SELECT data, mimeType FROM uploaded_files WHERE filename = ?', ['stamp-signature.png']);
+    const fileRow = (rows as any[])[0];
+    if (fileRow && fileRow.data) {
+      try {
+        fs.writeFileSync(localPath, fileRow.data);
+      } catch {}
+      res.setHeader('Content-Type', fileRow.mimeType || 'image/png');
+      return res.send(fileRow.data);
+    }
+  } catch (err) {
+    console.error('Error fetching stamp from DB:', err);
+  }
+  next();
 });
 
 // Serve local images
@@ -1630,8 +1655,53 @@ app.put('/api/registrations/:id', requireAdmin, async (req, res) => {
       const [rows] = await pool.query('SELECT * FROM registrations WHERE id = ?', [id]);
       const registration = (rows as any[])[0];
       if (registration && registration.status !== 'approved') {
-        const [campRows] = await pool.query('SELECT title FROM camps WHERE id = ?', [registration.campId]);
-        const campTitle = (campRows as any[])[0]?.title || 'Letní tábor';
+        const [campRows] = await pool.query('SELECT * FROM camps WHERE id = ?', [registration.campId]);
+        const camp = (campRows as any[])[0];
+        const campTitle = camp?.title || 'Letní tábor';
+
+        // Find bank transaction if exists
+        const [bankRows] = await pool.query(
+          'SELECT * FROM bank_payments_log WHERE matchedId = ? OR variableSymbol = ? ORDER BY createdAt DESC LIMIT 1',
+          [registration.id, registration.variableSymbol]
+        );
+        const bankTx = (bankRows as any[])[0];
+        let amountVal = 3500;
+        if (bankTx && bankTx.amount) {
+          amountVal = parseFloat(bankTx.amount);
+        } else if (camp && camp.price) {
+          const parsed = parseFloat(String(camp.price).replace(/[^0-9]/g, ''));
+          if (!isNaN(parsed) && parsed > 0) amountVal = parsed;
+        }
+
+        // Generate official 1:1 PDF confirmation
+        let attachments: any[] | undefined = undefined;
+        try {
+          const pdfBuffer = await generateSchoolPaymentPdf({
+            activityType: 'tabor',
+            activityName: campTitle,
+            paymentDate: bankTx?.bookingDate || new Date(),
+            senderAccount: bankTx?.senderAccount || '',
+            parentName: registration.parentName || bankTx?.senderName || 'Zákonný zástupce',
+            childName: registration.childName,
+            childSurname: '',
+            childBirthDate: registration.childBirthDate,
+            childRodneCislo: null,
+            amount: amountVal,
+            period: camp?.date || 'červenec – srpen',
+            issueDate: new Date()
+          });
+
+          const safeName = (registration.childName || 'tabor').replace(/[^a-zA-Z0-9_-]/g, '_');
+          attachments = [
+            {
+              filename: `Potvrzeni_o_prijeti_platby_tabor_${safeName}.pdf`,
+              content: pdfBuffer,
+              contentType: 'application/pdf'
+            }
+          ];
+        } catch (pdfErr) {
+          console.error('Failed to generate camp PDF attachment:', pdfErr);
+        }
 
         const emailHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
@@ -1644,7 +1714,7 @@ app.put('/api/registrations/:id', requireAdmin, async (req, res) => {
               <p>s radostí vám potvrzujeme, že Vaše platba byla úspěšně přijata a přihláška dítěte <strong>${registration.childName}</strong> na tábor <strong>${campTitle}</strong> byla <strong>schválena</strong>.</p>
               <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 16px; margin: 20px 0;">
                 <p style="margin: 0; color: #166534; font-weight: bold;">✅ Místo pro vaše dítě je závazně garantováno.</p>
-                <p style="margin: 6px 0 0 0; font-size: 13px; color: #15803d;">V Klientském portálu si nyní můžete stáhnout oficiální Potvrzení o zaplacení a účasti pro zdravotní pojišťovnu nebo zaměstnavatele (FKSP).</p>
+                <p style="margin: 6px 0 0 0; font-size: 13px; color: #15803d;">V příloze tohoto e-mailu naleznete oficiální <strong>Potvrzení o úhradě pro zdravotní pojišťovnu / FKSP</strong> s razítkem a podpisem. Stejné potvrzení si můžete kdykoliv stáhnout také po přihlášení do Klientského portálu.</p>
               </div>
               <p>Děkujeme a těšíme se na viděnou!</p>
               <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
@@ -1654,7 +1724,14 @@ app.put('/api/registrations/:id', requireAdmin, async (req, res) => {
             </div>
           </div>
         `;
-        sendEmail(registration.parentEmail, `Potvrzení platby a schválení přihlášky na tábor - Olymp Dance`, emailHtml).catch(console.error);
+        if (registration.parentEmail && registration.parentEmail.includes('@')) {
+          sendEmail(
+            registration.parentEmail,
+            `Potvrzení platby a schválení přihlášky na tábor (${registration.childName}) - Olymp Dance`,
+            emailHtml,
+            attachments
+          ).catch(console.error);
+        }
       }
     }
 
@@ -1663,6 +1740,96 @@ app.put('/api/registrations/:id', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Update camp registration error:', error);
     res.status(500).json({ error: 'Database error' });
+  }
+});
+
+app.post('/api/registrations/:id/send-confirmation', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [rows] = await pool.query('SELECT * FROM registrations WHERE id = ?', [id]);
+    if ((rows as any[]).length === 0) {
+      return res.status(404).json({ error: 'Přihláška nenalezena' });
+    }
+    const registration = (rows as any[])[0];
+
+    const [campRows] = await pool.query('SELECT * FROM camps WHERE id = ?', [registration.campId]);
+    const camp = (campRows as any[])[0];
+    const campTitle = camp?.title || 'Letní tábor';
+
+    const [bankRows] = await pool.query(
+      'SELECT * FROM bank_payments_log WHERE matchedId = ? OR variableSymbol = ? ORDER BY createdAt DESC LIMIT 1',
+      [registration.id, registration.variableSymbol]
+    );
+    const bankTx = (bankRows as any[])[0];
+    let amountVal = 3500;
+    if (bankTx && bankTx.amount) {
+      amountVal = parseFloat(bankTx.amount);
+    } else if (camp && camp.price) {
+      const parsed = parseFloat(String(camp.price).replace(/[^0-9]/g, ''));
+      if (!isNaN(parsed) && parsed > 0) amountVal = parsed;
+    }
+
+    const pdfBuffer = await generateSchoolPaymentPdf({
+      activityType: 'tabor',
+      activityName: campTitle,
+      paymentDate: bankTx?.bookingDate || registration.createdAt || new Date(),
+      senderAccount: bankTx?.senderAccount || '',
+      parentName: registration.parentName || bankTx?.senderName || 'Zákonný zástupce',
+      childName: registration.childName,
+      childSurname: '',
+      childBirthDate: registration.childBirthDate,
+      childRodneCislo: null,
+      amount: amountVal,
+      period: camp?.date || 'červenec – srpen',
+      issueDate: new Date()
+    });
+
+    const safeName = (registration.childName || 'tabor').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const attachments = [
+      {
+        filename: `Potvrzeni_o_prijeti_platby_tabor_${safeName}.pdf`,
+        content: pdfBuffer,
+        contentType: 'application/pdf'
+      }
+    ];
+
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
+        <div style="background-color: #002B49; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Olymp Dance Olomouc</h1>
+          <p style="color: #4ade80; margin: 6px 0 0 0; font-size: 15px; font-weight: bold;">Potvrzení o úhradě letního tábora</p>
+        </div>
+        <div style="background-color: #ffffff; padding: 32px 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
+          <p style="font-size: 16px;">Dobrý den, <strong>${registration.parentName}</strong>,</p>
+          <p>zasíláme Vám oficiální potvrzení o přijetí platby za letní tábor <strong>${campTitle}</strong> pro dítě <strong>${registration.childName}</strong>.</p>
+          <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 16px; margin: 20px 0;">
+            <p style="margin: 0; color: #166534; font-weight: bold;">📄 Oficiální potvrzení pro zdravotní pojišťovnu naleznete v příloze tohoto e-mailu.</p>
+            <p style="margin: 6px 0 0 0; font-size: 13px; color: #15803d;">Potvrzení si můžete také kdykoliv stáhnout ve svém Klientském portálu po přihlášení.</p>
+          </div>
+          <p>Těšíme se na viděnou!</p>
+          <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
+          <p style="font-size: 13px; color: #94a3b8; text-align: center; margin: 0;">
+            Taneční klub Olymp Olomouc • info@olympdance.cz • +420 722 017 700
+          </p>
+        </div>
+      </div>
+    `;
+
+    if (!registration.parentEmail || !registration.parentEmail.includes('@')) {
+      return res.status(400).json({ error: 'Přihláška nemá platný e-mail rodiče' });
+    }
+
+    await sendEmail(
+      registration.parentEmail,
+      `Potvrzení platby tábora (${registration.childName}) - Olymp Dance`,
+      emailHtml,
+      attachments
+    );
+
+    res.json({ success: true, message: 'Potvrzení bylo úspěšně odesláno na e-mail rodiče.' });
+  } catch (err: any) {
+    console.error('Send confirmation error:', err);
+    res.status(500).json({ error: 'Chyba při odesílání potvrzení: ' + err.message });
   }
 });
 
@@ -1689,14 +1856,20 @@ app.get('/api/registrations/:id/confirmation-pdf', async (req, res) => {
 
     // Access control: admin, trainer, or parent credentials match
     const authUser = (req as any).user;
+    const isAdminOrTrainer = Boolean(authUser && (authUser.role === 'admin' || authUser.role === 'trainer'));
     const isAuthorized = Boolean(
-      (authUser && (authUser.role === 'admin' || authUser.role === 'trainer')) ||
+      isAdminOrTrainer ||
       (authUser && authUser.type === 'camp_portal' && authUser.id === reg.id) ||
       (req.query.password && String(req.query.password).trim() === reg.password) ||
       (req.query.vs && String(req.query.vs).trim() === reg.variableSymbol)
     );
     if (!isAuthorized) {
       return res.status(403).json({ error: 'Přístup k potvrzení o platbě odepřen.' });
+    }
+
+    // Parents can only download the official paid confirmation once the registration is approved / paid
+    if (!isAdminOrTrainer && reg.status !== 'approved') {
+      return res.status(403).json({ error: 'Potvrzení o zaplacení bude k dispozici ke stažení až po zaplacení a schválení přihlášky administrátorem.' });
     }
 
     // Find camp info
@@ -2051,6 +2224,125 @@ app.get('/api/school-registrations/:id/confirmation-pdf', async (req, res) => {
   }
 });
 
+// Sample confirmation PDF endpoint (publicly viewable preview)
+app.get('/api/sample-confirmation-pdf', async (req, res) => {
+  try {
+    const pdfBuffer = await generateSchoolPaymentPdf({
+      activityType: 'krouzek',
+      activityName: 'ZŠ Za Mlýnem, Přerov',
+      paymentDate: new Date(),
+      senderAccount: '123456789/0800',
+      parentName: 'Jana Nováková',
+      childName: 'Eliška',
+      childSurname: 'Nováková',
+      childBirthDate: '2016-05-12',
+      amount: 1700,
+      period: 'únor 2026 – květen 2026',
+      issueDate: new Date()
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="Vzor_Potvrzeni_o_prijeti_platby.pdf"');
+    res.send(pdfBuffer);
+  } catch (err: any) {
+    console.error('Error generating sample confirmation PDF:', err);
+    res.status(500).json({ error: 'Chyba při generování vzoru potvrzení: ' + err.message });
+  }
+});
+
+// Admin endpoint to upload custom stamp & signature image (PNG, JPG, etc.)
+app.post('/api/admin/stamp', requireAdmin, upload.single('stampImage'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Nebyl nahrán žádný soubor razítka' });
+    }
+
+    const inputPath = req.file.path;
+    const publicStampPath = path.join(process.cwd(), 'public', 'stamp-signature.png');
+    const distStampPath = path.join(process.cwd(), 'dist', 'stamp-signature.png');
+
+    // Convert and optimize with sharp to clean high-resolution PNG
+    const processedBuffer = await sharp(inputPath)
+      .resize({ width: 1200, withoutEnlargement: false, fit: 'inside' })
+      .png({ quality: 95, compressionLevel: 7 })
+      .toBuffer();
+
+    // Write to public/stamp-signature.png
+    await fs.writeFile(publicStampPath, processedBuffer);
+    if (fs.existsSync(path.join(process.cwd(), 'dist'))) {
+      await fs.writeFile(distStampPath, processedBuffer).catch(() => {});
+    }
+
+    // Persist to MySQL uploaded_files so it is permanent across restarts & deployments
+    try {
+      await pool.query(
+        `INSERT INTO uploaded_files (filename, originalName, mimeType, size, data) 
+         VALUES (?, ?, ?, ?, ?) 
+         ON DUPLICATE KEY UPDATE data = VALUES(data), size = VALUES(size), mimeType = VALUES(mimeType)`,
+        ['stamp-signature.png', req.file.originalname, 'image/png', processedBuffer.length, processedBuffer]
+      );
+    } catch (dbErr) {
+      console.warn('Could not persist stamp to MySQL:', dbErr);
+    }
+
+    // Clean up temporary file
+    await fs.remove(inputPath).catch(() => {});
+
+    // Try to regenerate the sample preview image if script is available
+    try {
+      const stampBase64 = processedBuffer.toString('base64');
+      const previewSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 595 842" width="595" height="842" style="background:#ffffff">
+        <!-- Pure white background -->
+        <rect x="0" y="0" width="595" height="842" fill="#ffffff" />
+        <text x="46" y="44" font-family="'Liberation Sans', Arial, sans-serif" font-weight="bold" font-size="11" fill="#111827">Taneční klub Olymp Olomouc, z. s.</text>
+        <text x="46" y="58" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#374151">Jiráskova 25, Olomouc - Hodolany 779 00</text>
+        <text x="46" y="70" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#374151">IČO: 68347286</text>
+        <text x="46" y="82" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#374151">L 4133 vedený u Krajského soudu v Ostravě</text>
+        <text x="46" y="94" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#374151">zastoupený předsedou Martinem Matýskem</text>
+        <line x1="46" y1="108" x2="545" y2="108" stroke="#e5e7eb" stroke-width="1" />
+        <text x="297" y="155" font-family="'Liberation Sans', Arial, sans-serif" font-weight="bold" font-size="20" fill="#111827" text-anchor="middle">Potvrzení o přijetí platby</text>
+        <text x="55" y="210" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">Tímto potvrzuji,</text>
+        <text x="55" y="240" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">Že dne 9. 9. 2026 byl z bankovního účtu č. 123456789/0800 vedeného na Jana Nováková</text>
+        <text x="55" y="260" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">za tanečnici Eliška Nováková (r.č. 12. 5. 2016) uhrazen členský příspěvek a účastnický poplatek</text>
+        <text x="55" y="280" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">do tanečního kroužku (ZŠ Za Mlýnem, Přerov):</text>
+        <text x="55" y="325" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827" font-weight="bold">Částka: Kč 1 700,- <tspan font-weight="normal">(slovy: jedentisícsedmset)</tspan></text>
+        <text x="55" y="355" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">Účet příjemce: 1806875329/5500 Tanečnímu klubu Olymp Olomouc, z.s.</text>
+        <text x="55" y="385" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">za období : únor 2026 – květen 2026.</text>
+        <text x="55" y="440" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">V Přerově dne 9. 9. 2026</text>
+        <image href="data:image/png;base64,${stampBase64}" x="330" y="460" width="205" height="110" />
+        <text x="432" y="585" font-family="'Liberation Sans', Arial, sans-serif" font-weight="bold" font-size="10" fill="#111827" text-anchor="middle">Martin Matýsek</text>
+        <text x="432" y="600" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#4b5563" text-anchor="middle">Předseda / Statutární zástupce TK Olymp Olomouc, z. s.</text>
+      </svg>`;
+      const previewBuffer = await sharp(Buffer.from(previewSvg)).png().toBuffer();
+      await fs.writeFile(path.join(process.cwd(), 'public', 'sample-confirmation-preview.png'), previewBuffer);
+      if (fs.existsSync(path.join(process.cwd(), 'dist'))) {
+        await fs.writeFile(path.join(process.cwd(), 'dist', 'sample-confirmation-preview.png'), previewBuffer).catch(() => {});
+      }
+    } catch (previewErr) {
+      console.warn('Could not update sample confirmation preview image:', previewErr);
+    }
+
+    res.json({
+      success: true,
+      message: 'Originální razítko a podpis bylo úspěšně nahráno a je aktivní pro všechna PDF potvrzení!',
+      stampUrl: `/stamp-signature.png?t=${Date.now()}`
+    });
+  } catch (err: any) {
+    console.error('Error uploading stamp:', err);
+    res.status(500).json({ error: 'Chyba při nahrávání razítka: ' + err.message });
+  }
+});
+
+// Admin endpoint to get stamp status
+app.get('/api/admin/stamp', async (req, res) => {
+  const publicStampPath = path.join(process.cwd(), 'public', 'stamp-signature.png');
+  const exists = fs.existsSync(publicStampPath);
+  res.json({
+    exists,
+    url: exists ? `/stamp-signature.png?t=${Date.now()}` : null
+  });
+});
+
 app.delete('/api/school-registrations/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -2059,6 +2351,303 @@ app.delete('/api/school-registrations/:id', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Delete school registration error:', error);
     res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// =========================================================================
+// CUSTOMER BULK IMPORT & CONTROLLED BATCH EMAIL SENDER
+// =========================================================================
+
+// Get import queue with stats, filter by batch/status/search/school
+app.get('/api/admin/import-queue', requireAdmin, async (req, res) => {
+  try {
+    const batch = req.query.batch ? parseInt(req.query.batch as string, 10) : undefined;
+    const status = (req.query.status as string) || 'all';
+    const schoolId = (req.query.schoolId as string) || 'all';
+    const search = ((req.query.search as string) || '').trim().toLowerCase();
+    const page = parseInt((req.query.page as string) || '1', 10);
+    const limit = parseInt((req.query.limit as string) || '50', 10);
+    const offset = (page - 1) * limit;
+
+    let whereClauses: string[] = ['1=1'];
+    const params: any[] = [];
+
+    if (batch && !isNaN(batch)) {
+      whereClauses.push('batchNumber = ?');
+      params.push(batch);
+    }
+    if (status && status !== 'all') {
+      whereClauses.push('emailStatus = ?');
+      params.push(status);
+    }
+    if (schoolId && schoolId !== 'all') {
+      whereClauses.push('schoolId = ?');
+      params.push(schoolId);
+    }
+    if (search) {
+      whereClauses.push('(LOWER(childName) LIKE ? OR LOWER(childSurname) LIKE ? OR LOWER(email) LIKE ? OR LOWER(phone) LIKE ? OR LOWER(variableSymbol) LIKE ?)');
+      const s = `%${search}%`;
+      params.push(s, s, s, s, s);
+    }
+
+    const whereSql = whereClauses.join(' AND ');
+
+    // Total count for current filter
+    const [countRows] = await pool.query(`SELECT COUNT(*) as totalFiltered FROM customer_import_queue WHERE ${whereSql}`, params);
+    const totalFiltered = (countRows as any[])[0]?.totalFiltered || 0;
+
+    // Fetch page of items
+    const [items] = await pool.query(
+      `SELECT * FROM customer_import_queue WHERE ${whereSql} ORDER BY batchNumber ASC, id ASC LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    );
+
+    // Fetch overall queue statistics
+    const stats = await getImportQueueStats(pool);
+    const smtpConfig = await getSmtpConfig();
+
+    res.json({
+      items,
+      stats,
+      smtpConfigured: smtpConfig.isConfigured,
+      pagination: {
+        page,
+        limit,
+        totalFiltered,
+        totalPages: Math.ceil(totalFiltered / limit)
+      }
+    });
+  } catch (error: any) {
+    console.error('Error fetching customer import queue:', error);
+    res.status(500).json({ error: 'Chyba při načítání fronty importu: ' + error.message });
+  }
+});
+
+// Trigger synchronization or reload of customers into database and queue
+app.post('/api/admin/import-queue/sync', requireAdmin, async (req, res) => {
+  try {
+    const csvContent = req.body?.csvContent;
+    console.log('[Import] Starting customer sync to database...');
+    const result = await syncCustomersToDatabase(pool, csvContent);
+    const stats = await getImportQueueStats(pool);
+    res.json({
+      success: true,
+      message: `Úspěšně zpracováno ${result.totalProcessed} zákazníků (nových ve frontě: ${result.newInQueue}, propojeno do kroužků: ${result.syncedToRegistrations}).`,
+      result,
+      stats
+    });
+  } catch (error: any) {
+    console.error('Error syncing customers:', error);
+    res.status(500).json({ error: 'Chyba při synchronizaci zákazníků: ' + error.message });
+  }
+});
+
+// Preview email template for a single queue item
+app.get('/api/admin/import-queue/preview/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [rows] = await pool.query('SELECT * FROM customer_import_queue WHERE id = ?', [id]);
+    const item = (rows as any[])[0];
+    if (!item) {
+      return res.status(404).json({ error: 'Záznam nenalezen v databázi.' });
+    }
+
+    const [schoolRows] = await pool.query('SELECT * FROM schools WHERE id = ?', [item.schoolId]);
+    const school = (schoolRows as any[])[0] || { name: item.schoolName, city: 'Olomouc', price: '1700 Kč / pololetí' };
+
+    const host = `${req.protocol}://${req.get('host')}`;
+    const preview = generateCustomerEmailHtml(item, school, host);
+
+    res.json({
+      recipient: item.email,
+      childName: `${item.childName} ${item.childSurname}`,
+      schoolName: school.name,
+      variableSymbol: item.variableSymbol,
+      password: item.password,
+      subject: preview.subject,
+      html: preview.html
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Chyba při generování náhledu e-mailu: ' + error.message });
+  }
+});
+
+// Send email to a single queue item
+app.post('/api/admin/import-queue/send-single', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.body;
+    if (!id) return res.status(400).json({ error: 'Chybí ID záznamu.' });
+
+    const [rows] = await pool.query('SELECT * FROM customer_import_queue WHERE id = ?', [id]);
+    const item = (rows as any[])[0];
+    if (!item) return res.status(404).json({ error: 'Záznam nenalezen.' });
+
+    const [schoolRows] = await pool.query('SELECT * FROM schools WHERE id = ?', [item.schoolId]);
+    const school = (schoolRows as any[])[0] || { name: item.schoolName, city: 'Olomouc', price: '1700 Kč / pololetí' };
+
+    const host = `${req.protocol}://${req.get('host')}`;
+    const { subject, html } = generateCustomerEmailHtml(item, school, host);
+
+    // Update status to sending
+    await pool.query('UPDATE customer_import_queue SET emailStatus = "sending" WHERE id = ?', [id]);
+
+    const result = await sendEmail(item.email, subject, html);
+    if (result) {
+      await pool.query(`
+        UPDATE customer_import_queue 
+        SET emailStatus = "sent", emailSentAt = NOW(), emailError = NULL 
+        WHERE id = ?
+      `, [id]);
+
+      // Add to registration history
+      if (item.registrationId) {
+        try {
+          const [regRows] = await pool.query('SELECT history FROM school_registrations WHERE id = ?', [item.registrationId]);
+          const currentHist = (regRows as any[])[0]?.history || [];
+          const histArr = Array.isArray(currentHist) ? currentHist : (typeof currentHist === 'string' ? JSON.parse(currentHist) : []);
+          histArr.push({ date: new Date().toISOString(), message: `Odeslán e-mail s přihlášením (${item.email})` });
+          await pool.query('UPDATE school_registrations SET history = ? WHERE id = ?', [JSON.stringify(histArr), item.registrationId]);
+        } catch (e) {}
+      }
+
+      res.json({ success: true, message: `E-mail úspěšně odeslán na ${item.email}.` });
+    } else {
+      const errorMsg = 'Odeslání selhalo - ověřte konfiguraci SMTP v sekci Nastavení.';
+      await pool.query('UPDATE customer_import_queue SET emailStatus = "failed", emailError = ? WHERE id = ?', [errorMsg, id]);
+      res.status(500).json({ success: false, error: errorMsg });
+    }
+  } catch (error: any) {
+    console.error('Error sending single email:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Send batch of emails with strict 1.8s delay between messages to protect Gmail SMTP
+app.post('/api/admin/import-queue/send-batch', requireAdmin, async (req, res) => {
+  try {
+    const { batchNumber, count = 10, specificIds } = req.body;
+
+    let items: any[] = [];
+    if (Array.isArray(specificIds) && specificIds.length > 0) {
+      const [rows] = await pool.query('SELECT * FROM customer_import_queue WHERE id IN (?)', [specificIds]);
+      items = rows as any[];
+    } else if (batchNumber) {
+      const [rows] = await pool.query(
+        'SELECT * FROM customer_import_queue WHERE batchNumber = ? AND emailStatus != "sent" ORDER BY id ASC LIMIT ?',
+        [batchNumber, count]
+      );
+      items = rows as any[];
+    } else {
+      // Send next pending items across the queue
+      const [rows] = await pool.query(
+        'SELECT * FROM customer_import_queue WHERE emailStatus = "pending" ORDER BY batchNumber ASC, id ASC LIMIT ?',
+        [count]
+      );
+      items = rows as any[];
+    }
+
+    if (items.length === 0) {
+      return res.json({
+        success: true,
+        processed: 0,
+        succeeded: 0,
+        failed: 0,
+        message: 'Žádné čekající e-maily k odeslání pro vybranou dávku.'
+      });
+    }
+
+    console.log(`[Batch Email Dispatch] Starting batch sending of ${items.length} emails with 1.8s delay...`);
+
+    const host = `${req.protocol}://${req.get('host')}`;
+    const results: Array<{ id: string; email: string; childName: string; success: boolean; error?: string }> = [];
+    let succeeded = 0;
+    let failed = 0;
+
+    // Cache schools
+    const [allSchools] = await pool.query('SELECT * FROM schools');
+    const schoolMap = new Map<string, any>();
+    (allSchools as any[]).forEach(s => schoolMap.set(s.id, s));
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const school = schoolMap.get(item.schoolId) || { name: item.schoolName, city: 'Olomouc', price: '1700 Kč / pololetí' };
+      const { subject, html } = generateCustomerEmailHtml(item, school, host);
+
+      try {
+        console.log(`[Batch Progress ${i + 1}/${items.length}] Sending to: ${item.email} (${item.childName} ${item.childSurname})...`);
+        const sendRes = await sendEmail(item.email, subject, html);
+
+        if (sendRes) {
+          await pool.query(`
+            UPDATE customer_import_queue 
+            SET emailStatus = "sent", emailSentAt = NOW(), emailError = NULL 
+            WHERE id = ?
+          `, [item.id]);
+
+          // Update registration history
+          if (item.registrationId) {
+            try {
+              const [regRows] = await pool.query('SELECT history FROM school_registrations WHERE id = ?', [item.registrationId]);
+              const currentHist = (regRows as any[])[0]?.history || [];
+              const histArr = Array.isArray(currentHist) ? currentHist : (typeof currentHist === 'string' ? JSON.parse(currentHist) : []);
+              histArr.push({ date: new Date().toISOString(), message: `Odeslán e-mail s přihlášením (${item.email})` });
+              await pool.query('UPDATE school_registrations SET history = ? WHERE id = ?', [JSON.stringify(histArr), item.registrationId]);
+            } catch (e) {}
+          }
+
+          succeeded++;
+          results.push({ id: item.id, email: item.email, childName: `${item.childName} ${item.childSurname}`, success: true });
+        } else {
+          const err = 'SMTP odeslání vrátilo prázdnou odpověď nebo není nakonfigurováno';
+          await pool.query('UPDATE customer_import_queue SET emailStatus = "failed", emailError = ? WHERE id = ?', [err, item.id]);
+          failed++;
+          results.push({ id: item.id, email: item.email, childName: `${item.childName} ${item.childSurname}`, success: false, error: err });
+        }
+      } catch (err: any) {
+        console.error(`[Batch Error] Failed sending to ${item.email}:`, err.message);
+        await pool.query('UPDATE customer_import_queue SET emailStatus = "failed", emailError = ? WHERE id = ?', [err.message, item.id]);
+        failed++;
+        results.push({ id: item.id, email: item.email, childName: `${item.childName} ${item.childSurname}`, success: false, error: err.message });
+      }
+
+      // Respect Gmail SMTP rate-limit: 1.8 seconds delay between emails
+      if (i < items.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1800));
+      }
+    }
+
+    const updatedStats = await getImportQueueStats(pool);
+
+    res.json({
+      success: true,
+      processed: items.length,
+      succeeded,
+      failed,
+      results,
+      stats: updatedStats,
+      message: `Dávka dokončena: ${succeeded} odesláno úspěšně, ${failed} chyb.`
+    });
+  } catch (error: any) {
+    console.error('Error in send-batch:', error);
+    res.status(500).json({ error: 'Chyba při odesílání dávky: ' + error.message });
+  }
+});
+
+// Reset status of failed or selected items back to pending
+app.post('/api/admin/import-queue/reset-status', requireAdmin, async (req, res) => {
+  try {
+    const { ids, resetFailedOnly, resetAll } = req.body;
+    if (resetAll) {
+      await pool.query('UPDATE customer_import_queue SET emailStatus = "pending", emailError = NULL');
+    } else if (resetFailedOnly) {
+      await pool.query('UPDATE customer_import_queue SET emailStatus = "pending", emailError = NULL WHERE emailStatus = "failed"');
+    } else if (Array.isArray(ids) && ids.length > 0) {
+      await pool.query('UPDATE customer_import_queue SET emailStatus = "pending", emailError = NULL WHERE id IN (?)', [ids]);
+    }
+    const stats = await getImportQueueStats(pool);
+    res.json({ success: true, stats });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -2382,6 +2971,23 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Server running on http://localhost:${PORT}`);
+
+  // Restore stamp-signature.png from database if available, ensuring permanence across restarts & redeployments
+  try {
+    const [rows] = await pool.query('SELECT data FROM uploaded_files WHERE filename = ?', ['stamp-signature.png']);
+    const fileRow = (rows as any[])[0];
+    if (fileRow && fileRow.data) {
+      const publicPath = path.join(process.cwd(), 'public', 'stamp-signature.png');
+      const distPath = path.join(process.cwd(), 'dist', 'stamp-signature.png');
+      await fs.writeFile(publicPath, fileRow.data);
+      if (fs.existsSync(path.join(process.cwd(), 'dist'))) {
+        await fs.writeFile(distPath, fileRow.data).catch(() => {});
+      }
+      console.log('Restored official stamp-signature.png from permanent MySQL storage');
+    }
+  } catch (err) {
+    // Non-fatal if database is initializing
+  }
 });

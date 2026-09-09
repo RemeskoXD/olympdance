@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   HelpCircle
 } from 'lucide-react';
+import { matchesSearch } from '../utils/search';
 
 interface RbStatus {
   clientId: string;
@@ -224,14 +225,9 @@ export const RbBankManager: React.FC = () => {
   };
 
   const filteredLogs = logs.filter(log => {
-    if (!searchTerm) return true;
-    const term = searchTerm.toLowerCase();
-    return (
-      (log.variableSymbol && log.variableSymbol.toLowerCase().includes(term)) ||
-      (log.matchedName && log.matchedName.toLowerCase().includes(term)) ||
-      (log.message && log.message.toLowerCase().includes(term)) ||
-      (log.senderName && log.senderName.toLowerCase().includes(term)) ||
-      log.amount.toString().includes(term)
+    return matchesSearch(
+      [log.variableSymbol, log.matchedName, log.message, log.senderName, log.amount?.toString()],
+      searchTerm
     );
   });
 

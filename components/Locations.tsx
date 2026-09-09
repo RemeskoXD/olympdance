@@ -3,6 +3,7 @@ import { Search, MapPin, Calendar, Clock, Banknote, X, CheckCircle2, Shirt, Info
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { School } from '../types';
+import { matchesSearch } from '../utils/search';
 
 const Locations: React.FC = () => {
   const { schools } = useData();
@@ -54,16 +55,17 @@ const Locations: React.FC = () => {
   // Filter logic
   const filteredSchools = useMemo(() => {
     return schools.filter(school => {
-      const matchesSearch = school.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            school.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            school.day.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearchQuery = matchesSearch(
+        [school.name, school.city, school.day, school.time],
+        searchTerm
+      );
       const matchesCity = cityFilter === 'Všechna města' || school.city === cityFilter;
       const matchesType = typeFilter === 'all' || 
                           (typeFilter === 'kindergarten' && school.isKindergarten) || 
                           (typeFilter === 'elementary' && !school.isKindergarten);
       const matchesDay = dayFilter === 'all' || school.day.toLowerCase() === dayFilter.toLowerCase();
       
-      return matchesSearch && matchesCity && matchesType && matchesDay;
+      return matchesSearchQuery && matchesCity && matchesType && matchesDay;
     });
   }, [searchTerm, cityFilter, typeFilter, dayFilter, schools]);
 
@@ -181,11 +183,11 @@ const Locations: React.FC = () => {
                     <ul className="space-y-3 text-sm text-gray-600">
                        <li className="flex items-start">
                          <span className="text-brand-red mr-2 font-bold">•</span>
-                         <span>Kroužek se platí pololetně (do 15.10. a 15.2.).</span>
+                         <span>Kroužek se platí pololetně (do 10.10. a 10.2.).</span>
                        </li>
                        <li className="flex items-start">
                          <span className="text-brand-red mr-2 font-bold">•</span>
-                         <span>Lze vystavit potvrzení pro pojišťovnu.</span>
+                         <span>Lze vystavit potvrzení pro pojišťovnu (najdete ve vašem přihlášení).</span>
                        </li>
                        <li className="flex items-start">
                          <span className="text-brand-red mr-2 font-bold">•</span>

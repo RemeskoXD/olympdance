@@ -1,5 +1,6 @@
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
+import path from 'path';
 
 export interface SchoolPaymentPdfData {
   activityType?: 'krouzek' | 'tabor';
@@ -172,57 +173,43 @@ export function generateSchoolPaymentPdf(data: SchoolPaymentPdfData): Promise<Bu
       const fontReg = hasRegularFont ? libSansRegular : 'Helvetica';
       const fontBld = hasBoldFont ? libSansBold : 'Helvetica-Bold';
 
-      // 1. TOP RED BANNER (exact brand color #d32f2f)
-      doc.rect(0, 0, 595.28, 88).fill('#d32f2f');
+      // 1. PURE WHITE BACKGROUND FOR THE ENTIRE PDF
+      doc.rect(0, 0, 595.28, 841.89).fill('#ffffff');
 
-      // Left text block inside banner (white text)
-      doc.fillColor('#ffffff')
-         .font(fontBld).fontSize(9.5)
-         .text('Taneční klub Olymp Olomouc, z. s.', 46, 16);
+      // Top Header (Dark text on pure white background)
+      const headerTopY = 32;
+      doc.fillColor('#111827')
+         .font(fontBld).fontSize(10.5)
+         .text('Taneční klub Olymp Olomouc, z. s.', 46, headerTopY);
 
-      doc.font(fontReg).fontSize(8.5)
-         .text('Jiráskova 25, Olomouc - Hodolany 779 00', 46, 29)
-         .text('IČO: 68347286', 46, 41)
-         .text('L 4133 vedený u Krajského soudu v Ostravě', 46, 53)
-         .text('zastoupený předsedou Mgr. Miroslavem Hýžou', 46, 65);
+      doc.fillColor('#374151')
+         .font(fontReg).fontSize(8.5)
+         .text('Jiráskova 25, Olomouc - Hodolany 779 00', 46, headerTopY + 14)
+         .text('IČO: 68347286', 46, headerTopY + 26)
+         .text('L 4133 vedený u Krajského soudu v Ostravě', 46, headerTopY + 38)
+         .text('zastoupený předsedou Martinem Matýskem', 46, headerTopY + 50);
 
-      // Right black logo square badge
-      const logoBoxX = 480;
-      const logoBoxY = 11;
-      const logoBoxW = 68;
-      const logoBoxH = 66;
+      // Club logo in top right header
+      const logoPath = path.join(process.cwd(), 'public', 'logo.png');
+      if (fs.existsSync(logoPath)) {
+        try {
+          doc.image(logoPath, 475, headerTopY - 4, { width: 68 });
+        } catch {}
+      }
 
-      doc.roundedRect(logoBoxX, logoBoxY, logoBoxW, logoBoxH, 3).fill('#000000');
+      // Subtle divider under header
+      doc.strokeColor('#e5e7eb').lineWidth(1).moveTo(46, headerTopY + 72).lineTo(545, headerTopY + 72).stroke();
 
-      // White dancer graphic inside black square
-      doc.save();
-      doc.translate(logoBoxX + 34, logoBoxY + 24);
-      // Head / star
-      doc.circle(0, -11, 2.8).fill('#ffffff');
-      // Dynamic dancing arms and swoosh
-      doc.strokeColor('#ffffff').lineWidth(2.4).lineCap('round')
-         .moveTo(-11, -4).bezierCurveTo(-3, -7, 2, 2, 10, 8).stroke()
-         .moveTo(8, -8).bezierCurveTo(4, -4, -6, 2, -3, 11).stroke();
-      doc.restore();
+      // 2. DOCUMENT TITLE
+      doc.fillColor('#111827').font(fontBld).fontSize(19)
+         .text('Potvrzení o přijetí platby', 45, 145, { width: 505, align: 'center' });
 
-      doc.fillColor('#ffffff').font(fontBld).fontSize(7.5)
-         .text('TK OLYMP', logoBoxX, 48, { width: logoBoxW, align: 'center' });
-      doc.font(fontReg).fontSize(5)
-         .text('WWW.TKOLYMP.CZ', logoBoxX, 59, { width: logoBoxW, align: 'center' });
-
-      // 2. BOTTOM LEFT RED ACCENT STRIPE
-      doc.rect(0, 825, 115, 14).fill('#d32f2f');
-
-      // 3. DOCUMENT TITLE
-      doc.fillColor('#000000').font(fontBld).fontSize(19)
-         .text('Potvrzení o přijetí platby', 45, 160, { width: 505, align: 'center' });
-
-      // 4. MAIN CONTENT
+      // 3. MAIN CONTENT
       const textX = 55;
       const textW = 485;
 
       doc.font(fontReg).fontSize(11).fillColor('#111827')
-         .text('Tímto potvrzuji,', textX, 215);
+         .text('Tímto potvrzuji,', textX, 205);
 
       // Data formatting
       const paymentDateStr = formatCzechDate(data.paymentDate || new Date());
@@ -273,48 +260,31 @@ export function generateSchoolPaymentPdf(data: SchoolPaymentPdfData): Promise<Bu
       doc.text(`V Přerově dne ${issueDateStr}`, textX, 430);
 
       // 5. OFFICIAL CLUB STAMP & SIGNATURE BLOCK (Right aligned)
-      const stampX = 350;
-      const stampY = 465;
+      const stampX = 335;
+      const stampY = 460;
+      const stampImagePath = path.join(process.cwd(), 'public', 'stamp-signature.png');
 
-      // Stamp border
-      doc.roundedRect(stampX, stampY, 162, 62, 3).strokeColor('#002B49').lineWidth(1.2).stroke();
-
-      // Stamp internal text
-      doc.fillColor('#002B49').font(fontBld).fontSize(7.5)
-         .text('TANEČNÍ KLUB OLYMP OLOMOUC', stampX + 6, stampY + 6, { width: 150 });
-
-      doc.font(fontReg).fontSize(6.5)
-         .text('Jiráskova 25, 779 00 Olomouc', stampX + 6, stampY + 18)
-         .text('IČ: 683 47 286', stampX + 6, stampY + 28)
-         .text('č.ú.: 1806875329 / 0800', stampX + 6, stampY + 38);
-
-      doc.fontSize(5.5)
-         .text('www.tkolymp.cz   tkolymp@tkolymp.cz', stampX + 6, stampY + 48);
-
-      // Stamp small dancer logo emblem on the right side
-      doc.save();
-      doc.translate(stampX + 138, stampY + 28);
-      doc.circle(0, -6, 2).fill('#002B49');
-      doc.strokeColor('#002B49').lineWidth(1.4)
-         .moveTo(-5, -2).bezierCurveTo(-1, -3, 1, 3, 5, 5).stroke();
-      doc.restore();
-
-      // Realistic dark-ink signature swoosh signing diagonally across the stamp
-      doc.strokeColor('#001a33').lineWidth(1.8).lineCap('round')
-         .moveTo(stampX + 25, stampY + 42)
-         .bezierCurveTo(stampX + 60, stampY + 12, stampX + 90, stampY + 52, stampX + 135, stampY + 20)
-         .stroke();
-      doc.strokeColor('#001a33').lineWidth(1.3).lineCap('round')
-         .moveTo(stampX + 45, stampY + 32)
-         .bezierCurveTo(stampX + 80, stampY + 58, stampX + 115, stampY + 8, stampX + 152, stampY + 36)
-         .stroke();
+      if (fs.existsSync(stampImagePath)) {
+        doc.image(stampImagePath, stampX, stampY, { width: 195 });
+      } else {
+        // Fallback stamp border
+        doc.roundedRect(stampX, stampY, 175, 65, 3).strokeColor('#002B49').lineWidth(1.2).stroke();
+        doc.fillColor('#002B49').font(fontBld).fontSize(7.5)
+           .text('TANEČNÍ KLUB OLYMP OLOMOUC', stampX + 6, stampY + 6, { width: 160 });
+        doc.font(fontReg).fontSize(6.5)
+           .text('Jiráskova 25, 779 00 Olomouc', stampX + 6, stampY + 18)
+           .text('IČ: 683 47 286', stampX + 6, stampY + 28)
+           .text('č.ú.: 1806875329 / 0800', stampX + 6, stampY + 38);
+        doc.fontSize(5.5)
+           .text('www.tkolymp.cz   tkolymp@tkolymp.cz', stampX + 6, stampY + 48);
+      }
 
       // Signatory representative name & position below stamp
-      doc.fillColor('#000000').font(fontBld).fontSize(10.5)
-         .text('Martin Matýsek', stampX, stampY + 70, { width: 162, align: 'center' });
+      doc.fillColor('#111827').font(fontBld).fontSize(10)
+         .text('Martin Matýsek', stampX, stampY + 106, { width: 195, align: 'center' });
 
-      doc.font(fontReg).fontSize(9)
-         .text('Sekretariát TK Olymp Olomouc, z. s.', stampX, stampY + 84, { width: 162, align: 'center' });
+      doc.fillColor('#4b5563').font(fontReg).fontSize(8.5)
+         .text('Předseda / Statutární zástupce TK Olymp Olomouc, z. s.', stampX, stampY + 119, { width: 195, align: 'center' });
 
       // Finalize document stream
       doc.end();

@@ -37,6 +37,7 @@ export const SCHOOLS: School[] = [
   { id: '28', name: 'ZŠ Holečkova', city: 'Olomouc', day: 'Středa', time: '14:00 - 14:45', price: '1700 Kč / pololetí' },
   { id: '29', name: 'ZŠ Spojenců', city: 'Olomouc', day: 'Čtvrtek', time: '15:00 - 15:45', price: '1700 Kč / pololetí' },
   { id: '30', name: 'MŠ Aurora', city: 'Olomouc', day: 'Pátek', time: '10:00 - 10:45', price: '1550 Kč / pololetí', isKindergarten: true }, // MŠ Standard
+  { id: '31', name: 'ZŠ Dub nad Moravou', city: 'Dub nad Moravou', day: 'Čtvrtek', time: '14:00 - 14:45', price: '1700 Kč / pololetí' },
 ];
 
 export const CAMPS: Camp[] = [

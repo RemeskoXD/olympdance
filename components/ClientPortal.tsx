@@ -296,39 +296,53 @@ const ClientPortal: React.FC = () => {
                     )}
 
                     {/* Confirmation for Health Insurance / FKSP */}
-                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 rounded-xl bg-brand-blue text-white flex items-center justify-center shrink-0 shadow-sm">
-                          <ShieldCheck size={20} />
+                    {currentUser.status === 'approved' ? (
+                      <div className="bg-gradient-to-r from-emerald-50 to-blue-50 p-5 rounded-2xl border border-emerald-200/80 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                            <ShieldCheck size={22} />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h5 className="font-bold text-gray-900 text-sm">Potvrzení pro zdravotní pojišťovnu / FKSP</h5>
+                              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md text-[11px] font-bold">Platba zaevidována</span>
+                            </div>
+                            <p className="text-xs text-gray-600 mt-0.5">Oficiální doklad o úhradě tábora s razítkem a podpisem (příspěvek až 1 500 Kč).</p>
+                          </div>
                         </div>
-                        <div>
-                          <h5 className="font-bold text-gray-900 text-sm">Potvrzení pro zdravotní pojišťovnu / FKSP</h5>
-                          <p className="text-xs text-gray-500">Získejte příspěvek na tábor od vaší pojišťovny (až 1 500 Kč)</p>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 shrink-0 w-full sm:w-auto">
-                        {currentUser.status === 'approved' && (
+                        <div className="flex flex-wrap items-center gap-2 shrink-0 w-full sm:w-auto">
                           <a
                             href={`/api/registrations/${currentUser.id}/confirmation-pdf`}
                             target="_blank"
                             rel="noopener noreferrer"
                             download
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold px-3.5 py-2 rounded-xl transition-colors shadow-sm flex items-center justify-center flex-1 sm:flex-initial"
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold px-4 py-2.5 rounded-xl transition-colors shadow-sm flex items-center justify-center flex-1 sm:flex-initial"
                             title="Stáhnout oficiální PDF potvrzení o přijetí platby s razítkem 1:1"
                           >
-                            <FileText size={14} className="mr-1.5" />
-                            Oficiální PDF (1:1)
+                            <FileText size={15} className="mr-1.5" />
+                            Stáhnout PDF (1:1)
                           </a>
-                        )}
-                        <button
-                          onClick={() => setShowInsuranceModal(true)}
-                          className="bg-brand-blue hover:bg-blue-700 text-white text-xs sm:text-sm font-bold px-3.5 py-2 rounded-xl transition-colors shadow-sm flex items-center justify-center flex-1 sm:flex-initial"
-                        >
-                          <FileText size={14} className="mr-1.5" />
-                          Zobrazit doklad
-                        </button>
+                          <button
+                            onClick={() => setShowInsuranceModal(true)}
+                            className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs sm:text-sm font-bold px-3.5 py-2.5 rounded-xl transition-colors shadow-xs flex items-center justify-center flex-1 sm:flex-initial"
+                          >
+                            Náhled dokladu
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="bg-amber-50/80 p-4 rounded-xl border border-amber-200 mb-6 flex items-start space-x-3">
+                        <div className="w-9 h-9 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                          <Clock size={18} />
+                        </div>
+                        <div className="text-xs text-amber-900">
+                          <div className="font-bold text-sm text-amber-950 mb-0.5">Potvrzení pro zdravotní pojišťovnu / FKSP</div>
+                          <p className="leading-relaxed">
+                            Oficiální potvrzení o zaplacení tábora pro pojišťovnu bude k dispozici ke stažení ihned po přijetí platby a jejím zaevidování administrátorem.
+                          </p>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="space-y-4">
                       <h5 className="font-bold text-sm text-gray-700">Dokumenty:</h5>
@@ -482,6 +496,7 @@ const ClientPortal: React.FC = () => {
       {showInsuranceModal && currentUser && (
         <InsuranceConfirmationModal
           data={{
+            id: currentUser.id,
             childName: currentUser.childName,
             childBirthDate: currentUser.childBirthDate,
             parentName: currentUser.parentName,

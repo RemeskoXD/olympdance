@@ -64,11 +64,7 @@ const FAQS = [
   },
   {
     question: "Lze získat potvrzení pro příspěvek od pojišťovny?",
-    answer: (
-      <span>
-        Ano, lze. Napište prosím o něj na e-mail: <a href="mailto:info@olympdance.cz" className="text-brand-blue font-bold hover:underline">info@olympdance.cz</a>
-      </span>
-    )
+    answer: "Ano, lze. Najdete to ve vašem přihlášení."
   },
   {
     question: "Od kolika let je kroužek?",
@@ -84,7 +80,7 @@ const FAQS = [
   },
   {
     question: "Do kdy se musí kroužek zaplatit?",
-    answer: "Kroužek se platí vždy do 15. dne v začátku nového pololetí. Tzn. v 1. pol. do 15.října a 2. pol. do 15.února."
+    answer: "Kroužek se platí vždy do 10. dne v začátku nového pololetí. Tzn. v 1. pol. do 10. října a 2. pol. do 10. února."
   }
 ];
 

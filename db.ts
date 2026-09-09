@@ -405,6 +405,42 @@ export const initDb = async () => {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    // 15. Customer Import Queue table (Structured storage for bulk imported customers and batched email dispatch)
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS customer_import_queue (
+        id VARCHAR(255) PRIMARY KEY,
+        registrationId VARCHAR(255),
+        email VARCHAR(255) NOT NULL,
+        childName VARCHAR(255) NOT NULL,
+        childSurname VARCHAR(255) NOT NULL,
+        childRodneCislo VARCHAR(255),
+        address VARCHAR(255),
+        phone VARCHAR(255),
+        schoolRaw VARCHAR(255) NOT NULL,
+        schoolId VARCHAR(255) NOT NULL,
+        schoolName VARCHAR(255),
+        variableSymbol VARCHAR(50) NOT NULL,
+        password VARCHAR(100) NOT NULL,
+        emailStatus VARCHAR(50) DEFAULT 'pending',
+        emailSentAt DATETIME,
+        emailError TEXT,
+        batchNumber INT DEFAULT 1,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_email_status (emailStatus),
+        INDEX idx_batch (batchNumber),
+        INDEX idx_school (schoolId)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Ensure ZŠ Dub nad Moravou exists in schools table
+    try {
+      await connection.query(`
+        INSERT IGNORE INTO schools (id, name, city, day, time, price, isKindergarten) 
+        VALUES ('31', 'ZŠ Dub nad Moravou', 'Dub nad Moravou', 'Čtvrtek', '14:00 - 14:45', '1700 Kč / pololetí', 0)
+      `);
+    } catch (e) {}
+
     // ==========================================
     // Synchronization of Initial Static Data to MySQL (ONLY on empty database)
     // ==========================================

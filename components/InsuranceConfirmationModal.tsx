@@ -224,28 +224,16 @@ export const InsuranceConfirmationModal: React.FC<InsuranceConfirmationModalProp
             </div>
 
             {/* Stamp and Signature Box */}
-            <div className="flex items-center gap-6 text-center">
-              {/* Authenticated Stamp graphic */}
-              <div className="border-2 border-brand-blue/80 rounded-full w-24 h-24 p-1 flex flex-col items-center justify-center text-brand-blue/90 shadow-xs print:border-brand-blue">
-                <div className="text-[7px] font-bold uppercase tracking-wider text-center">
-                  OLYMP OLOMOUC
-                </div>
-                <div className="text-[11px] font-black uppercase my-0.5 text-brand-red">
-                  ★ Z. S. ★
-                </div>
-                <div className="text-[7px] font-semibold">
-                  IČO: {CONTACT_INFO.ico}
-                </div>
-                <div className="text-[6px] font-bold uppercase mt-0.5 tracking-tight">
-                  TANEČNÍ KLUB
-                </div>
-              </div>
-
-              <div className="w-44 text-center">
-                <div className="border-b border-gray-400 pb-1 mb-1">
-                  <span className="text-[11px] text-gray-400 italic">Podpis statutárního zástupce</span>
-                </div>
-                <span className="text-xs font-bold text-gray-800">Vedení klubu Olymp Dance</span>
+            <div className="flex flex-col items-center text-center">
+              <img 
+                src="/stamp-signature.png" 
+                alt="Oficiální razítko a podpis TK Olymp Olomouc" 
+                className="w-56 sm:w-64 h-auto object-contain print:w-60"
+                referrerPolicy="no-referrer"
+              />
+              <div className="text-center mt-1">
+                <span className="text-xs font-bold text-gray-900 block">Martin Matýsek</span>
+                <span className="text-[10px] text-gray-500 block">Předseda / Statutární zástupce TK Olymp Olomouc, z. s.</span>
               </div>
             </div>
           </div>
