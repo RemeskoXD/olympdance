@@ -1,6 +1,10 @@
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export interface SchoolPaymentPdfData {
   activityType?: 'krouzek' | 'tabor';
@@ -19,69 +23,55 @@ export interface SchoolPaymentPdfData {
 
 /**
  * Converts integer amount to Czech words representation (financial format)
- * e.g. 1700 -> "jedentisícsedmset"
+ * e.g. 1550 -> "jeden tisíc pět set padesát korun českých"
+ *      1700 -> "jeden tisíc sedm set korun českých"
  */
 export function numberToCzechWords(n: number): string {
-  const units = ['', 'jedna', 'dva', 'tři', 'čtyři', 'pět', 'šest', 'sedm', 'osm', 'devět'];
+  const units = ['', 'jeden', 'dva', 'tři', 'čtyři', 'pět', 'šest', 'sedm', 'osm', 'devět'];
   const teens = ['deset', 'jedenáct', 'dvanáct', 'třináct', 'čtrnáct', 'patnáct', 'šestnáct', 'sedmnáct', 'osmnáct', 'devatenáct'];
   const tens = ['', 'deset', 'dvacet', 'třicet', 'čtyřicet', 'padesát', 'šedesát', 'sedmdesát', 'osmdesát', 'devadesát'];
-  const hundreds = ['', 'sto', 'dvěstě', 'třista', 'čtyřista', 'pětset', 'šestset', 'sedmset', 'osmset', 'devětset'];
+  const hundreds = ['', 'sto', 'dvě stě', 'tři sta', 'čtyři sta', 'pět set', 'šest set', 'sedm set', 'osm set', 'devět set'];
 
-  if (n === 0) return 'nula';
+  if (n === 0) return 'nula korun českých';
   let num = Math.floor(Math.abs(n));
-  let words = '';
-
-  if (num >= 100000) {
-    const hundredThousands = Math.floor(num / 100000);
-    words += hundreds[hundredThousands];
-    num %= 100000;
-  }
+  const parts: string[] = [];
 
   if (num >= 1000) {
     const thousands = Math.floor(num / 1000);
     num %= 1000;
     if (thousands === 1) {
-      words += 'jedentisíc';
+      parts.push('jeden tisíc');
     } else if (thousands === 2) {
-      words += 'dvatisíce';
+      parts.push('dva tisíce');
     } else if (thousands >= 3 && thousands <= 4) {
-      words += units[thousands] + 'tisíce';
-    } else if (thousands >= 10 && thousands <= 19) {
-      words += teens[thousands - 10] + 'tisíc';
-    } else if (thousands >= 20) {
-      const t = Math.floor(thousands / 10);
-      const u = thousands % 10;
-      words += tens[t];
-      if (u === 1 || u === 2 || u === 3 || u === 4) {
-        words += units[u] + (u === 1 ? 'jedentisíc' : 'tisíce');
-      } else {
-        words += (u > 0 ? units[u] : '') + 'tisíc';
-      }
+      parts.push(`${units[thousands]} tisíce`);
+    } else if (thousands >= 5 && thousands <= 19) {
+      parts.push(thousands < 10 ? `${units[thousands]} tisíc` : `${teens[thousands - 10]} tisíc`);
     } else {
-      words += units[thousands] + 'tisíc';
+      parts.push(`${thousands} tisíc`);
     }
   }
 
   if (num >= 100) {
     const h = Math.floor(num / 100);
     num %= 100;
-    words += hundreds[h];
+    parts.push(hundreds[h]);
   }
 
   if (num >= 10 && num <= 19) {
-    words += teens[num - 10];
+    parts.push(teens[num - 10]);
     num = 0;
   } else if (num >= 20) {
     const t = Math.floor(num / 10);
     num %= 10;
-    words += tens[t];
+    parts.push(tens[t]);
   }
 
   if (num > 0 && num < 10) {
-    words += units[num];
+    parts.push(units[num]);
   }
 
-  return words;
+  return parts.filter(Boolean).join(' ') + ' korun českých';
 }
 
 /**
@@ -163,53 +153,90 @@ export function generateSchoolPaymentPdf(data: SchoolPaymentPdfData): Promise<Bu
         reject(err);
       });
 
-      // Font setup with Liberation Sans (installed system font with full Czech UTF-8 diacritics)
-      const libSansRegular = '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf';
-      const libSansBold = '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf';
+      // Multi-path font loader to ensure TrueType Czech UTF-8 font is ALWAYS loaded on any server
+      const findFont = (filename: string) => {
+        const candidates = [
+          path.join(process.cwd(), 'fonts', filename),
+          path.join(process.cwd(), 'public', 'fonts', filename),
+          path.join(process.cwd(), 'dist', 'fonts', filename),
+          path.join(__dirname, 'fonts', filename),
+          path.join(__dirname, '..', 'fonts', filename),
+          `/usr/share/fonts/truetype/liberation/${filename}`,
+          `/usr/share/fonts/liberation/${filename}`
+        ];
+        for (const c of candidates) {
+          try {
+            if (fs.existsSync(c)) return c;
+          } catch {}
+        }
+        return null;
+      };
 
-      const hasRegularFont = fs.existsSync(libSansRegular);
-      const hasBoldFont = fs.existsSync(libSansBold);
+      const regularFontPath = findFont('LiberationSans-Regular.ttf');
+      const boldFontPath = findFont('LiberationSans-Bold.ttf');
 
-      const fontReg = hasRegularFont ? libSansRegular : 'Helvetica';
-      const fontBld = hasBoldFont ? libSansBold : 'Helvetica-Bold';
+      let fontReg = 'Helvetica';
+      let fontBld = 'Helvetica-Bold';
 
-      // 1. PURE WHITE BACKGROUND FOR THE ENTIRE PDF
+      if (regularFontPath && boldFontPath) {
+        try {
+          doc.registerFont('LiberationSans', regularFontPath);
+          doc.registerFont('LiberationSans-Bold', boldFontPath);
+          fontReg = 'LiberationSans';
+          fontBld = 'LiberationSans-Bold';
+        } catch (fontErr) {
+          console.error('Failed to register LiberationSans font:', fontErr);
+        }
+      }
+
+      // 1. PURE WHITE BACKGROUND FOR THE PAGE
       doc.rect(0, 0, 595.28, 841.89).fill('#ffffff');
 
-      // Top Header (Dark text on pure white background)
-      const headerTopY = 32;
-      doc.fillColor('#111827')
+      // 2. RED HEADER BANNER (Exact match to original TK Olymp document)
+      const bannerHeight = 104;
+      const olympRed = '#b91c24'; // Rich crimson/red of TK Olymp
+      doc.rect(0, 0, 595.28, bannerHeight).fill(olympRed);
+
+      // Header text (White on red banner)
+      const headerTextX = 42;
+      const headerTextY = 22;
+
+      doc.fillColor('#ffffff')
          .font(fontBld).fontSize(10.5)
-         .text('Taneční klub Olymp Olomouc, z. s.', 46, headerTopY);
+         .text('Taneční klub Olymp Olomouc, z. s.', headerTextX, headerTextY);
 
-      doc.fillColor('#374151')
-         .font(fontReg).fontSize(8.5)
-         .text('Jiráskova 25, Olomouc - Hodolany 779 00', 46, headerTopY + 14)
-         .text('IČO: 68347286', 46, headerTopY + 26)
-         .text('L 4133 vedený u Krajského soudu v Ostravě', 46, headerTopY + 38)
-         .text('zastoupený předsedou Martinem Matýskem', 46, headerTopY + 50);
+      doc.fillColor('#ffffff')
+         .font(fontReg).fontSize(8.2)
+         .text('Jiráskova 25, Olomouc - Hodolany 779 00', headerTextX, headerTextY + 15)
+         .text('IČO: 68347286', headerTextX, headerTextY + 28)
+         .text('L 4133 vedený u Krajského soudu v Ostravě', headerTextX, headerTextY + 41)
+         .text('zastoupený předsedou Mgr. Miroslavem Hýžou', headerTextX, headerTextY + 54);
 
-      // Club logo in top right header
-      const logoPath = path.join(process.cwd(), 'public', 'logo.png');
-      if (fs.existsSync(logoPath)) {
+      // Logo in top right of red header banner (using loloo.png)
+      const logoPaths = [
+        path.join(process.cwd(), 'public', 'loloo.png'),
+        path.join(process.cwd(), 'dist', 'loloo.png'),
+        path.join(process.cwd(), 'public', 'tk-olymp-logo-black.png'),
+        path.join(process.cwd(), 'dist', 'tk-olymp-logo-black.png'),
+        path.join(process.cwd(), 'public', 'logo.png')
+      ];
+      const selectedLogo = logoPaths.find(p => fs.existsSync(p));
+      if (selectedLogo) {
         try {
-          doc.image(logoPath, 475, headerTopY - 4, { width: 68 });
+          doc.image(selectedLogo, 455, 12, { width: 66, height: 80 });
         } catch {}
       }
 
-      // Subtle divider under header
-      doc.strokeColor('#e5e7eb').lineWidth(1).moveTo(46, headerTopY + 72).lineTo(545, headerTopY + 72).stroke();
-
-      // 2. DOCUMENT TITLE
+      // 3. DOCUMENT TITLE
       doc.fillColor('#111827').font(fontBld).fontSize(19)
-         .text('Potvrzení o přijetí platby', 45, 145, { width: 505, align: 'center' });
+         .text('Potvrzení o přijetí platby', 45, 160, { width: 505, align: 'center' });
 
-      // 3. MAIN CONTENT
+      // 4. MAIN CONTENT
       const textX = 55;
       const textW = 485;
 
       doc.font(fontReg).fontSize(11).fillColor('#111827')
-         .text('Tímto potvrzuji,', textX, 205);
+         .text('Tímto potvrzuji,', textX, 218);
 
       // Data formatting
       const paymentDateStr = formatCzechDate(data.paymentDate || new Date());
@@ -235,29 +262,30 @@ export function generateSchoolPaymentPdf(data: SchoolPaymentPdfData): Promise<Bu
       const mainStatement = `Že dne ${paymentDateStr} byl z bankovního účtu č. ${senderAccountStr} vedeného na ${parentNameStr} za ${role} ${childFullName} ${rcLabel}`.trim() + 
         ` ${activityLabel}`;
 
-      doc.text(mainStatement, textX, 245, { width: textW, lineGap: 4, align: 'left' });
+      doc.text(mainStatement, textX, 252, { width: textW, lineGap: 4, align: 'left' });
 
       // Numeric and spelled amount
       const numericAmount = typeof data.amount === 'number' ? data.amount : (parseFloat(String(data.amount).replace(/\s+/g, '')) || 1700);
       const formattedAmount = numericAmount.toLocaleString('cs-CZ');
       const amountWords = numberToCzechWords(numericAmount);
 
-      doc.text(`Částka: Kč ${formattedAmount},- (slovy: ${amountWords})`, textX, 315);
-      doc.text('Účet příjemce: 1806875329/5500 Tanečnímu klubu Olymp Olomouc, z.s.', textX, 345);
+      doc.font(fontBld).text('Částka: ', textX, 328, { continued: true })
+         .font(fontReg).text(`Kč ${formattedAmount},- (slovy: ${amountWords})`);
+
+      doc.font(fontReg).text('Účet příjemce: 1806875329/5500 Tanečnímu klubu Olymp Olomouc, z.s.', textX, 356);
 
       // Period text
       let periodStr = data.period;
       if (!periodStr) {
         const pDate = data.paymentDate ? new Date(data.paymentDate) : new Date();
         const year = !isNaN(pDate.getTime()) ? pDate.getFullYear() : new Date().getFullYear();
-        // As in template: "období které platí vždy únor (aktuální rok) - květen (aktuální rok)."
         periodStr = `únor ${year} – květen ${year}`;
       }
-      doc.text(`za období : ${periodStr}.`, textX, 375);
+      doc.text(`za období : ${periodStr}.`, textX, 384);
 
       // Issue date and location
       const issueDateStr = formatCzechDate(data.issueDate || data.paymentDate || new Date());
-      doc.text(`V Přerově dne ${issueDateStr}`, textX, 430);
+      doc.text(`V Přerově dne ${issueDateStr}`, textX, 440);
 
       // 5. OFFICIAL CLUB STAMP & SIGNATURE BLOCK (Right aligned)
       const stampX = 335;
@@ -279,12 +307,12 @@ export function generateSchoolPaymentPdf(data: SchoolPaymentPdfData): Promise<Bu
            .text('www.tkolymp.cz   tkolymp@tkolymp.cz', stampX + 6, stampY + 48);
       }
 
-      // Signatory representative name & position below stamp
+      // Signatory representative name below stamp
       doc.fillColor('#111827').font(fontBld).fontSize(10)
-         .text('Martin Matýsek', stampX, stampY + 106, { width: 195, align: 'center' });
+         .text('Martin Matýsek', stampX, stampY + 104, { width: 195, align: 'center' });
 
-      doc.fillColor('#4b5563').font(fontReg).fontSize(8.5)
-         .text('Předseda / Statutární zástupce TK Olymp Olomouc, z. s.', stampX, stampY + 119, { width: 195, align: 'center' });
+      doc.fillColor('#374151').font(fontReg).fontSize(8.5)
+         .text('Taneční klub Olymp Olomouc, z. s.', stampX, stampY + 118, { width: 195, align: 'center' });
 
       // Finalize document stream
       doc.end();

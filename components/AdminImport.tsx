@@ -360,6 +360,17 @@ export const AdminImport: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+          <a
+            href="/vzor-potvrzeni-platby.pdf"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 md:flex-initial px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs sm:text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm"
+            title="Otevřít a stáhnout vzorové PDF potvrzení o přijetí platby pro zdravotní pojišťovnu"
+          >
+            <FileText size={16} />
+            <span>Vzorové PDF potvrzení</span>
+          </a>
+
           <button
             onClick={() => handleSyncData()}
             disabled={isSyncing}
@@ -817,6 +828,17 @@ export const AdminImport: React.FC = () => {
                             <Eye size={16} />
                           </button>
 
+                          {/* PDF Confirmation Button */}
+                          <a
+                            href={`/api/import-queue/${item.id}/pdf`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 text-gray-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                            title="Zobrazit a stáhnout PDF potvrzení o přijetí platby pro pojišťovnu"
+                          >
+                            <FileText size={16} />
+                          </a>
+
                           {/* Send Single Button */}
                           <button
                             onClick={() => handleSendSingle(item.id, item.email, `${item.childName} ${item.childSurname}`)}
@@ -905,7 +927,25 @@ export const AdminImport: React.FC = () => {
               <span className="text-xs text-gray-500">
                 Škola: <strong>{previewItem.schoolName}</strong> • VS: <strong>{previewItem.variableSymbol}</strong>
               </span>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
+                {(() => {
+                  const matchedItem = items.find(i => i.email === previewItem.recipient);
+                  if (matchedItem) {
+                    return (
+                      <a
+                        href={`/api/import-queue/${matchedItem.id}/pdf`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3.5 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold hover:bg-emerald-100 flex items-center gap-1.5 transition-colors shadow-sm"
+                        title="Otevřít PDF potvrzení pro pojišťovnu"
+                      >
+                        <FileText size={14} />
+                        <span>PDF potvrzení</span>
+                      </a>
+                    );
+                  }
+                  return null;
+                })()}
                 <button
                   onClick={() => setPreviewItem(null)}
                   className="px-4 py-2 border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50"

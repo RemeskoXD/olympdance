@@ -1752,6 +1752,11 @@ app.post('/api/registrations/:id/send-confirmation', requireAdmin, async (req, r
     }
     const registration = (rows as any[])[0];
 
+    // Strict security rule: Never send payment confirmation unless paid & matched in system
+    if (registration.status !== 'approved') {
+      return res.status(400).json({ error: 'Potvrzení o platbě nelze odeslat – přihláška dosud není označena jako zaplacená a spárovaná v systému.' });
+    }
+
     const [campRows] = await pool.query('SELECT * FROM camps WHERE id = ?', [registration.campId]);
     const camp = (campRows as any[])[0];
     const campTitle = camp?.title || 'Letní tábor';
@@ -1867,9 +1872,9 @@ app.get('/api/registrations/:id/confirmation-pdf', async (req, res) => {
       return res.status(403).json({ error: 'Přístup k potvrzení o platbě odepřen.' });
     }
 
-    // Parents can only download the official paid confirmation once the registration is approved / paid
-    if (!isAdminOrTrainer && reg.status !== 'approved') {
-      return res.status(403).json({ error: 'Potvrzení o zaplacení bude k dispozici ke stažení až po zaplacení a schválení přihlášky administrátorem.' });
+    // Strict business rule: Payment confirmation must ONLY be issued once paid and matched in system
+    if (reg.status !== 'approved') {
+      return res.status(403).json({ error: 'Potvrzení o zaplacení nelze vystavit ani stáhnout – přihláška dosud není označena jako zaplacená a spárovaná v systému.' });
     }
 
     // Find camp info
@@ -1910,6 +1915,9 @@ app.get('/api/registrations/:id/confirmation-pdf', async (req, res) => {
     const safeName = (reg.childName || 'tabor').replace(/[^a-zA-Z0-9_-]/g, '_');
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="Potvrzeni_o_prijeti_platby_tabor_${safeName}.pdf"`);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.send(pdfBuffer);
   } catch (err: any) {
     console.error('Error generating camp confirmation PDF:', err);
@@ -2180,6 +2188,11 @@ app.get('/api/school-registrations/:id/confirmation-pdf', async (req, res) => {
       return res.status(403).json({ error: 'Přístup k potvrzení o platbě odepřen.' });
     }
 
+    // Strict business rule: Payment confirmation must ONLY be issued once paid and matched in system
+    if (reg.status !== 'approved') {
+      return res.status(403).json({ error: 'Potvrzení o zaplacení nelze vystavit ani stáhnout – přihláška dosud není označena jako zaplacená a spárovaná v systému.' });
+    }
+
     // Find bank payment log for sender account & exact transaction info
     const [bankRows] = await pool.query(
       'SELECT * FROM bank_payments_log WHERE matchedId = ? OR variableSymbol = ? ORDER BY createdAt DESC LIMIT 1',
@@ -2217,10 +2230,108 @@ app.get('/api/school-registrations/:id/confirmation-pdf', async (req, res) => {
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="Potvrzeni_o_prijeti_platby_${safeName}.pdf"`);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.send(pdfBuffer);
   } catch (err: any) {
     console.error('Error generating confirmation PDF:', err);
     res.status(500).json({ error: 'Chyba při generování potvrzení: ' + err.message });
+  }
+});
+
+// Admin re-send confirmation email with PDF for a school registration
+app.post('/api/school-registrations/:id/send-confirmation', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [rows] = await pool.query('SELECT * FROM school_registrations WHERE id = ?', [id]);
+    if ((rows as any[]).length === 0) {
+      return res.status(404).json({ error: 'Přihláška nenalezena' });
+    }
+    const reg = (rows as any[])[0];
+
+    // Strict security rule: Never send payment confirmation unless paid & matched in system
+    if (reg.status !== 'approved') {
+      return res.status(400).json({ error: 'Potvrzení o platbě nelze odeslat – přihláška dosud není označena jako zaplacená a spárovaná v systému.' });
+    }
+
+    if (!reg.parentEmail || !reg.parentEmail.includes('@')) {
+      return res.status(400).json({ error: 'Přihláška nemá platný e-mail rodiče' });
+    }
+
+    const [bankRows] = await pool.query(
+      'SELECT * FROM bank_payments_log WHERE matchedId = ? OR variableSymbol = ? ORDER BY createdAt DESC LIMIT 1',
+      [reg.id, reg.variableSymbol]
+    );
+    const bankTx = (bankRows as any[])[0];
+
+    let amountVal = 1700;
+    if (bankTx && bankTx.amount) {
+      amountVal = parseFloat(bankTx.amount);
+    } else if (reg.schoolId) {
+      const [schoolRows] = await pool.query('SELECT price FROM schools WHERE id = ?', [reg.schoolId]);
+      if ((schoolRows as any[]).length > 0 && (schoolRows as any[])[0].price) {
+        const parsed = parseFloat(String((schoolRows as any[])[0].price).replace(/[^0-9]/g, ''));
+        if (!isNaN(parsed) && parsed > 0) amountVal = parsed;
+      }
+    }
+
+    const pdfBuffer = await generateSchoolPaymentPdf({
+      paymentDate: bankTx?.bookingDate || reg.createdAt || new Date(),
+      senderAccount: bankTx?.senderAccount || '',
+      parentName: reg.parentName || bankTx?.senderName || 'Zákonný zástupce',
+      childName: reg.childName,
+      childSurname: reg.childSurname,
+      childBirthDate: reg.childBirthDate,
+      childRodneCislo: reg.childRodneCislo,
+      amount: amountVal,
+      period: null,
+      issueDate: bankTx?.bookingDate || new Date()
+    });
+
+    const childFullName = [reg.childName, reg.childSurname].filter(Boolean).join(' ').trim();
+    const safeName = (childFullName || 'krouzek').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const attachments = [
+      {
+        filename: `Potvrzeni_o_prijeti_platby_${safeName}.pdf`,
+        content: pdfBuffer,
+        contentType: 'application/pdf'
+      }
+    ];
+
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
+        <div style="background-color: #002B49; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Olymp Dance Olomouc</h1>
+          <p style="color: #4ade80; margin: 6px 0 0 0; font-size: 15px; font-weight: bold;">Potvrzení o úhradě tanečního kroužku</p>
+        </div>
+        <div style="background-color: #ffffff; padding: 32px 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
+          <p style="font-size: 16px;">Dobrý den, <strong>${reg.parentName}</strong>,</p>
+          <p>zasíláme Vám oficiální potvrzení o přijetí platby za taneční kroužek pro <strong>${childFullName}</strong>.</p>
+          <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 16px; margin: 20px 0;">
+            <p style="margin: 0; color: #166534; font-weight: bold;">📄 Oficiální potvrzení pro zdravotní pojišťovnu naleznete v příloze tohoto e-mailu.</p>
+            <p style="margin: 6px 0 0 0; font-size: 13px; color: #15803d;">Potvrzení si můžete také kdykoliv stáhnout ve svém Klientském portálu po přihlášení.</p>
+          </div>
+          <p>Děkujeme a těšíme se na další lekce!</p>
+          <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
+          <p style="font-size: 13px; color: #94a3b8; text-align: center; margin: 0;">
+            Taneční klub Olymp Olomouc • info@olympdance.cz • +420 722 017 700
+          </p>
+        </div>
+      </div>
+    `;
+
+    await sendEmail(
+      reg.parentEmail,
+      `Potvrzení platby kroužku (${childFullName}) - Olymp Dance`,
+      emailHtml,
+      attachments
+    );
+
+    res.json({ success: true, message: 'Potvrzení bylo úspěšně odesláno na e-mail rodiče.' });
+  } catch (err: any) {
+    console.error('Send school confirmation error:', err);
+    res.status(500).json({ error: 'Chyba při odesílání potvrzení: ' + err.message });
   }
 });
 
@@ -2243,6 +2354,9 @@ app.get('/api/sample-confirmation-pdf', async (req, res) => {
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline; filename="Vzor_Potvrzeni_o_prijeti_platby.pdf"');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.send(pdfBuffer);
   } catch (err: any) {
     console.error('Error generating sample confirmation PDF:', err);
@@ -2291,27 +2405,39 @@ app.post('/api/admin/stamp', requireAdmin, upload.single('stampImage'), async (r
     // Try to regenerate the sample preview image if script is available
     try {
       const stampBase64 = processedBuffer.toString('base64');
+      const logoFile = fs.existsSync(path.join(process.cwd(), 'public', 'loloo.png'))
+        ? path.join(process.cwd(), 'public', 'loloo.png')
+        : (fs.existsSync(path.join(process.cwd(), 'public', 'tk-olymp-logo-black.png'))
+            ? path.join(process.cwd(), 'public', 'tk-olymp-logo-black.png')
+            : '');
+      const logoBase64 = logoFile ? fs.readFileSync(logoFile).toString('base64') : '';
+
       const previewSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 595 842" width="595" height="842" style="background:#ffffff">
         <!-- Pure white background -->
         <rect x="0" y="0" width="595" height="842" fill="#ffffff" />
-        <text x="46" y="44" font-family="'Liberation Sans', Arial, sans-serif" font-weight="bold" font-size="11" fill="#111827">Taneční klub Olymp Olomouc, z. s.</text>
-        <text x="46" y="58" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#374151">Jiráskova 25, Olomouc - Hodolany 779 00</text>
-        <text x="46" y="70" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#374151">IČO: 68347286</text>
-        <text x="46" y="82" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#374151">L 4133 vedený u Krajského soudu v Ostravě</text>
-        <text x="46" y="94" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#374151">zastoupený předsedou Martinem Matýskem</text>
-        <line x1="46" y1="108" x2="545" y2="108" stroke="#e5e7eb" stroke-width="1" />
-        <text x="297" y="155" font-family="'Liberation Sans', Arial, sans-serif" font-weight="bold" font-size="20" fill="#111827" text-anchor="middle">Potvrzení o přijetí platby</text>
-        <text x="55" y="210" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">Tímto potvrzuji,</text>
-        <text x="55" y="240" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">Že dne 9. 9. 2026 byl z bankovního účtu č. 123456789/0800 vedeného na Jana Nováková</text>
-        <text x="55" y="260" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">za tanečnici Eliška Nováková (r.č. 12. 5. 2016) uhrazen členský příspěvek a účastnický poplatek</text>
-        <text x="55" y="280" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">do tanečního kroužku (ZŠ Za Mlýnem, Přerov):</text>
-        <text x="55" y="325" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827" font-weight="bold">Částka: Kč 1 700,- <tspan font-weight="normal">(slovy: jedentisícsedmset)</tspan></text>
-        <text x="55" y="355" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">Účet příjemce: 1806875329/5500 Tanečnímu klubu Olymp Olomouc, z.s.</text>
-        <text x="55" y="385" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">za období : únor 2026 – květen 2026.</text>
-        <text x="55" y="440" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">V Přerově dne 9. 9. 2026</text>
+        
+        <!-- Red Header Banner -->
+        <rect x="0" y="0" width="595" height="104" fill="#b91c24" />
+        <text x="42" y="32" font-family="'Liberation Sans', Arial, sans-serif" font-weight="bold" font-size="11" fill="#ffffff">Taneční klub Olymp Olomouc, z. s.</text>
+        <text x="42" y="48" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#ffffff">Jiráskova 25, Olomouc - Hodolany 779 00</text>
+        <text x="42" y="61" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#ffffff">IČO: 68347286</text>
+        <text x="42" y="74" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#ffffff">L 4133 vedený u Krajského soudu v Ostravě</text>
+        <text x="42" y="87" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#ffffff">zastoupený předsedou Mgr. Miroslavem Hýžou</text>
+        
+        ${logoBase64 ? `<image href="data:image/png;base64,${logoBase64}" x="455" y="12" width="66" height="80" />` : ''}
+
+        <text x="297" y="165" font-family="'Liberation Sans', Arial, sans-serif" font-weight="bold" font-size="20" fill="#111827" text-anchor="middle">Potvrzení o přijetí platby</text>
+        <text x="55" y="220" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">Tímto potvrzuji,</text>
+        <text x="55" y="254" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">Že dne 26. 2. 2026 byl z bankovního účtu č. 123456789/0800 vedeného na Jana Nováková</text>
+        <text x="55" y="274" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">za tanečnici Eliška Nováková (r.č. 155425/1234) uhrazen členský příspěvek a účastnický poplatek</text>
+        <text x="55" y="294" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">do tanečního kroužku (ZŠ Za Mlýnem, Přerov):</text>
+        <text x="55" y="335" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827" font-weight="bold">Částka: <tspan font-weight="normal">Kč 1 550,- (slovy: jeden tisíc pět set padesát korun českých)</tspan></text>
+        <text x="55" y="362" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">Účet příjemce: 1806875329/5500 Tanečnímu klubu Olymp Olomouc, z.s.</text>
+        <text x="55" y="390" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">za období : únor 2026 – květen 2026.</text>
+        <text x="55" y="445" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">V Přerově dne 26. 2. 2026</text>
         <image href="data:image/png;base64,${stampBase64}" x="330" y="460" width="205" height="110" />
-        <text x="432" y="585" font-family="'Liberation Sans', Arial, sans-serif" font-weight="bold" font-size="10" fill="#111827" text-anchor="middle">Martin Matýsek</text>
-        <text x="432" y="600" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#4b5563" text-anchor="middle">Předseda / Statutární zástupce TK Olymp Olomouc, z. s.</text>
+        <text x="432" y="580" font-family="'Liberation Sans', Arial, sans-serif" font-weight="bold" font-size="10.5" fill="#111827" text-anchor="middle">Martin Matýsek</text>
+        <text x="432" y="596" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#4b5563" text-anchor="middle">Taneční klub Olymp Olomouc, z. s.</text>
       </svg>`;
       const previewBuffer = await sharp(Buffer.from(previewSvg)).png().toBuffer();
       await fs.writeFile(path.join(process.cwd(), 'public', 'sample-confirmation-preview.png'), previewBuffer);
@@ -2469,6 +2595,63 @@ app.get('/api/admin/import-queue/preview/:id', requireAdmin, async (req, res) =>
     });
   } catch (error: any) {
     res.status(500).json({ error: 'Chyba při generování náhledu e-mailu: ' + error.message });
+  }
+});
+
+// Download / View confirmation PDF for a specific queue item (admin only, paid only)
+app.get(['/api/admin/import-queue/:id/pdf', '/api/import-queue/:id/pdf'], requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [rows] = await pool.query('SELECT * FROM customer_import_queue WHERE id = ? OR registrationId = ?', [id, id]);
+    const item = (rows as any[])[0];
+    if (!item) {
+      return res.status(404).json({ error: 'Záznam nenalezen.' });
+    }
+
+    // Verify payment status if linked to a registration
+    if (item.registrationId) {
+      const [regRows] = await pool.query('SELECT status FROM school_registrations WHERE id = ?', [item.registrationId]);
+      const reg = (regRows as any[])[0];
+      if (reg && reg.status !== 'approved') {
+        return res.status(403).json({ error: 'Potvrzení o platbě nelze vystavit – přihláška dosud není označena jako zaplacená a spárovaná v systému.' });
+      }
+    }
+
+    const [schoolRows] = await pool.query('SELECT * FROM schools WHERE id = ?', [item.schoolId]);
+    const school = (schoolRows as any[])[0] || { name: item.schoolName, city: 'Olomouc', price: '1700 Kč / pololetí' };
+
+    let amountVal = 1700;
+    if (school && school.price) {
+      const parsed = parseFloat(String(school.price).replace(/[^0-9]/g, ''));
+      if (!isNaN(parsed) && parsed > 0) amountVal = parsed;
+    }
+
+    const pdfBuffer = await generateSchoolPaymentPdf({
+      activityType: 'krouzek',
+      activityName: `${school.name || item.schoolName} (${school.city || 'Olomouc'})`,
+      paymentDate: new Date(),
+      senderAccount: '1806875329/5500',
+      parentName: item.email,
+      childName: item.childName,
+      childSurname: item.childSurname,
+      childRodneCislo: item.childRodneCislo,
+      amount: amountVal,
+      period: 'únor 2026 – květen 2026',
+      issueDate: new Date()
+    });
+
+    const childFullName = [item.childName, item.childSurname].filter(Boolean).join(' ').trim();
+    const safeName = (childFullName || 'potvrzeni').replace(/[^a-zA-Z0-9_-]/g, '_');
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="Potvrzeni_platby_${safeName}.pdf"`);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.send(pdfBuffer);
+  } catch (err: any) {
+    console.error('Error generating import queue PDF:', err);
+    res.status(500).json({ error: 'Chyba při generování potvrzení: ' + err.message });
   }
 });
 

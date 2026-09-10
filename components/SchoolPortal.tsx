@@ -567,24 +567,53 @@ const SchoolPortal: React.FC = () => {
                       )}
 
                       {!isEditing && reg.status !== 'cancelled' && (
-                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 rounded-xl bg-brand-blue text-white flex items-center justify-center shrink-0 shadow-sm">
-                              <ShieldCheck size={20} />
+                        reg.status === 'approved' ? (
+                          <div className="bg-gradient-to-r from-emerald-50 to-blue-50 p-4 rounded-xl border border-emerald-200 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                            <div className="flex items-center space-x-3">
+                              <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                                <ShieldCheck size={20} />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h5 className="font-bold text-gray-900 text-sm">Potvrzení pro zdravotní pojišťovnu / FKSP</h5>
+                                  <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md text-[10px] font-bold">Platba zaevidována</span>
+                                </div>
+                                <p className="text-xs text-gray-600 mt-0.5">Oficiální doklad o úhradě kroužku s razítkem a podpisem (příspěvek až 1 500 Kč).</p>
+                              </div>
                             </div>
-                            <div>
-                              <h5 className="font-bold text-gray-900 text-sm">Potvrzení pro zdravotní pojišťovnu / FKSP</h5>
-                              <p className="text-xs text-gray-500">Získejte příspěvek na kroužek od pojišťovny (až 1 500 Kč)</p>
+                            <div className="flex flex-wrap items-center gap-2 shrink-0 w-full sm:w-auto">
+                              <a
+                                href={`/api/school-registrations/${reg.id}/confirmation-pdf`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                download
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm flex items-center shrink-0 w-full sm:w-auto justify-center"
+                                title="Stáhnout oficiální PDF potvrzení o přijetí platby s razítkem 1:1"
+                              >
+                                <FileText size={14} className="mr-1.5" />
+                                Stáhnout PDF (1:1)
+                              </a>
+                              <button
+                                onClick={() => setSelectedInsuranceReg(reg)}
+                                className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs sm:text-sm font-bold px-3 py-2 rounded-xl transition-colors shadow-xs flex items-center shrink-0 w-full sm:w-auto justify-center"
+                              >
+                                Náhled dokladu
+                              </button>
                             </div>
                           </div>
-                          <button
-                            onClick={() => setSelectedInsuranceReg(reg)}
-                            className="bg-brand-blue hover:bg-blue-700 text-white text-xs sm:text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm flex items-center shrink-0 w-full sm:w-auto justify-center"
-                          >
-                            <FileText size={14} className="mr-1.5" />
-                            Vystavit doklad
-                          </button>
-                        </div>
+                        ) : (
+                          <div className="bg-amber-50/80 p-4 rounded-xl border border-amber-200 mb-6 flex items-start space-x-3">
+                            <div className="w-9 h-9 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                              <ShieldCheck size={18} />
+                            </div>
+                            <div>
+                              <h5 className="font-bold text-amber-900 text-sm">Potvrzení o platbě pro pojišťovnu / FKSP</h5>
+                              <p className="text-xs text-amber-700 mt-0.5">
+                                Oficiální potvrzení o přijetí platby s razítkem a podpisem bude k dispozici ke stažení <strong>ihned po připsání a spárování platby</strong> na bankovním účtu.
+                              </p>
+                            </div>
+                          </div>
+                        )
                       )}
 
                       {!isEditing && reg.status !== 'cancelled' && (

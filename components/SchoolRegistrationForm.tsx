@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { ChevronRight, ChevronLeft, CheckCircle, CreditCard, User, Mail, Phone, Calendar as CalendarIcon, MapPin, Plus, Trash2, School as SchoolIcon } from 'lucide-react';
@@ -29,6 +29,63 @@ const SchoolRegistrationForm: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [registrationResult, setRegistrationResult] = useState<any>(null);
   const [totalAmount, setTotalAmount] = useState(0);
+
+  const formCardRef = useRef<HTMLDivElement>(null);
+  const activeStepRef = useRef<HTMLDivElement>(null);
+  const isFirstRender = useRef(true);
+  const invalidHandledRef = useRef(false);
+
+  const scrollToActiveSection = (targetElement?: HTMLElement | null) => {
+    // Determine the element to scroll to (either specific invalid input, active step, or top of form card)
+    const el = targetElement || activeStepRef.current || formCardRef.current;
+    if (!el) return;
+
+    const navbarHeight = 85;
+    const rect = el.getBoundingClientRect();
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    const targetY = rect.top + scrollTop - navbarHeight;
+
+    window.scrollTo({
+      top: Math.max(0, targetY),
+      behavior: 'smooth'
+    });
+
+    // Bring focus to the target element or first interactive field
+    setTimeout(() => {
+      if (targetElement) {
+        targetElement.focus({ preventScroll: true });
+      } else if (activeStepRef.current) {
+        const firstField = activeStepRef.current.querySelector<HTMLElement>(
+          'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])'
+        );
+        if (firstField) {
+          firstField.focus({ preventScroll: true });
+        }
+      }
+    }, 150);
+  };
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    // When step changes (e.g. clicking Pokračovat or Zpět), automatically move to the active fields
+    scrollToActiveSection();
+  }, [step]);
+
+  const handleInvalid = (e: React.FormEvent<HTMLFormElement>) => {
+    if (invalidHandledRef.current) return;
+    invalidHandledRef.current = true;
+    setTimeout(() => {
+      invalidHandledRef.current = false;
+    }, 600);
+
+    const invalidElement = e.target as HTMLElement;
+    if (invalidElement && typeof invalidElement.getBoundingClientRect === 'function') {
+      scrollToActiveSection(invalidElement);
+    }
+  };
 
   useEffect(() => {
     let amount = 0;
@@ -75,6 +132,9 @@ const SchoolRegistrationForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
     if (step < 2) {
       setStep(step + 1);
     } else {
@@ -138,15 +198,15 @@ const SchoolRegistrationForm: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+        <div ref={formCardRef} className="bg-white rounded-2xl shadow-xl overflow-hidden scroll-mt-24">
           <div className="bg-brand-blue p-5 sm:p-6 text-white">
             <h2 className="text-xl sm:text-2xl font-bold">Přihláška do kroužků</h2>
             <p className="text-sm sm:text-base text-blue-100">Registrace dětí do tanečních kroužků</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-4 sm:p-8">
+          <form onSubmit={handleSubmit} onInvalidCapture={handleInvalid} className="p-4 sm:p-8">
             {step === 1 && (
-              <div className="space-y-6 sm:space-y-8 animate-fadeIn">
+              <div ref={step === 1 ? activeStepRef : undefined} className="space-y-6 sm:space-y-8 animate-fadeIn">
                 {/* Parent Data */}
                 <div>
                   <h3 className="text-base sm:text-lg font-bold text-gray-900 border-b pb-2 mb-4">Údaje zákonného zástupce</h3>
@@ -341,7 +401,7 @@ const SchoolRegistrationForm: React.FC = () => {
             )}
 
             {step === 2 && (
-              <div className="space-y-6 animate-fadeIn">
+              <div ref={step === 2 ? activeStepRef : undefined} className="space-y-6 animate-fadeIn">
                 <div className="bg-blue-50 p-6 rounded-xl border border-blue-100">
                   <h3 className="font-bold text-brand-blue mb-4 flex items-center">
                     <CheckCircle size={18} className="mr-2" /> Souhlas s podmínkami
@@ -394,7 +454,7 @@ const SchoolRegistrationForm: React.FC = () => {
             )}
 
             {step === 3 && registrationResult && (
-              <div className="space-y-8 animate-fadeIn">
+              <div ref={step === 3 ? activeStepRef : undefined} className="space-y-8 animate-fadeIn">
                 <div className="text-center">
                   <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
                     <CheckCircle size={32} />

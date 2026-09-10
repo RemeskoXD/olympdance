@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Printer, CheckCircle, ShieldCheck, Loader2, FileDown } from 'lucide-react';
+import { X, Printer, CheckCircle, ShieldCheck, Loader2, FileDown, Clock } from 'lucide-react';
 import { CONTACT_INFO } from '../constants';
 
 interface ConfirmationData {
@@ -27,6 +27,7 @@ export const InsuranceConfirmationModal: React.FC<InsuranceConfirmationModalProp
   const today = new Date().toLocaleDateString('cs-CZ');
   const [isPreparing, setIsPreparing] = useState(false);
   const [logoLoaded, setLogoLoaded] = useState(false);
+  const isPaid = data.paymentStatus === 'approved';
 
   // Add print isolation classes to body while modal is active
   useEffect(() => {
@@ -43,6 +44,7 @@ export const InsuranceConfirmationModal: React.FC<InsuranceConfirmationModalProp
   }, []);
 
   const handlePrint = () => {
+    if (!isPaid) return;
     setIsPreparing(true);
     // Short timeout to ensure all DOM elements, fonts, and images are fully rasterized
     setTimeout(() => {
@@ -68,7 +70,7 @@ export const InsuranceConfirmationModal: React.FC<InsuranceConfirmationModalProp
             </div>
           </div>
           <div className="flex items-center space-x-3">
-            {data.id && (
+            {isPaid && data.id ? (
               <a
                 href={data.activityType === 'tabor' ? `/api/registrations/${data.id}/confirmation-pdf` : `/api/school-registrations/${data.id}/confirmation-pdf`}
                 target="_blank"
@@ -80,24 +82,30 @@ export const InsuranceConfirmationModal: React.FC<InsuranceConfirmationModalProp
                 <FileDown size={16} className="mr-2" />
                 Oficiální PDF (1:1)
               </a>
+            ) : (
+              <span className="text-xs font-semibold px-3 py-1.5 bg-amber-500/30 text-amber-200 rounded-lg border border-amber-400/40">
+                Čeká na zaplacení
+              </span>
             )}
-            <button
-              onClick={handlePrint}
-              disabled={isPreparing}
-              className="bg-white text-brand-blue px-4 py-2 rounded-xl font-bold text-sm hover:bg-blue-50 transition-colors flex items-center shadow-md disabled:opacity-75"
-            >
-              {isPreparing ? (
-                <>
-                  <Loader2 size={16} className="mr-2 animate-spin" />
-                  Načítám tisk...
-                </>
-              ) : (
-                <>
-                  <Printer size={16} className="mr-2" />
-                  Vytisknout / Uložit PDF
-                </>
-              )}
-            </button>
+            {isPaid && (
+              <button
+                onClick={handlePrint}
+                disabled={isPreparing}
+                className="bg-white text-brand-blue px-4 py-2 rounded-xl font-bold text-sm hover:bg-blue-50 transition-colors flex items-center shadow-md disabled:opacity-75"
+              >
+                {isPreparing ? (
+                  <>
+                    <Loader2 size={16} className="mr-2 animate-spin" />
+                    Načítám tisk...
+                  </>
+                ) : (
+                  <>
+                    <Printer size={16} className="mr-2" />
+                    Vytisknout / Uložit PDF
+                  </>
+                )}
+              </button>
+            )}
             <button
               onClick={onClose}
               className="p-2 hover:bg-white/20 rounded-full transition-colors text-white"
@@ -110,15 +118,29 @@ export const InsuranceConfirmationModal: React.FC<InsuranceConfirmationModalProp
         {/* Printable Certificate Body */}
         <div className="p-8 sm:p-12 overflow-y-auto print:p-0 print:overflow-visible print:m-0 font-sans text-gray-900 bg-white print:w-full" id="printable-certificate">
           
+          {!isPaid && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 text-amber-800 text-xs sm:text-sm flex items-start gap-3 print:hidden">
+              <ShieldCheck size={20} className="text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-amber-900">Upozornění: Platba za kroužek dosud nebyla spárována na účtu</p>
+                <p className="mt-0.5 text-amber-700">
+                  Oficiální potvrzení s razítkem a podpisem pro zdravotní pojišťovnu bude platné a zpřístupněno ke stažení ihned po přijetí a zaevidování platby v systému.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Header */}
           <div className="border-b-2 border-brand-blue pb-5 mb-6 flex justify-between items-start">
             <div className="flex items-center space-x-4">
               <img 
-                src="https://web2.itnahodinu.cz/olympdance/logo.png" 
-                alt="Olymp Dance Logo" 
-                className="h-16 w-auto object-contain"
+                src="/loloo.png" 
+                alt="TK Olymp Logo" 
+                className="h-16 w-auto object-contain rounded"
                 loading="eager"
-                crossOrigin="anonymous"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = '/tk-olymp-logo-black.png';
+                }}
               />
               <div>
                 <h1 className="text-lg font-bold text-brand-blue uppercase tracking-wide">Taneční klub Olymp Olomouc, z. s.</h1>
@@ -198,10 +220,17 @@ export const InsuranceConfirmationModal: React.FC<InsuranceConfirmationModalProp
               </div>
               <div>
                 <span className="text-gray-500 block text-[11px] font-bold uppercase tracking-wider">Stav úhrady:</span>
-                <span className="inline-flex items-center text-green-700 font-bold mt-1">
-                  <CheckCircle size={16} className="mr-1.5 text-green-600 shrink-0" />
-                  Uhrazeno v plné výši (Bankovní převod)
-                </span>
+                {isPaid ? (
+                  <span className="inline-flex items-center text-green-700 font-bold mt-1">
+                    <CheckCircle size={16} className="mr-1.5 text-green-600 shrink-0" />
+                    Uhrazeno v plné výši (Bankovní převod)
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center text-amber-700 font-bold mt-1">
+                    <Clock size={16} className="mr-1.5 text-amber-600 shrink-0" />
+                    Čeká na připsání platby (Neuhrazeno)
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -225,15 +254,21 @@ export const InsuranceConfirmationModal: React.FC<InsuranceConfirmationModalProp
 
             {/* Stamp and Signature Box */}
             <div className="flex flex-col items-center text-center">
-              <img 
-                src="/stamp-signature.png" 
-                alt="Oficiální razítko a podpis TK Olymp Olomouc" 
-                className="w-56 sm:w-64 h-auto object-contain print:w-60"
-                referrerPolicy="no-referrer"
-              />
+              {isPaid ? (
+                <img 
+                  src="/stamp-signature.png" 
+                  alt="Oficiální razítko a podpis TK Olymp Olomouc" 
+                  className="w-56 sm:w-64 h-auto object-contain print:w-60"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-56 sm:w-64 h-24 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center p-3 text-[11px] text-gray-400 italic">
+                  Razítko a podpis budou připojeny až po spárování platby
+                </div>
+              )}
               <div className="text-center mt-1">
                 <span className="text-xs font-bold text-gray-900 block">Martin Matýsek</span>
-                <span className="text-[10px] text-gray-500 block">Předseda / Statutární zástupce TK Olymp Olomouc, z. s.</span>
+                <span className="text-[10px] text-gray-500 block">Taneční klub Olymp Olomouc, z. s.</span>
               </div>
             </div>
           </div>
