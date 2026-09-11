@@ -1964,6 +1964,7 @@ const RegistrationManager: React.FC = () => {
   const [deletingReg, setDeletingReg] = useState<Registration | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [sendingEmailId, setSendingEmailId] = useState<string | null>(null);
+  const [sendingWelcomeEmailId, setSendingWelcomeEmailId] = useState<string | null>(null);
   const [sendSuccessMsg, setSendSuccessMsg] = useState<{ id: string; msg: string } | null>(null);
 
   const handleMarkAsPaid = async (reg: Registration) => {
@@ -1973,6 +1974,33 @@ const RegistrationManager: React.FC = () => {
       setTimeout(() => setSendSuccessMsg(null), 5000);
     } catch (err: any) {
       alert('Chyba při označení přihlášky: ' + (err.message || err));
+    }
+  };
+
+  const handleResendWelcomeEmail = async (reg: Registration) => {
+    if (!window.confirm(`Opravdu chcete znovu odeslat úvodní e-mail s přihlašovacími údaji a pokyny k platbě na adresu: ${reg.parentEmail}?`)) {
+      return;
+    }
+    setSendingWelcomeEmailId(reg.id);
+    try {
+      const res = await fetch(`/api/registrations/${reg.id}/resend-welcome-email`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('olymp_admin_token') || ''}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSendSuccessMsg({ id: reg.id, msg: data.message || 'Úvodní e-mail byl úspěšně znovu odeslán na e-mail rodiče!' });
+        setTimeout(() => setSendSuccessMsg(null), 6000);
+      } else {
+        alert(data.error || 'Odeslání úvodního e-mailu selhalo');
+      }
+    } catch (err: any) {
+      alert('Chyba spojení: ' + (err.message || err));
+    } finally {
+      setSendingWelcomeEmailId(null);
     }
   };
 
@@ -2225,6 +2253,15 @@ const RegistrationManager: React.FC = () => {
                                 </button>
                               </div>
                             )}
+
+                            <button
+                              onClick={() => handleResendWelcomeEmail(reg)}
+                              disabled={sendingWelcomeEmailId === reg.id}
+                              className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-md text-xs font-bold transition-colors flex items-center gap-1 disabled:opacity-50"
+                              title="Znovu odeslat úvodní e-mail přihlášky (s heslem do portálu a pokyny k platbě)"
+                            >
+                              <Mail size={13} /> {sendingWelcomeEmailId === reg.id ? 'Odesílám...' : 'Úvodní e-mail'}
+                            </button>
 
                             <button 
                               onClick={() => handleUpdateStatus(reg.id, 'action_required')}
@@ -3337,6 +3374,35 @@ const SchoolRegistrationManager: React.FC = () => {
   const [isStampModalOpen, setIsStampModalOpen] = useState(false);
   const [deletingReg, setDeletingReg] = useState<SchoolRegistration | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [sendingWelcomeEmailId, setSendingWelcomeEmailId] = useState<string | null>(null);
+  const [sendSuccessMsg, setSendSuccessMsg] = useState<{ id: string; msg: string } | null>(null);
+
+  const handleResendWelcomeEmail = async (reg: SchoolRegistration) => {
+    if (!window.confirm(`Opravdu chcete znovu odeslat úvodní e-mail s přihlašovacími údaji a pokyny k platbě na adresu: ${reg.parentEmail}?`)) {
+      return;
+    }
+    setSendingWelcomeEmailId(reg.id);
+    try {
+      const res = await fetch(`/api/school-registrations/${reg.id}/resend-welcome-email`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('olymp_admin_token') || ''}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSendSuccessMsg({ id: reg.id, msg: data.message || 'Úvodní e-mail byl úspěšně znovu odeslán na e-mail rodiče!' });
+        setTimeout(() => setSendSuccessMsg(null), 6000);
+      } else {
+        alert(data.error || 'Odeslání úvodního e-mailu selhalo');
+      }
+    } catch (err: any) {
+      alert('Chyba spojení: ' + (err.message || err));
+    } finally {
+      setSendingWelcomeEmailId(null);
+    }
+  };
 
   const handleConfirmDelete = async () => {
     if (!deletingReg) return;
@@ -3570,6 +3636,25 @@ const SchoolRegistrationManager: React.FC = () => {
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-2">
                           <div className="flex items-center gap-1.5 flex-wrap">
+                            <button
+                              onClick={() => handleResendWelcomeEmail(reg)}
+                              disabled={sendingWelcomeEmailId === reg.id}
+                              className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-md text-xs font-bold transition-colors flex items-center gap-1 disabled:opacity-50"
+                              title="Znovu odeslat úvodní e-mail přihlášky (s heslem do portálu a pokyny k platbě)"
+                            >
+                              <Mail size={13} /> {sendingWelcomeEmailId === reg.id ? 'Odesílám...' : 'Úvodní e-mail'}
+                            </button>
+                            {reg.status === 'approved' && (
+                              <a
+                                href={`/api/school-registrations/${reg.id}/confirmation-pdf`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-md text-xs font-bold transition-colors flex items-center gap-1"
+                                title="Stáhnout oficiální PDF potvrzení"
+                              >
+                                <FileText size={13} /> PDF
+                              </a>
+                            )}
                             <button 
                               onClick={() => handleUpdateStatus(reg.id, 'approved')}
                               className="p-1.5 bg-green-100 text-green-600 rounded hover:bg-green-200 transition-colors"
@@ -3609,6 +3694,12 @@ const SchoolRegistrationManager: React.FC = () => {
                               <Trash2 size={16} />
                             </button>
                           </div>
+
+                          {sendSuccessMsg && sendSuccessMsg.id === reg.id && (
+                            <div className="text-[11px] bg-emerald-50 text-emerald-800 p-2 rounded border border-emerald-200 font-medium animate-fadeIn">
+                              {sendSuccessMsg.msg}
+                            </div>
+                          )}
                           
                           {editingId === reg.id && (
                             <div className="mt-2 space-y-2 bg-gray-50 p-2 rounded border border-gray-200">

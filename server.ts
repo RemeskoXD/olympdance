@@ -905,6 +905,134 @@ const generateQrPaymentUrl = (amount: number, vs: string, message: string) => {
   return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&margin=10&data=${encodeURIComponent(spayd)}`;
 };
 
+// Initial welcome & payment confirmation email for summer camps (Tábory a akce)
+const generateCampWelcomeEmailHtml = (registration: any, camp: any, variableSymbol: string, qrUrl: string) => {
+  const campTitle = camp?.title || 'Letní tábor';
+  const campPrice = camp?.price || 'Cena dle tábora';
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
+      <div style="background-color: #002B49; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Olymp Dance Olomouc</h1>
+        <p style="color: #93c5fd; margin: 6px 0 0 0; font-size: 15px;">Potvrzení přihlášky na letní tábor</p>
+      </div>
+      <div style="background-color: #ffffff; padding: 32px 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
+        <p style="font-size: 16px;">Vážený rodiči <strong>${registration.parentName || ''}</strong>,</p>
+        <p>děkujeme za přihlášení dítěte <strong>${registration.childName || ''}</strong> na tábor <strong>${campTitle}</strong>.</p>
+        
+        <!-- Informace o táboře -->
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin: 20px 0;">
+          <h3 style="margin: 0 0 10px 0; color: #002B49; font-size: 16px;">🏕️ Informace o táboře</h3>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Název tábora:</strong> ${campTitle}</p>
+          ${camp?.date ? `<p style="margin: 4px 0; font-size: 14px;"><strong>Termín konání:</strong> ${camp.date}</p>` : ''}
+          ${camp?.location ? `<p style="margin: 4px 0; font-size: 14px;"><strong>Místo konání:</strong> ${camp.location}</p>` : ''}
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Cena:</strong> <span style="color: #E30613; font-weight: bold;">${campPrice}</span></p>
+        </div>
+
+        <!-- Přihlašovací údaje -->
+        <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 18px; margin: 20px 0;">
+          <h3 style="margin: 0 0 10px 0; color: #1e40af; font-size: 16px;">🔑 Vaše přihlašovací údaje do Klientského portálu</h3>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Přihlašovací e-mail:</strong> ${registration.parentEmail || ''}</p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Heslo:</strong> <span style="font-family: monospace; background: #ffffff; padding: 2px 8px; border-radius: 4px; font-weight: bold; border: 1px solid #93c5fd; color: #1e40af;">${registration.password || ''}</span></p>
+          <p style="margin: 8px 0 0 0; font-size: 12px; color: #475569;">V klientském portálu můžete sledovat stav přihlášky a po schválení stáhnout potvrzení pro pojišťovnu / FKSP.</p>
+        </div>
+
+        <!-- Platební údaje -->
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin: 20px 0;">
+          <h3 style="margin: 0 0 10px 0; color: #002B49; font-size: 16px;">💳 Platební údaje</h3>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Číslo účtu:</strong> ${BANK_DETAILS.account} (${BANK_DETAILS.bankName})</p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>IBAN:</strong> ${BANK_DETAILS.ibanFormatted}</p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>BIC / SWIFT:</strong> ${BANK_DETAILS.bic}</p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Částka:</strong> <span style="color: #E30613; font-weight: bold;">${campPrice}</span></p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Variabilní symbol:</strong> <span style="font-weight: bold; color: #002B49;">${variableSymbol}</span></p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Zpráva pro příjemce:</strong> ${registration.childName || ''} ${registration.childBirthDate || ''}</p>
+        </div>
+
+        <!-- QR Platba -->
+        <div style="text-align: center; margin: 20px 0; padding: 16px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+          <p style="font-weight: bold; margin: 0 0 10px 0; color: #002B49; font-size: 15px;">📲 Rychlá platba mobilem (QR kód):</p>
+          <img src="${qrUrl}" alt="QR platba" width="220" height="220" style="display: block; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 8px;" />
+          <p style="font-size: 12px; color: #64748b; margin: 8px 0 0 0;">Naskenujte v aplikaci své banky (Raiffeisenbank, ČSOB, KB, Spořitelna, AirBank atd.)</p>
+        </div>
+
+        <p>Těšíme se na skvělé léto plné tance!</p>
+        <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
+        <p style="font-size: 13px; color: #94a3b8; text-align: center; margin: 0;">
+          Taneční klub Olymp Olomouc • info@olympdance.cz • +420 722 017 700
+        </p>
+      </div>
+    </div>
+  `;
+};
+
+// Initial welcome & payment confirmation email for school dance courses (Kroužky na školách)
+const generateSchoolWelcomeEmailHtml = (registration: any, school: any, vs: string, qrUrl: string) => {
+  const schoolName = school?.name ? `${school.name} (${school.city})` : 'Taneční kroužek';
+  const schoolPrice = school?.price || 'Dle ceníku školy';
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
+      <div style="background-color: #002B49; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Olymp Dance Olomouc</h1>
+        <p style="color: #93c5fd; margin: 6px 0 0 0; font-size: 15px;">Potvrzení přihlášky do tanečního kroužku</p>
+      </div>
+      <div style="background-color: #ffffff; padding: 32px 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
+        <p style="font-size: 16px;">Vážený rodiči <strong>${registration.parentName || ''}</strong>,</p>
+        <p>děkujeme za přihlášení dítěte <strong>${registration.childName || ''} ${registration.childSurname || ''}</strong> do tanečního kroužku v tanečním klubu <strong>Olymp Dance</strong>.</p>
+        
+        <!-- Informace o kroužku a škole -->
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin: 20px 0;">
+          <h3 style="margin: 0 0 10px 0; color: #002B49; font-size: 16px;">📍 Informace o kroužku</h3>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Škola / Místo:</strong> ${schoolName}</p>
+          ${school?.day ? `<p style="margin: 4px 0; font-size: 14px;"><strong>Den tréninků:</strong> ${school.day}</p>` : ''}
+          ${school?.time ? `<p style="margin: 4px 0; font-size: 14px;"><strong>Čas tréninků:</strong> ${school.time}</p>` : ''}
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Pololetní kurzovné:</strong> <span style="color: #E30613; font-weight: bold;">${schoolPrice}</span></p>
+        </div>
+
+        <!-- Rekapitulace údajů -->
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin: 20px 0;">
+          <h3 style="margin: 0 0 10px 0; color: #002B49; font-size: 16px;">📋 Rekapitulace přihlášky</h3>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Dítě:</strong> ${registration.childName || ''} ${registration.childSurname || ''}</p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Třída:</strong> ${registration.childClass || 'Neuvedeno'}</p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Datum narození / RČ:</strong> ${registration.childBirthDate || registration.childRodneCislo || 'Neuvedeno'}</p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Vyzvedávání z družiny:</strong> ${registration.afterSchoolClub ? 'Ano' : 'Ne'}</p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Zákonný zástupce:</strong> ${registration.parentName || ''}</p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Telefon:</strong> ${registration.parentPhone || ''}</p>
+        </div>
+
+        <!-- Přihlašovací údaje -->
+        <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 18px; margin: 20px 0;">
+          <h3 style="margin: 0 0 10px 0; color: #1e40af; font-size: 16px;">🔑 Vaše přihlašovací údaje do Školního portálu</h3>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Přihlašovací e-mail:</strong> ${registration.parentEmail || ''}</p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Heslo:</strong> <span style="font-family: monospace; background: #ffffff; padding: 3px 8px; border-radius: 4px; font-weight: bold; border: 1px solid #93c5fd; color: #1e40af;">${registration.password || ''}</span></p>
+          <p style="margin: 8px 0 0 0; font-size: 12px; color: #475569;">Ve Školním portálu můžete sledovat docházku na všech 14 lekcích, omlouvat dítě z tréninků a stáhnout potvrzení o platbě pro pojišťovnu.</p>
+        </div>
+
+        <!-- Platební údaje -->
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin: 20px 0;">
+          <h3 style="margin: 0 0 10px 0; color: #002B49; font-size: 16px;">💳 Platební údaje (Raiffeisenbank)</h3>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Číslo účtu:</strong> ${BANK_DETAILS.account} (${BANK_DETAILS.bankName})</p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>IBAN:</strong> ${BANK_DETAILS.ibanFormatted}</p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Částka:</strong> <span style="color: #E30613; font-weight: bold; font-size: 15px;">${schoolPrice}</span></p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Variabilní symbol:</strong> <span style="font-weight: bold; color: #002B49;">${vs}</span></p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Zpráva pro příjemce:</strong> ${registration.parentName || ''} ${registration.childName || ''}</p>
+        </div>
+
+        <!-- QR Platba -->
+        <div style="text-align: center; margin: 20px 0; padding: 16px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+          <p style="font-weight: bold; margin: 0 0 10px 0; color: #002B49; font-size: 15px;">📲 Rychlá platba mobilem (QR kód):</p>
+          <img src="${qrUrl}" alt="QR platba" width="220" height="220" style="display: block; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 8px;" />
+          <p style="font-size: 12px; color: #64748b; margin: 8px 0 0 0;">Naskenujte v mobilní aplikaci své banky (Raiffeisenbank, ČSOB, KB, Spořitelna, AirBank atd.)</p>
+        </div>
+
+        <p>Těšíme se na naše taneční lekce s vaším dítětem!</p>
+        <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
+        <p style="font-size: 13px; color: #94a3b8; text-align: center; margin: 0;">
+          Taneční klub Olymp Olomouc • info@olympdance.cz • +420 722 017 700
+        </p>
+      </div>
+    </div>
+  `;
+};
+
 // Admin recipient list (company notification mailbox)
 const getAdminEmails = async (): Promise<string[]> => {
   const emails = new Set<string>();
@@ -1920,59 +2048,7 @@ app.post('/api/registrations', async (req, res) => {
     const qrUrl = generateQrPaymentUrl(numericPrice, variableSymbol, `${registration.childName} ${campTitle}`);
 
     // Send confirmation email to parent WITH LOGIN CREDENTIALS & PAYMENT INFO & QR CODE
-    const emailHtml = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
-        <div style="background-color: #002B49; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
-          <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Olymp Dance Olomouc</h1>
-          <p style="color: #93c5fd; margin: 6px 0 0 0; font-size: 15px;">Potvrzení přihlášky na letní tábor</p>
-        </div>
-        <div style="background-color: #ffffff; padding: 32px 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
-          <p style="font-size: 16px;">Vážený rodiči <strong>${registration.parentName}</strong>,</p>
-          <p>děkujeme za přihlášení dítěte <strong>${registration.childName}</strong> na tábor <strong>${campTitle}</strong>.</p>
-          
-          <!-- Informace o táboře -->
-          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin: 20px 0;">
-            <h3 style="margin: 0 0 10px 0; color: #002B49; font-size: 16px;">🏕️ Informace o táboře</h3>
-            <p style="margin: 4px 0; font-size: 14px;"><strong>Název tábora:</strong> ${campTitle}</p>
-            ${camp.date ? `<p style="margin: 4px 0; font-size: 14px;"><strong>Termín konání:</strong> ${camp.date}</p>` : ''}
-            ${camp.location ? `<p style="margin: 4px 0; font-size: 14px;"><strong>Místo konání:</strong> ${camp.location}</p>` : ''}
-            <p style="margin: 4px 0; font-size: 14px;"><strong>Cena:</strong> <span style="color: #E30613; font-weight: bold;">${campPrice}</span></p>
-          </div>
-
-          <!-- Přihlašovací údaje -->
-          <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 18px; margin: 20px 0;">
-            <h3 style="margin: 0 0 10px 0; color: #1e40af; font-size: 16px;">🔑 Vaše přihlašovací údaje do Klientského portálu</h3>
-            <p style="margin: 4px 0; font-size: 14px;"><strong>Přihlašovací e-mail:</strong> ${registration.parentEmail}</p>
-            <p style="margin: 4px 0; font-size: 14px;"><strong>Heslo:</strong> <span style="font-family: monospace; background: #ffffff; padding: 2px 8px; border-radius: 4px; font-weight: bold; border: 1px solid #93c5fd; color: #1e40af;">${registration.password}</span></p>
-            <p style="margin: 8px 0 0 0; font-size: 12px; color: #475569;">V klientském portálu můžete sledovat stav přihlášky a po schválení stáhnout potvrzení pro pojišťovnu / FKSP.</p>
-          </div>
-
-          <!-- Platební údaje -->
-          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin: 20px 0;">
-            <h3 style="margin: 0 0 10px 0; color: #002B49; font-size: 16px;">💳 Platební údaje</h3>
-            <p style="margin: 4px 0; font-size: 14px;"><strong>Číslo účtu:</strong> ${BANK_DETAILS.account} (${BANK_DETAILS.bankName})</p>
-            <p style="margin: 4px 0; font-size: 14px;"><strong>IBAN:</strong> ${BANK_DETAILS.ibanFormatted}</p>
-            <p style="margin: 4px 0; font-size: 14px;"><strong>BIC / SWIFT:</strong> ${BANK_DETAILS.bic}</p>
-            <p style="margin: 4px 0; font-size: 14px;"><strong>Částka:</strong> <span style="color: #E30613; font-weight: bold;">${campPrice}</span></p>
-            <p style="margin: 4px 0; font-size: 14px;"><strong>Variabilní symbol:</strong> <span style="font-weight: bold; color: #002B49;">${variableSymbol}</span></p>
-            <p style="margin: 4px 0; font-size: 14px;"><strong>Zpráva pro příjemce:</strong> ${registration.childName} ${registration.childBirthDate || ''}</p>
-          </div>
-
-          <!-- QR Platba -->
-          <div style="text-align: center; margin: 20px 0; padding: 16px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
-            <p style="font-weight: bold; margin: 0 0 10px 0; color: #002B49; font-size: 15px;">📲 Rychlá platba mobilem (QR kód):</p>
-            <img src="${qrUrl}" alt="QR platba" width="220" height="220" style="display: block; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 8px;" />
-            <p style="font-size: 12px; color: #64748b; margin: 8px 0 0 0;">Naskenujte v aplikaci své banky (Raiffeisenbank, ČSOB, KB, Spořitelna, AirBank atd.)</p>
-          </div>
-
-          <p>Těšíme se na skvělé léto plné tance!</p>
-          <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
-          <p style="font-size: 13px; color: #94a3b8; text-align: center; margin: 0;">
-            Taneční klub Olymp Olomouc • info@olympdance.cz • +420 722 017 700
-          </p>
-        </div>
-      </div>
-    `;
+    const emailHtml = generateCampWelcomeEmailHtml(registration, camp, variableSymbol, qrUrl);
 
     // Send emails in background
     (async () => {
@@ -2210,6 +2286,50 @@ app.post('/api/registrations/:id/send-confirmation', requireAdmin, async (req, r
   }
 });
 
+// Admin re-send INITIAL welcome email with credentials, payment instructions & QR code for a camp registration
+app.post('/api/registrations/:id/resend-welcome-email', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [rows] = await pool.query('SELECT * FROM registrations WHERE id = ?', [id]);
+    if ((rows as any[]).length === 0) {
+      return res.status(404).json({ error: 'Přihláška nenalezena' });
+    }
+    const registration = (rows as any[])[0];
+
+    const customerEmail = (registration.parentEmail || '').trim();
+    if (!customerEmail || !customerEmail.includes('@')) {
+      return res.status(400).json({ error: 'Rodič nemá vyplněný platný e-mail' });
+    }
+
+    // If password missing, generate one and update DB
+    if (!registration.password) {
+      registration.password = Math.random().toString(36).slice(-8);
+      await pool.query('UPDATE registrations SET password = ? WHERE id = ?', [registration.password, id]);
+    }
+
+    const [campRows] = await pool.query('SELECT * FROM camps WHERE id = ?', [registration.campId]);
+    const camp = (campRows as any[])[0] || {};
+    const campTitle = camp.title || 'Letní tábor';
+    const campPrice = camp.price || 'Cena dle tábora';
+    const numericPrice = parseInt((campPrice || '').replace(/\D/g, ''), 10) || 3500;
+    const variableSymbol = (registration.variableSymbol || '').replace(/\D/g, '').slice(0, 10) || `262${Date.now().toString().slice(-6)}`;
+    const qrUrl = generateQrPaymentUrl(numericPrice, variableSymbol, `${registration.childName} ${campTitle}`);
+
+    const emailHtml = generateCampWelcomeEmailHtml(registration, camp, variableSymbol, qrUrl);
+    const subject = `Potvrzení přihlášky na tábor (${registration.childName}) - Olymp Dance`;
+
+    const info = await sendEmail(customerEmail, subject, emailHtml);
+    if (!info) {
+      return res.status(500).json({ error: 'Nepodařilo se odeslat e-mail. Zkontrolujte nastavení SMTP nebo poštovní server.' });
+    }
+
+    res.json({ success: true, message: `Úvodní e-mail byl úspěšně znovu odeslán na ${customerEmail}` });
+  } catch (error: any) {
+    console.error('Error resending camp welcome email:', error);
+    res.status(500).json({ error: 'Chyba při odesílání e-mailu: ' + (error.message || error) });
+  }
+});
+
 app.delete('/api/registrations/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -2331,69 +2451,7 @@ app.post('/api/school-registrations', async (req, res) => {
     const qrUrl = generateQrPaymentUrl(numericPrice, vs, `${registration.childName} ${school.name || ''}`);
 
     // Send confirmation email to parent WITH LOGIN CREDENTIALS, SCHOOL SCHEDULE, RECAP & QR CODE
-    const emailHtml = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
-        <div style="background-color: #002B49; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
-          <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Olymp Dance Olomouc</h1>
-          <p style="color: #93c5fd; margin: 6px 0 0 0; font-size: 15px;">Potvrzení přihlášky do tanečního kroužku</p>
-        </div>
-        <div style="background-color: #ffffff; padding: 32px 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
-          <p style="font-size: 16px;">Vážený rodiči <strong>${registration.parentName}</strong>,</p>
-          <p>děkujeme za přihlášení dítěte <strong>${registration.childName} ${registration.childSurname || ''}</strong> do tanečního kroužku v tanečním klubu <strong>Olymp Dance</strong>.</p>
-          
-          <!-- Informace o kroužku a škole -->
-          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin: 20px 0;">
-            <h3 style="margin: 0 0 10px 0; color: #002B49; font-size: 16px;">📍 Informace o kroužku</h3>
-            <p style="margin: 4px 0; font-size: 14px;"><strong>Škola / Místo:</strong> ${schoolName}</p>
-            ${school.day ? `<p style="margin: 4px 0; font-size: 14px;"><strong>Den tréninků:</strong> ${school.day}</p>` : ''}
-            ${school.time ? `<p style="margin: 4px 0; font-size: 14px;"><strong>Čas tréninků:</strong> ${school.time}</p>` : ''}
-            <p style="margin: 4px 0; font-size: 14px;"><strong>Pololetní kurzovné:</strong> <span style="color: #E30613; font-weight: bold;">${schoolPrice}</span></p>
-          </div>
-
-          <!-- Rekapitulace údajů -->
-          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin: 20px 0;">
-            <h3 style="margin: 0 0 10px 0; color: #002B49; font-size: 16px;">📋 Rekapitulace přihlášky</h3>
-            <p style="margin: 4px 0; font-size: 14px;"><strong>Dítě:</strong> ${registration.childName} ${registration.childSurname || ''}</p>
-            <p style="margin: 4px 0; font-size: 14px;"><strong>Třída:</strong> ${registration.childClass || 'Neuvedeno'}</p>
-            <p style="margin: 4px 0; font-size: 14px;"><strong>Datum narození / RČ:</strong> ${registration.childBirthDate || registration.childRodneCislo || 'Neuvedeno'}</p>
-            <p style="margin: 4px 0; font-size: 14px;"><strong>Vyzvedávání z družiny:</strong> ${registration.afterSchoolClub ? 'Ano' : 'Ne'}</p>
-            <p style="margin: 4px 0; font-size: 14px;"><strong>Zákonný zástupce:</strong> ${registration.parentName}</p>
-            <p style="margin: 4px 0; font-size: 14px;"><strong>Telefon:</strong> ${registration.parentPhone}</p>
-          </div>
-
-          <!-- Přihlašovací údaje -->
-          <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 18px; margin: 20px 0;">
-            <h3 style="margin: 0 0 10px 0; color: #1e40af; font-size: 16px;">🔑 Vaše přihlašovací údaje do Školního portálu</h3>
-            <p style="margin: 4px 0; font-size: 14px;"><strong>Přihlašovací e-mail:</strong> ${registration.parentEmail}</p>
-            <p style="margin: 4px 0; font-size: 14px;"><strong>Heslo:</strong> <span style="font-family: monospace; background: #ffffff; padding: 3px 8px; border-radius: 4px; font-weight: bold; border: 1px solid #93c5fd; color: #1e40af;">${registration.password}</span></p>
-            <p style="margin: 8px 0 0 0; font-size: 12px; color: #475569;">Ve Školním portálu můžete sledovat docházku na všech 14 lekcích, omlouvat dítě z tréninků a stáhnout potvrzení o platbě pro pojišťovnu.</p>
-          </div>
-
-          <!-- Platební údaje -->
-          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin: 20px 0;">
-            <h3 style="margin: 0 0 10px 0; color: #002B49; font-size: 16px;">💳 Platební údaje (Raiffeisenbank)</h3>
-            <p style="margin: 4px 0; font-size: 14px;"><strong>Číslo účtu:</strong> ${BANK_DETAILS.account} (${BANK_DETAILS.bankName})</p>
-            <p style="margin: 4px 0; font-size: 14px;"><strong>IBAN:</strong> ${BANK_DETAILS.ibanFormatted}</p>
-            <p style="margin: 4px 0; font-size: 14px;"><strong>Částka:</strong> <span style="color: #E30613; font-weight: bold; font-size: 15px;">${schoolPrice}</span></p>
-            <p style="margin: 4px 0; font-size: 14px;"><strong>Variabilní symbol:</strong> <span style="font-weight: bold; color: #002B49;">${vs}</span></p>
-            <p style="margin: 4px 0; font-size: 14px;"><strong>Zpráva pro příjemce:</strong> ${registration.parentName} ${registration.childName}</p>
-          </div>
-
-          <!-- QR Platba -->
-          <div style="text-align: center; margin: 20px 0; padding: 16px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
-            <p style="font-weight: bold; margin: 0 0 10px 0; color: #002B49; font-size: 15px;">📲 Rychlá platba mobilem (QR kód):</p>
-            <img src="${qrUrl}" alt="QR platba" width="220" height="220" style="display: block; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 8px;" />
-            <p style="font-size: 12px; color: #64748b; margin: 8px 0 0 0;">Naskenujte v mobilní aplikaci své banky (Raiffeisenbank, ČSOB, KB, Spořitelna, AirBank atd.)</p>
-          </div>
-
-          <p>Těšíme se na naše taneční lekce s vaším dítětem!</p>
-          <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
-          <p style="font-size: 13px; color: #94a3b8; text-align: center; margin: 0;">
-            Taneční klub Olymp Olomouc • info@olympdance.cz • +420 722 017 700
-          </p>
-        </div>
-      </div>
-    `;
+    const emailHtml = generateSchoolWelcomeEmailHtml(registration, school, vs, qrUrl);
 
     // Send emails in background
     (async () => {
@@ -2714,6 +2772,50 @@ app.post('/api/school-registrations/:id/send-confirmation', requireAdmin, async 
   } catch (err: any) {
     console.error('Send school confirmation error:', err);
     res.status(500).json({ error: 'Chyba při odesílání potvrzení: ' + err.message });
+  }
+});
+
+// Admin re-send INITIAL welcome email with credentials, course schedule, payment instructions & QR code for a school registration
+app.post('/api/school-registrations/:id/resend-welcome-email', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [rows] = await pool.query('SELECT * FROM school_registrations WHERE id = ?', [id]);
+    if ((rows as any[]).length === 0) {
+      return res.status(404).json({ error: 'Přihláška nenalezena' });
+    }
+    const registration = (rows as any[])[0];
+
+    const customerEmail = (registration.parentEmail || '').trim();
+    if (!customerEmail || !customerEmail.includes('@')) {
+      return res.status(400).json({ error: 'Rodič nemá vyplněný platný e-mail' });
+    }
+
+    // If password missing, generate one and update DB
+    if (!registration.password) {
+      registration.password = Math.random().toString(36).slice(-8);
+      await pool.query('UPDATE school_registrations SET password = ? WHERE id = ?', [registration.password, id]);
+    }
+
+    const [schoolRows] = await pool.query('SELECT * FROM schools WHERE id = ?', [registration.schoolId]);
+    const school = (schoolRows as any[])[0] || {};
+    const schoolName = school.name ? `${school.name} (${school.city})` : 'Taneční kroužek';
+    const schoolPrice = school.price || 'Dle ceníku školy';
+    const numericPrice = parseInt((schoolPrice || '').replace(/\D/g, ''), 10) || 1600;
+    const vs = (registration.variableSymbol || '').replace(/\D/g, '').slice(0, 10) || `261${Date.now().toString().slice(-6)}`;
+    const qrUrl = generateQrPaymentUrl(numericPrice, vs, `${registration.childName} ${school.name || ''}`);
+
+    const emailHtml = generateSchoolWelcomeEmailHtml(registration, school, vs, qrUrl);
+    const subject = `Potvrzení přihlášky do tanečního kroužku (${registration.childName}) - Olymp Dance`;
+
+    const info = await sendEmail(customerEmail, subject, emailHtml);
+    if (!info) {
+      return res.status(500).json({ error: 'Nepodařilo se odeslat e-mail. Zkontrolujte nastavení SMTP nebo poštovní server.' });
+    }
+
+    res.json({ success: true, message: `Úvodní e-mail byl úspěšně znovu odeslán na ${customerEmail}` });
+  } catch (error: any) {
+    console.error('Error resending school welcome email:', error);
+    res.status(500).json({ error: 'Chyba při odesílání e-mailu: ' + (error.message || error) });
   }
 });
 
