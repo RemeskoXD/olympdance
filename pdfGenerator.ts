@@ -285,7 +285,7 @@ export function generateSchoolPaymentPdf(data: SchoolPaymentPdfData): Promise<Bu
 
       // Issue date and location
       const issueDateStr = formatCzechDate(data.issueDate || data.paymentDate || new Date());
-      doc.text(`V Přerově dne ${issueDateStr}`, textX, 440);
+      doc.text(`V Olomouci dne ${issueDateStr}`, textX, 440);
 
       // 5. OFFICIAL CLUB STAMP & SIGNATURE BLOCK (Right aligned)
       const stampX = 335;

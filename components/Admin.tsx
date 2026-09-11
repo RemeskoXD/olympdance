@@ -11,6 +11,7 @@ import {
 import { School, Camp, Product, Registration, User, SchoolRegistration, MerchOrder } from '../types';
 import { exportSchoolRegistrationsToCsv, exportCampRegistrationsToCsv } from '../utils/exportCsv';
 import { matchesSearch } from '../utils/search';
+import { getFirstTrainingDate } from '../utils/trainingDates';
 import { AttendanceSheetModal } from './AttendanceSheetModal';
 import { TrainingDatesModal } from './TrainingDatesModal';
 import { InsuranceConfirmationModal } from './InsuranceConfirmationModal';
@@ -18,6 +19,7 @@ import { StampManagerModal } from './StampManagerModal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { RbBankManager } from './RbBankManager';
 import { AdminImport } from './AdminImport';
+import { EmailAntispamManager } from './EmailAntispamManager';
 import { UploadCloud } from 'lucide-react';
 
 const Admin: React.FC = () => {
@@ -28,7 +30,7 @@ const Admin: React.FC = () => {
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'schools' | 'camps' | 'gallery' | 'merch' | 'registrations' | 'school_registrations' | 'users' | 'attendance' | 'rb_bank' | 'import_customers'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'schools' | 'camps' | 'gallery' | 'merch' | 'registrations' | 'school_registrations' | 'users' | 'attendance' | 'rb_bank' | 'import_customers' | 'email_antispam'>('dashboard');
 
   // Check for persisted login on mount and verify token
   useEffect(() => {
@@ -381,6 +383,17 @@ const Admin: React.FC = () => {
                 <UploadCloud size={18} className="mr-2" />
                 Import zákazníků
               </button>
+              <button
+                onClick={() => setActiveTab('email_antispam')}
+                className={`flex items-center px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+                  activeTab === 'email_antispam' 
+                  ? 'bg-brand-blue text-white shadow-md' 
+                  : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <Mail size={18} className="mr-2" />
+                Antispam & E-maily
+              </button>
             </>
           )}
 
@@ -410,6 +423,7 @@ const Admin: React.FC = () => {
         {activeTab === 'attendance' && <AttendanceManager currentUser={currentUser} />}
         {activeTab === 'rb_bank' && <RbBankManager />}
         {activeTab === 'import_customers' && <AdminImport />}
+        {activeTab === 'email_antispam' && <EmailAntispamManager />}
       </div>
     </div>
   );
@@ -846,6 +860,7 @@ const SchoolManager: React.FC = () => {
       <div className="lg:col-span-2 space-y-4">
         {schools.map(school => {
           const filledDates = (school.trainingDates || []).filter(Boolean).length;
+          const firstTraining = getFirstTrainingDate(school);
 
           return (
             <div key={school.id} className={`bg-white p-4 rounded-xl shadow-sm border flex justify-between items-center group transition-all ${isEditing === school.id ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 hover:shadow-md'}`}>
@@ -855,14 +870,21 @@ const SchoolManager: React.FC = () => {
                     {school.isKindergarten && <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded font-bold">MŠ</span>}
                 </div>
                 <p className="text-sm text-gray-500">{school.city} • {school.day} {school.time}</p>
-                <div className="flex items-center gap-3 mt-1">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1.5">
                   <p className="text-sm font-semibold text-brand-blue">{school.price}</p>
-                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full flex items-center ${
-                    filledDates > 0 
-                      ? 'bg-blue-50 text-brand-blue border border-blue-200' 
-                      : 'bg-gray-100 text-gray-500'
+                  <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full flex items-center border ${
+                    firstTraining.isSet 
+                      ? 'bg-blue-50 text-brand-blue border-blue-200' 
+                      : 'bg-amber-50 text-amber-800 border-amber-200 italic'
                   }`}>
-                    <Calendar size={11} className="mr-1" />
+                    <Calendar size={11} className="mr-1 shrink-0" />
+                    První trénink: {firstTraining.formatted}
+                  </span>
+                  <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full flex items-center ${
+                    filledDates > 0 
+                      ? 'bg-gray-100 text-gray-600' 
+                      : 'bg-gray-50 text-gray-400'
+                  }`}>
                     {filledDates > 0 ? `${filledDates}/14 termínů` : 'Termíny nezadány'}
                   </span>
                 </div>
@@ -2857,6 +2879,15 @@ const AttendanceManager: React.FC<{ currentUser: User | null }> = ({ currentUser
                       <Calendar size={14} className="mr-2 text-brand-red shrink-0" />
                       {school.day} &bull; {school.time}
                     </p>
+                    {(() => {
+                      const firstTraining = getFirstTrainingDate(school);
+                      return (
+                        <p className={`flex items-center text-xs font-medium ${firstTraining.isSet ? 'text-gray-700' : 'text-amber-700 italic'}`}>
+                          <Sparkles size={13} className={`mr-2 shrink-0 ${firstTraining.isSet ? 'text-brand-blue' : 'text-amber-500'}`} />
+                          První trénink: <strong className="ml-1">{firstTraining.formatted}</strong>
+                        </p>
+                      );
+                    })()}
                     <p className="flex items-center text-gray-500">
                       <UsersIcon size={14} className="mr-2 text-gray-400 shrink-0" />
                       <strong>{enrolledStudents.length}</strong> {enrolledStudents.length === 1 ? 'přihlášené dítě' : enrolledStudents.length < 5 ? 'přihlášené děti' : 'přihlášených dětí'}

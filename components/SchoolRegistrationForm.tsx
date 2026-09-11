@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
-import { ChevronRight, ChevronLeft, CheckCircle, CreditCard, User, Mail, Phone, Calendar as CalendarIcon, MapPin, Plus, Trash2, School as SchoolIcon } from 'lucide-react';
+import { ChevronRight, ChevronLeft, CheckCircle, CreditCard, User, Mail, Phone, Calendar as CalendarIcon, MapPin, Plus, Trash2, School as SchoolIcon, Sparkles } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { BANK_INFO } from '../constants';
 import { LegalModal, LegalDocType } from './LegalModal';
+import { getFirstTrainingDate } from '../utils/trainingDates';
 
 const SchoolRegistrationForm: React.FC = () => {
   const { schoolId } = useParams<{ schoolId: string }>();
@@ -379,6 +380,24 @@ const SchoolRegistrationForm: React.FC = () => {
                               <option key={s.id} value={s.id}>{s.name} ({s.day} {s.time}) - {s.price}</option>
                             ))}
                           </select>
+
+                          {child.schoolId && (() => {
+                            const chosenSchool = schools.find(s => s.id === child.schoolId);
+                            const firstTraining = getFirstTrainingDate(chosenSchool);
+                            return (
+                              <div className={`mt-2 p-2.5 rounded-lg border text-xs flex items-center justify-between transition-colors ${
+                                firstTraining.isSet ? 'bg-blue-50/80 border-blue-200 text-brand-blue' : 'bg-amber-50/80 border-amber-200 text-amber-800'
+                              }`}>
+                                <span className="font-semibold flex items-center">
+                                  <Sparkles size={13} className="mr-1.5 shrink-0" />
+                                  První trénink:
+                                </span>
+                                <span className="font-bold">
+                                  {firstTraining.withWeekday || firstTraining.formatted}
+                                </span>
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         <div className="mt-4 flex items-center">

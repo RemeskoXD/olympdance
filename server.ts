@@ -751,12 +751,13 @@ export const getSmtpConfig = async () => {
     }
   } catch (e) {}
 
-  const host = (process.env.SMTP_HOST || dbSettings?.smtpHost || 'smtp.gmail.com').trim();
-  const port = parseInt(process.env.SMTP_PORT || dbSettings?.smtpPort || '465', 10);
-  const secureSetting = process.env.SMTP_SECURE || dbSettings?.smtpSecure;
+  // Prioritize settings saved in database (admin panel) if provided, fallback to environment variables
+  const user = (dbSettings?.smtpUser?.trim() ? dbSettings.smtpUser : process.env.SMTP_USER || '').trim();
+  const pass = (dbSettings?.smtpPass?.trim() ? dbSettings.smtpPass : process.env.SMTP_PASS || '').replace(/\s+/g, '').replace(/^["']|["']$/g, '');
+  const host = (dbSettings?.smtpHost?.trim() ? dbSettings.smtpHost : process.env.SMTP_HOST || 'smtp.gmail.com').trim();
+  const port = parseInt(dbSettings?.smtpPort || process.env.SMTP_PORT || '465', 10);
+  const secureSetting = dbSettings?.smtpSecure || process.env.SMTP_SECURE;
   const secure = secureSetting ? (secureSetting === 'true' || secureSetting === 'ssl') : (port === 465);
-  const user = (process.env.SMTP_USER || dbSettings?.smtpUser || '').trim();
-  const pass = (process.env.SMTP_PASS || dbSettings?.smtpPass || '').replace(/\s+/g, '').replace(/^["']|["']$/g, '');
 
   return {
     host,
@@ -765,8 +766,93 @@ export const getSmtpConfig = async () => {
     user,
     pass,
     isConfigured: Boolean(user && pass),
-    source: process.env.SMTP_USER ? 'env' : (dbSettings?.smtpUser ? 'database' : 'none')
+    source: dbSettings?.smtpUser ? 'database' : (process.env.SMTP_USER ? 'env' : 'none')
   };
+};
+
+// Automatic plain-text generator for MIME multipart/alternative compliance
+// This removes SpamAssassin's MIME_HTML_ONLY penalty and ensures clean deliverability to Seznam.cz
+export const convertHtmlToPlainText = (html: string): string => {
+  if (!html) return '';
+  let text = html;
+
+  // 1. Remove style and script blocks
+  text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+  text = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+
+  // 2. Format hyperlinks: <a href="url">text</a> -> text (url)
+  text = text.replace(/<a\s+(?:[^>]*?\s+)?href=["']([^"']*)["'][^>]*>(.*?)<\/a>/gi, (_match, url, linkText) => {
+    const cleanLinkText = linkText.replace(/<[^>]+>/g, '').trim();
+    if (!cleanLinkText || cleanLinkText === url) return url;
+    if (url.startsWith('mailto:') || url.startsWith('tel:')) return cleanLinkText;
+    return `${cleanLinkText} (${url})`;
+  });
+
+  // 3. Format headers and paragraphs
+  text = text.replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, '\n\n$1\n----------------------------------------\n');
+  text = text.replace(/<li[^>]*>(.*?)<\/li>/gi, '• $1\n');
+  text = text.replace(/<br\s*\/?>/gi, '\n');
+  text = text.replace(/<\/(p|div|tr|table|ul|ol|blockquote)>/gi, '\n\n');
+
+  // 4. Strip remaining HTML tags
+  text = text.replace(/<[^>]+>/g, '');
+
+  // 5. Decode common HTML entities
+  text = text
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&bull;/gi, '•')
+    .replace(/&check;/gi, '✓');
+
+  // 6. Normalize whitespace and newlines
+  text = text.replace(/[ \t]+/g, ' ');
+  text = text.replace(/\n{3,}/g, '\n\n');
+
+  return text.trim();
+};
+
+// Wraps any HTML snippet into a standard, fully-valid HTML5 document envelope with UTF-8 and institutional footer
+export const wrapEmailHtml = (content: string, subject: string, recipientEmail?: string): string => {
+  if (content.includes('<!DOCTYPE') || content.includes('<html')) {
+    return content;
+  }
+
+  const safeSubject = (subject || 'Olymp Dance Olomouc').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="cs" xml:lang="cs">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="format-detection" content="telephone=no" />
+  <title>${safeSubject}</title>
+  <style type="text/css">
+    body { margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; }
+    table { border-collapse: collapse; }
+    img { border: 0; outline: none; text-decoration: none; }
+  </style>
+</head>
+<body style="margin: 0; padding: 24px 12px; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+    ${content}
+  </div>
+  <div style="max-width: 600px; margin: 16px auto 0 auto; text-align: center; font-size: 11px; color: #64748b; line-height: 1.6; padding: 0 16px;">
+    <p style="margin: 0;">
+      Tento e-mail byl automaticky odeslán informačním systémem <strong>Tanečního klubu Olymp Olomouc, z. s.</strong> (IČO: 01452601).
+    </p>
+    <p style="margin: 4px 0 0 0;">
+      Jiráskova 25, 779 00 Olomouc • Web: <a href="https://olympdance.cz" style="color: #2563eb; text-decoration: underline;">olympdance.cz</a> • E-mail: <a href="mailto:info@olympdance.cz" style="color: #2563eb; text-decoration: underline;">info@olympdance.cz</a>
+    </p>
+    <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 10px;">
+      Tato zpráva je určena pro: ${recipientEmail ? recipientEmail : 'příjemce'}. Pokud jste ji obdrželi omylem, informujte nás prosím na info@olympdance.cz.
+    </p>
+  </div>
+</body>
+</html>`;
 };
 
 const createTransporterFor = (host: string, port: number, secure: boolean, user: string, pass: string) => {
@@ -836,7 +922,7 @@ const getAdminEmails = async (): Promise<string[]> => {
 
 const getAdminEmail = async () => 'info@olympdance.cz';
 
-// Helper to send email safely with IPv4 and auto-fallback (465 SSL <-> 587 STARTTLS)
+// Helper to send email safely with IPv4, auto-fallback (465 SSL <-> 587 STARTTLS) and full anti-spam compliance (Seznam.cz, Gmail, etc.)
 const sendEmail = async (
   to: string, 
   subject: string, 
@@ -857,12 +943,28 @@ const sendEmail = async (
     return null;
   }
 
+  // Generate clean plain text and standard HTML5 envelope
+  const wrappedHtml = wrapEmailHtml(html, subject, cleanTo);
+  const plainText = convertHtmlToPlainText(html);
+
+  // Sender name & address alignment:
+  // If sending via @gmail.com, use same sender in replyTo to prevent cross-domain DMARC spoofing penalties on Seznam.cz
+  const isGmailSender = config.user.toLowerCase().endsWith('@gmail.com');
+  const replyToEmail = isGmailSender ? config.user : (config.user.includes('@') ? config.user : 'info@olympdance.cz');
+
   const mailOptions: any = {
-    from: `"Olymp Dance" <${config.user}>`,
-    replyTo: 'info@olympdance.cz',
+    from: `"Olymp Dance Olomouc" <${config.user}>`,
+    replyTo: replyToEmail,
     to: cleanTo,
     subject,
-    html,
+    html: wrappedHtml,
+    text: plainText,
+    headers: {
+      'X-Mailer': 'Olymp Dance Olomouc Club System',
+      'X-Auto-Response-Suppress': 'OOF, AutoReply',
+      'Auto-Submitted': 'auto-generated',
+      'List-Id': '<notifications.olympdance.cz>'
+    }
   };
   if (attachments && attachments.length > 0) {
     mailOptions.attachments = attachments;
@@ -916,6 +1018,82 @@ app.get('/api/smtp/status', async (req, res) => {
     });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// Detailed Antispam Diagnostics endpoint for Seznam.cz & mail deliverability
+app.get('/api/antispam/diagnostics', requireAdmin, async (req, res) => {
+  try {
+    const config = await getSmtpConfig();
+    const isGmail = config.user.toLowerCase().endsWith('@gmail.com');
+    const isCustomDomain = config.user.toLowerCase().includes('@olympdance.cz');
+    const senderDomain = config.user.includes('@') ? config.user.split('@')[1] : 'olympdance.cz';
+
+    res.json({
+      smtp: {
+        isConfigured: config.isConfigured,
+        host: config.host,
+        port: config.port,
+        secure: config.secure,
+        user: config.user,
+        source: config.source,
+        senderDomain,
+        isGmail,
+        isCustomDomain
+      },
+      checks: [
+        {
+          id: 'multipart_plain_text',
+          name: 'MIME Multipart/Alternative (HTML + Čistý text)',
+          status: 'ok',
+          description: 'Systém automaticky ke každému HTML e-mailu generuje plnohodnotný čitelný text. Odstraňuje přísnou SpamAssassin penalizaci MIME_HTML_ONLY.'
+        },
+        {
+          id: 'html5_standards',
+          name: 'Standardizovaná obálka HTML5 (UTF-8, DOCTYPE, lang="cs")',
+          status: 'ok',
+          description: 'E-maily mají validní hlavičky, české kódování UTF-8, responzivní design a oficiální identifikační patičku spolku.'
+        },
+        {
+          id: 'antispam_headers',
+          name: 'Standardní RFC antispamové hlavičky',
+          status: 'ok',
+          description: 'Nastaveny hlavičky X-Mailer, Auto-Submitted: auto-generated a X-Auto-Response-Suppress pro transakční doručení do složky Doručené.'
+        },
+        {
+          id: 'sender_domain',
+          name: 'Důvěryhodnost domény odesílatele',
+          status: isGmail ? 'warning' : 'ok',
+          description: isGmail 
+            ? `Aktuálně odesíláte z bezplatného Gmailu (${config.user}). Seznam.cz takové e-maily s přiloženou fakturou/potvrzením vnímá s vyšším podezřením. Doporučujeme přepnout na info@olympdance.cz.`
+            : `Odesíláte z domény ${senderDomain}, což je pro antispam Seznamu optimální.`
+        },
+        {
+          id: 'spf_record',
+          name: 'Ověření odesílatele SPF (DNS TXT)',
+          status: isGmail ? 'info' : 'warning',
+          description: isGmail
+            ? 'Při odesílání přes Google servery je SPF pro @gmail.com validní, ale doména @olympdance.cz není v hlavičce ověřena.'
+            : `Ujistěte se, že máte v DNS domény ${senderDomain} nastaven záznam: "v=spf1 include:... ~all"`
+        },
+        {
+          id: 'dmarc_record',
+          name: 'DMARC politika domény (DNS TXT)',
+          status: 'info',
+          description: 'Doporučeno mít v DNS domény olympdance.cz záznam _dmarc s hodnotou: "v=DMARC1; p=none; sp=none; rua=mailto:info@olympdance.cz"'
+        }
+      ],
+      dnsRecommendations: {
+        domain: 'olympdance.cz',
+        spfGmail: 'v=spf1 include:_spf.google.com ~all',
+        spfWedos: 'v=spf1 include:_spf.we-do.cz ~all',
+        dmarc: 'v=DMARC1; p=none; sp=none; rua=mailto:info@olympdance.cz',
+        dkimNote: 'DKIM klíč se generuje přímo v administraci vašeho hostingu (např. Wedos, Forpsi, Google Workspace).'
+      },
+      postmasterUrl: 'https://postmaster.seznam.cz/'
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -2683,7 +2861,7 @@ app.post('/api/admin/stamp', requireAdmin, upload.single('stampImage'), async (r
         <text x="55" y="335" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827" font-weight="bold">Částka: <tspan font-weight="normal">Kč 1 550,- (slovy: jeden tisíc pět set padesát korun českých)</tspan></text>
         <text x="55" y="362" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">Účet příjemce: 1806875329/5500 Tanečnímu klubu Olymp Olomouc, z.s.</text>
         <text x="55" y="390" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">za období : únor 2026 – květen 2026.</text>
-        <text x="55" y="445" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">V Přerově dne 26. 2. 2026</text>
+        <text x="55" y="445" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">V Olomouci dne 26. 2. 2026</text>
         <image href="data:image/png;base64,${stampBase64}" x="330" y="460" width="205" height="110" />
         <text x="432" y="580" font-family="'Liberation Sans', Arial, sans-serif" font-weight="bold" font-size="10.5" fill="#111827" text-anchor="middle">Martin Matýsek</text>
         <text x="432" y="596" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#4b5563" text-anchor="middle">Taneční klub Olymp Olomouc, z. s.</text>

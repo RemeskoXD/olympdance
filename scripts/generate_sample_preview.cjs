@@ -39,7 +39,7 @@ async function generateSamplePreview() {
     <text x="55" y="355" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">Účet příjemce: 1806875329/5500 Tanečnímu klubu Olymp Olomouc, z.s.</text>
     <text x="55" y="385" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">za období : únor 2026 – květen 2026.</text>
 
-    <text x="55" y="440" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">V Přerově dne 9. 9. 2026</text>
+    <text x="55" y="440" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">V Olomouci dne 9. 9. 2026</text>
 
     <!-- Stamp & Signature Image -->
     <image href="data:image/png;base64,${stampBase64}" x="330" y="460" width="205" height="110" />

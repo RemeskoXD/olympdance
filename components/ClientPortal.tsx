@@ -310,23 +310,15 @@ const ClientPortal: React.FC = () => {
                             <p className="text-xs text-gray-600 mt-0.5">Oficiální doklad o úhradě tábora s razítkem a podpisem (příspěvek až 1 500 Kč).</p>
                           </div>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2 shrink-0 w-full sm:w-auto">
-                          <a
-                            href={`/api/registrations/${currentUser.id}/confirmation-pdf`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            download
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold px-4 py-2.5 rounded-xl transition-colors shadow-sm flex items-center justify-center flex-1 sm:flex-initial"
-                            title="Stáhnout oficiální PDF potvrzení o přijetí platby s razítkem 1:1"
-                          >
-                            <FileText size={15} className="mr-1.5" />
-                            Stáhnout PDF (1:1)
-                          </a>
+                        <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
                           <button
+                            type="button"
                             onClick={() => setShowInsuranceModal(true)}
-                            className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs sm:text-sm font-bold px-3.5 py-2.5 rounded-xl transition-colors shadow-xs flex items-center justify-center flex-1 sm:flex-initial"
+                            className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold px-4 py-2.5 rounded-xl transition-colors shadow-sm flex items-center justify-center min-h-[42px] cursor-pointer"
+                            title="Náhled a stažení PDF potvrzení pro pojišťovnu"
                           >
-                            Náhled dokladu
+                            <FileText size={16} className="mr-2 shrink-0" />
+                            Náhled / Stáhnout
                           </button>
                         </div>
                       </div>

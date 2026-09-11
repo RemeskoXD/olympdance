@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { School } from '../types';
 import { matchesSearch } from '../utils/search';
+import { getFirstTrainingDate } from '../utils/trainingDates';
 
 const Locations: React.FC = () => {
   const { schools } = useData();
@@ -366,35 +367,94 @@ const Locations: React.FC = () => {
             <div className="p-5 sm:p-6 md:p-8 overflow-y-auto">
               
               {/* Specific Details Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6 sm:mb-8">
-                <div className="bg-gray-50 p-3 sm:p-4 rounded-xl border border-gray-100 flex items-start">
-                   <div className="bg-white p-2 rounded-lg shadow-sm mr-3 sm:mr-4 text-brand-red shrink-0">
-                      <Calendar size={20} className="sm:w-6 sm:h-6" />
-                   </div>
-                   <div>
-                      <p className="text-xs sm:text-sm text-gray-500 uppercase font-bold tracking-wider">Kdy</p>
-                      <p className="font-bold text-gray-900 text-base sm:text-lg">{formatDay(selectedSchool.day)}</p>
-                   </div>
-                </div>
-                <div className="bg-gray-50 p-3 sm:p-4 rounded-xl border border-gray-100 flex items-start">
-                   <div className="bg-white p-2 rounded-lg shadow-sm mr-3 sm:mr-4 text-brand-blue shrink-0">
-                      <Clock size={20} className="sm:w-6 sm:h-6" />
-                   </div>
-                   <div>
-                      <p className="text-xs sm:text-sm text-gray-500 uppercase font-bold tracking-wider">Čas</p>
-                      <p className="font-bold text-gray-900 text-base sm:text-lg">{selectedSchool.time}</p>
-                   </div>
-                </div>
-                <div className="bg-gray-50 p-3 sm:p-4 rounded-xl border border-gray-100 flex items-start sm:col-span-2">
-                   <div className="bg-white p-2 rounded-lg shadow-sm mr-3 sm:mr-4 text-green-600 shrink-0">
-                      <Banknote size={20} className="sm:w-6 sm:h-6" />
-                   </div>
-                   <div>
-                      <p className="text-xs sm:text-sm text-gray-500 uppercase font-bold tracking-wider">Cena</p>
-                      <p className="font-bold text-gray-900 text-base sm:text-lg">{selectedSchool.price}</p>
-                   </div>
-                </div>
-              </div>
+              {(() => {
+                const modalFirstTraining = getFirstTrainingDate(selectedSchool);
+                const hasSchedule = selectedSchool.trainingDates && selectedSchool.trainingDates.some(Boolean);
+
+                return (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6 sm:mb-8">
+                      <div className="bg-gray-50 p-3 sm:p-4 rounded-xl border border-gray-100 flex items-start">
+                         <div className="bg-white p-2 rounded-lg shadow-sm mr-3 sm:mr-4 text-brand-red shrink-0">
+                            <Calendar size={20} className="sm:w-6 sm:h-6" />
+                         </div>
+                         <div>
+                            <p className="text-xs sm:text-sm text-gray-500 uppercase font-bold tracking-wider">Kdy</p>
+                            <p className="font-bold text-gray-900 text-base sm:text-lg">{formatDay(selectedSchool.day)}</p>
+                         </div>
+                      </div>
+                      <div className="bg-gray-50 p-3 sm:p-4 rounded-xl border border-gray-100 flex items-start">
+                         <div className="bg-white p-2 rounded-lg shadow-sm mr-3 sm:mr-4 text-brand-blue shrink-0">
+                            <Clock size={20} className="sm:w-6 sm:h-6" />
+                         </div>
+                         <div>
+                            <p className="text-xs sm:text-sm text-gray-500 uppercase font-bold tracking-wider">Čas</p>
+                            <p className="font-bold text-gray-900 text-base sm:text-lg">{selectedSchool.time}</p>
+                         </div>
+                      </div>
+                      <div className="bg-gray-50 p-3 sm:p-4 rounded-xl border border-gray-100 flex items-start">
+                         <div className="bg-white p-2 rounded-lg shadow-sm mr-3 sm:mr-4 text-green-600 shrink-0">
+                            <Banknote size={20} className="sm:w-6 sm:h-6" />
+                         </div>
+                         <div>
+                            <p className="text-xs sm:text-sm text-gray-500 uppercase font-bold tracking-wider">Cena</p>
+                            <p className="font-bold text-gray-900 text-base sm:text-lg">{selectedSchool.price}</p>
+                         </div>
+                      </div>
+                      <div className="bg-gray-50 p-3 sm:p-4 rounded-xl border border-gray-100 flex items-start">
+                         <div className="bg-white p-2 rounded-lg shadow-sm mr-3 sm:mr-4 text-purple-600 shrink-0">
+                            <Sparkles size={20} className="sm:w-6 sm:h-6" />
+                         </div>
+                         <div>
+                            <p className="text-xs sm:text-sm text-gray-500 uppercase font-bold tracking-wider">První trénink</p>
+                            <p className="font-bold text-gray-900 text-base sm:text-lg">
+                              {modalFirstTraining.formatted}
+                            </p>
+                            {modalFirstTraining.withWeekday && (
+                              <p className="text-xs text-gray-500 mt-0.5">{modalFirstTraining.withWeekday}</p>
+                            )}
+                         </div>
+                      </div>
+                    </div>
+
+                    {/* Schedule of lessons if available */}
+                    {hasSchedule && selectedSchool.trainingDates && (
+                      <div className="mb-6 p-4 bg-gray-50 rounded-2xl border border-gray-200">
+                        <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200">
+                          <h5 className="font-bold text-gray-900 text-sm flex items-center">
+                            <Calendar size={16} className="mr-2 text-brand-blue" />
+                            Plán všech 14 lekcí ({selectedSchool.trainingDates.filter(Boolean).length}/14 vypsáno)
+                          </h5>
+                          <span className="text-[11px] text-gray-500 font-medium">Každý {selectedSchool.day} {selectedSchool.time}</span>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 text-xs">
+                          {selectedSchool.trainingDates.map((dateStr, idx) => {
+                            if (!dateStr) return null;
+                            const isFirst = idx === 0;
+                            const formatted = new Date(dateStr + 'T12:00:00').toLocaleDateString('cs-CZ', {
+                              day: 'numeric',
+                              month: 'numeric'
+                            });
+                            return (
+                              <div 
+                                key={idx} 
+                                className={`p-2 rounded-lg border text-center ${
+                                  isFirst 
+                                    ? 'bg-blue-100 border-blue-300 font-bold text-brand-blue ring-1 ring-blue-300' 
+                                    : 'bg-white border-gray-200 text-gray-700'
+                                }`}
+                              >
+                                <span className="block text-[10px] uppercase text-gray-400 font-semibold">{idx + 1}. lekce {isFirst ? '(start)' : ''}</span>
+                                <span className="font-bold">{formatted}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
 
               {/* Info Text */}
               <div className="space-y-4 mb-8">
@@ -460,9 +520,11 @@ const formatDay = (day: string) => {
 };
 
 const SchoolCard: React.FC<{ school: School, onSelect: () => void }> = ({ school, onSelect }) => {
+  const firstTraining = getFirstTrainingDate(school);
+
   return (
     <div className="bg-white rounded-2xl shadow-md border border-gray-100 hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col group h-full">
-      <div className="p-6 flex-grow">
+      <div className="p-6 flex-grow flex flex-col">
         <div className="flex justify-between items-start mb-4">
           <div className="inline-flex items-center px-3 py-1 rounded-full bg-brand-blue/10 text-brand-blue text-xs font-bold mr-2">
             <MapPin size={12} className="mr-1" />
@@ -479,11 +541,11 @@ const SchoolCard: React.FC<{ school: School, onSelect: () => void }> = ({ school
           )}
         </div>
 
-        <h3 className="text-xl font-bold text-gray-900 mb-4 group-hover:text-brand-blue transition-colors line-clamp-2 min-h-[3.5rem]">
+        <h3 className="text-xl font-bold text-gray-900 mb-3 group-hover:text-brand-blue transition-colors line-clamp-2 min-h-[3.5rem]">
           {school.name}
         </h3>
 
-        <div className="space-y-3 text-sm text-gray-600">
+        <div className="space-y-2.5 text-sm text-gray-600 mb-4">
           <div className="flex items-center">
             <Calendar size={16} className="text-brand-red mr-3 flex-shrink-0" />
             <span className="font-medium">{school.day}</span>
@@ -495,6 +557,12 @@ const SchoolCard: React.FC<{ school: School, onSelect: () => void }> = ({ school
           <div className="flex items-center">
             <Banknote size={16} className="text-brand-red mr-3 flex-shrink-0" />
             <span className="font-medium">{school.price}</span>
+          </div>
+          <div className="flex items-center">
+            <Sparkles size={16} className="text-brand-red mr-3 flex-shrink-0" />
+            <span className="font-medium">
+              První trénink: <span className={firstTraining.isSet ? 'font-semibold text-gray-900' : 'text-gray-500 italic'}>{firstTraining.formatted}</span>
+            </span>
           </div>
         </div>
       </div>
