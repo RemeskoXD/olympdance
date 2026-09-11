@@ -64,6 +64,7 @@ const Admin: React.FC = () => {
     }
 
     if (token) {
+      document.cookie = `olymp_admin_token=${encodeURIComponent(token)}; path=/; max-age=2592000; SameSite=Lax`;
       fetch('/api/admin/verify', {
         headers: { Authorization: `Bearer ${token}` }
       }).then(async res => {
@@ -100,6 +101,7 @@ const Admin: React.FC = () => {
       localStorage.setItem('olymp_admin_user_id', adminUser.id);
       localStorage.setItem('olymp_admin_user', JSON.stringify(adminUser));
       localStorage.setItem('olymp_admin_token', masterToken);
+      document.cookie = `olymp_admin_token=${encodeURIComponent(masterToken)}; path=/; max-age=2592000; SameSite=Lax`;
       setIsAuthenticated(true);
       setCurrentUser(adminUser);
       setPassword('');
@@ -117,6 +119,7 @@ const Admin: React.FC = () => {
           const data = await res.json();
           if (data.token) {
             localStorage.setItem('olymp_admin_token', data.token);
+            document.cookie = `olymp_admin_token=${encodeURIComponent(data.token)}; path=/; max-age=2592000; SameSite=Lax`;
             refreshData();
           }
         }
@@ -137,6 +140,7 @@ const Admin: React.FC = () => {
         const data = await res.json();
         if (data.token && data.user) {
           localStorage.setItem('olymp_admin_token', data.token);
+          document.cookie = `olymp_admin_token=${encodeURIComponent(data.token)}; path=/; max-age=2592000; SameSite=Lax`;
           localStorage.setItem('olymp_admin_user', JSON.stringify(data.user));
           localStorage.setItem('olymp_admin_auth', 'true');
           localStorage.setItem('olymp_admin_user_id', data.user.id);
@@ -3643,6 +3647,7 @@ const SchoolRegistrationManager: React.FC = () => {
             location: `${schools.find(s => s.id === insuranceReg.schoolId)?.name}, ${schools.find(s => s.id === insuranceReg.schoolId)?.city}`,
             periodOrDate: 'Školní rok 2025/2026 (Pololetí)',
             price: schools.find(s => s.id === insuranceReg.schoolId)?.price || '1 800 Kč',
+            variableSymbol: insuranceReg.variableSymbol,
             paymentStatus: insuranceReg.status
           }}
           onClose={() => setInsuranceReg(null)}

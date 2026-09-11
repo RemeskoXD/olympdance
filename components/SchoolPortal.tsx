@@ -1014,6 +1014,8 @@ const SchoolPortal: React.FC = () => {
             location: `${schools.find(s => s.id === selectedInsuranceReg.schoolId)?.name}, ${schools.find(s => s.id === selectedInsuranceReg.schoolId)?.city}`,
             periodOrDate: 'Školní rok 2025/2026 (Pololetí)',
             price: schools.find(s => s.id === selectedInsuranceReg.schoolId)?.price || '1 800 Kč',
+            variableSymbol: selectedInsuranceReg.variableSymbol,
+            password: selectedInsuranceReg.password,
             paymentStatus: selectedInsuranceReg.status
           }}
           onClose={() => setSelectedInsuranceReg(null)}

@@ -110,7 +110,7 @@ app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
 
-  // Extract auth token if provided in Authorization header, custom header or query
+  // Extract auth token if provided in Authorization header, custom header, query or cookie
   const authHeader = req.headers.authorization;
   let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : null;
   if (!token && req.headers['x-admin-token']) {
@@ -118,6 +118,15 @@ app.use((req, res, next) => {
   }
   if (!token && req.query.token) {
     token = String(req.query.token).trim();
+  }
+  if (!token && req.query.admin_token) {
+    token = String(req.query.admin_token).trim();
+  }
+  if (!token && req.headers.cookie) {
+    const match = req.headers.cookie.match(/(?:^|;\s*)olymp_admin_token=([^;]+)/);
+    if (match) {
+      token = decodeURIComponent(match[1]);
+    }
   }
   if (token) {
     const decoded = verifyToken(token);
@@ -425,6 +434,7 @@ app.all('/api/admin/login', async (req, res) => {
       name: 'Martin (Hlavní administrátor)'
     };
     const token = signToken(userPayload, 168); // 7 days validity
+    res.setHeader('Set-Cookie', `olymp_admin_token=${token}; Path=/; SameSite=Lax; Max-Age=2592000`);
     return res.json({ success: true, token, user: userPayload });
   }
 
@@ -449,6 +459,7 @@ app.all('/api/admin/login', async (req, res) => {
         schoolId: matched.schoolId || (schoolIds.length > 0 ? schoolIds[0] : undefined)
       };
       const token = signToken(userPayload, 168);
+      res.setHeader('Set-Cookie', `olymp_admin_token=${token}; Path=/; SameSite=Lax; Max-Age=2592000`);
       return res.json({ success: true, token, user: userPayload });
     }
   } catch (err) {
@@ -464,6 +475,11 @@ app.get('/api/admin/verify', (req, res) => {
   const user = (req as any).user;
   if (!user) {
     return res.status(401).json({ valid: false, error: 'Platnost přihlášení vypršela.' });
+  }
+  const authHeader = req.headers.authorization;
+  const currentToken = (authHeader && authHeader.startsWith('Bearer ')) ? authHeader.substring(7).trim() : (req.query.token as string);
+  if (currentToken) {
+    res.setHeader('Set-Cookie', `olymp_admin_token=${currentToken}; Path=/; SameSite=Lax; Max-Age=2592000`);
   }
   res.json({ valid: true, user });
 });
@@ -1334,6 +1350,184 @@ app.get('/api/rb/logs', requireAdmin, async (req, res) => {
   }
 });
 
+// Get detailed information of what was sent for a specific bank payment
+app.get('/api/rb/logs/:id/sent-details', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [logRows] = await pool.query('SELECT * FROM bank_payments_log WHERE id = ?', [id]);
+    if ((logRows as any[]).length === 0) {
+      return res.status(404).json({ error: 'Záznam o platbě nenalezen' });
+    }
+    const log = (logRows as any[])[0];
+
+    const details: any = {
+      log,
+      matchedType: log.matchedType,
+      matchedId: log.matchedId,
+      matchedName: log.matchedName,
+      recipientEmail: null,
+      recipientName: null,
+      recipientPhone: null,
+      childName: null,
+      activityTitle: null,
+      subject: null,
+      emailBodyHtml: null,
+      hasPdf: false,
+      pdfUrl: null,
+      confirmationData: null
+    };
+
+    if (log.matchedType === 'school' && log.matchedId) {
+      const [regRows] = await pool.query('SELECT * FROM school_registrations WHERE id = ?', [log.matchedId]);
+      if ((regRows as any[]).length > 0) {
+        const reg = (regRows as any[])[0];
+        const [schoolRows] = await pool.query('SELECT name, city, price FROM schools WHERE id = ?', [reg.schoolId]);
+        const school = (schoolRows as any[])[0];
+        const schoolName = school ? `${school.name} (${school.city})` : 'Taneční kroužek';
+        const childFullName = [reg.childName, reg.childSurname].filter(Boolean).join(' ').trim();
+        const formattedAmt = (parseFloat(log.amount) || parseFloat(school?.price) || 1700).toLocaleString('cs-CZ');
+
+        details.recipientEmail = reg.parentEmail;
+        details.recipientName = reg.parentName;
+        details.recipientPhone = reg.parentPhone;
+        details.childName = childFullName;
+        details.activityTitle = `Taneční kroužek: ${schoolName}`;
+        details.subject = `Potvrzení o přijetí platby – Taneční kroužek (${childFullName}) - Olymp Dance`;
+        details.hasPdf = true;
+        details.pdfUrl = `/api/school-registrations/${reg.id}/confirmation-pdf`;
+        details.confirmationData = {
+          id: reg.id,
+          childName: childFullName,
+          childBirthDate: reg.childBirthDate || '',
+          parentName: reg.parentName || '',
+          parentPhone: reg.parentPhone || '',
+          parentEmail: reg.parentEmail || '',
+          activityTitle: `Taneční kroužek: ${schoolName}`,
+          activityType: 'krouzek',
+          location: school ? `${school.name}, ${school.city}` : 'Olomouc',
+          periodOrDate: 'Školní rok 2025/2026 (Pololetí)',
+          price: `${formattedAmt} Kč`,
+          variableSymbol: log.variableSymbol || reg.variableSymbol,
+          paymentStatus: reg.status
+        };
+
+        details.emailBodyHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
+            <div style="background-color: #002B49; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 22px;">Olymp Dance Olomouc</h1>
+              <p style="color: #4ade80; margin: 6px 0 0 0; font-size: 14px; font-weight: bold;">Platba byla úspěšně přijata</p>
+            </div>
+            <div style="background-color: #ffffff; padding: 28px 20px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
+              <p style="font-size: 15px;">Vážený rodiči, <strong>${reg.parentName || 'paní / pane'}</strong>,</p>
+              <p>potvrzujeme, že jsme z bankovního účtu v pořádku přijali platbu kurzovného za taneční kroužek pro Vaše dítě <strong>${childFullName}</strong>.</p>
+              
+              <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 16px; margin: 16px 0;">
+                <h3 style="margin: 0 0 10px 0; color: #166534; font-size: 15px;">✅ Detaily platby a kroužku</h3>
+                <p style="margin: 4px 0; font-size: 13px;"><strong>Účastník:</strong> ${childFullName}</p>
+                <p style="margin: 4px 0; font-size: 13px;"><strong>Kroužek:</strong> ${schoolName}</p>
+                <p style="margin: 4px 0; font-size: 13px;"><strong>Uhrazená částka:</strong> <span style="color: #16a34a; font-weight: bold;">${formattedAmt} Kč</span></p>
+                <p style="margin: 4px 0; font-size: 13px;"><strong>Variabilní symbol:</strong> ${log.variableSymbol || reg.variableSymbol}</p>
+                <p style="margin: 4px 0; font-size: 13px;"><strong>Stav přihlášky:</strong> <span style="color: #16a34a; font-weight: bold;">Zaplaceno / Schváleno</span></p>
+              </div>
+
+              <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 14px; margin: 16px 0;">
+                <h4 style="margin: 0 0 6px 0; color: #1e40af; font-size: 14px;">📄 Oficiální potvrzení o platbě v příloze</h4>
+                <p style="margin: 0; font-size: 12px; color: #1e3a8a;">
+                  V příloze tohoto e-mailu naleznete oficiální <strong>Potvrzení o přijetí platby (PDF)</strong> s razítkem a podpisem statutárního zástupce TK Olymp Olomouc, které můžete přímo předložit své zdravotní pojišťovně pro čerpání finančního příspěvku nebo zaměstnavateli pro proplacení z FKSP.
+                </p>
+              </div>
+
+              <p style="font-size: 13px; color: #475569;">
+                Ve Školním portálu na našem webu můžete kdykoliv sledovat docházku z tréninků, omlouvat případnou nepřítomnost a stáhnout si toto potvrzení kdykoliv znovu.
+              </p>
+            </div>
+          </div>
+        `;
+      }
+    } else if (log.matchedType === 'camp' && log.matchedId) {
+      const [regRows] = await pool.query('SELECT * FROM registrations WHERE id = ?', [log.matchedId]);
+      if ((regRows as any[]).length > 0) {
+        const reg = (regRows as any[])[0];
+        const [campRows] = await pool.query('SELECT title, location, date, price FROM camps WHERE id = ?', [reg.campId]);
+        const camp = (campRows as any[])[0];
+        const campTitle = camp?.title || 'Letní tábor';
+        const formattedAmt = (parseFloat(log.amount) || 3500).toLocaleString('cs-CZ');
+
+        details.recipientEmail = reg.parentEmail;
+        details.recipientName = reg.parentName;
+        details.recipientPhone = reg.parentPhone;
+        details.childName = reg.childName;
+        details.activityTitle = `Letní tábor: ${campTitle}`;
+        details.subject = `Potvrzení o úhradě tábora – ${campTitle} - Olymp Dance`;
+        details.hasPdf = true;
+        details.pdfUrl = `/api/registrations/${reg.id}/confirmation-pdf`;
+        details.confirmationData = {
+          id: reg.id,
+          childName: reg.childName,
+          childBirthDate: reg.childBirthDate || '',
+          parentName: reg.parentName || '',
+          parentPhone: reg.parentPhone || '',
+          parentEmail: reg.parentEmail || '',
+          activityTitle: `Letní tábor: ${campTitle}`,
+          activityType: 'tabor',
+          location: camp?.location || 'Olomouc',
+          periodOrDate: camp?.date || 'Léto 2026',
+          price: `${formattedAmt} Kč`,
+          variableSymbol: log.variableSymbol || reg.variableSymbol,
+          paymentStatus: reg.status
+        };
+        details.emailBodyHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
+            <div style="background-color: #002B49; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 22px;">Olymp Dance Olomouc</h1>
+              <p style="color: #4ade80; margin: 6px 0 0 0; font-size: 14px; font-weight: bold;">Platba tábora byla spárována</p>
+            </div>
+            <div style="background-color: #ffffff; padding: 28px 20px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
+              <p style="font-size: 15px;">Vážený rodiči, <strong>${reg.parentName || 'paní / pane'}</strong>,</p>
+              <p>platba za tábor <strong>${campTitle}</strong> pro účastníka <strong>${reg.childName}</strong> byla v pořádku spárována na našem bankovním účtu.</p>
+              <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 16px; margin: 16px 0;">
+                <p style="margin: 4px 0; font-size: 13px;"><strong>Účastník:</strong> ${reg.childName}</p>
+                <p style="margin: 4px 0; font-size: 13px;"><strong>Tábor:</strong> ${campTitle}</p>
+                <p style="margin: 4px 0; font-size: 13px;"><strong>Uhrazená částka:</strong> <span style="color: #16a34a; font-weight: bold;">${formattedAmt} Kč</span></p>
+                <p style="margin: 4px 0; font-size: 13px;"><strong>Variabilní symbol:</strong> ${log.variableSymbol || reg.variableSymbol}</p>
+              </div>
+              <p>Oficiální potvrzení o přijetí platby je vygenerováno s razítkem a podpisem.</p>
+            </div>
+          </div>
+        `;
+      }
+    } else if (log.matchedType === 'merch' && log.matchedId) {
+      const [orderRows] = await pool.query('SELECT * FROM merch_orders WHERE id = ?', [log.matchedId]);
+      if ((orderRows as any[]).length > 0) {
+        const order = (orderRows as any[])[0];
+        details.recipientEmail = order.userEmail;
+        details.recipientName = order.userName;
+        details.recipientPhone = order.userPhone;
+        details.activityTitle = `Klubový merch: ${order.productName}`;
+        details.subject = `Platba přijata: Objednávka merche (${order.productName}) - Olymp Dance`;
+        details.hasPdf = false;
+        details.emailBodyHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
+            <div style="background-color: #002B49; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 20px;">Olymp Dance - Klubový Merch</h1>
+            </div>
+            <div style="padding: 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px; background-color: #fff;">
+              <h2 style="color: #15803d; margin-top: 0;">Platba byla úspěšně spárována!</h2>
+              <p>Dobrý den, <strong>${order.userName}</strong>,</p>
+              <p>Vaše platba ve výši <strong>${log.amount} Kč</strong> za objednávku zboží <strong>${order.productName}</strong> byla v pořádku přijata na náš účet.</p>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    res.json(details);
+  } catch (err: any) {
+    console.error('Error fetching sent details:', err);
+    res.status(500).json({ error: 'Chyba při načítání detailů odeslaného potvrzení: ' + err.message });
+  }
+});
+
 // Simulate or manually test a single bank payment reconciliation
 app.post('/api/rb/simulate-payment', requireAdmin, async (req, res) => {
   try {
@@ -1860,7 +2054,10 @@ app.get('/api/registrations/:id/confirmation-pdf', async (req, res) => {
     const reg = (rows as any[])[0];
 
     // Access control: admin, trainer, or parent credentials match
-    const authUser = (req as any).user;
+    let authUser = (req as any).user;
+    if (!authUser && (req.query.token || req.query.admin_token)) {
+      authUser = verifyToken(String(req.query.token || req.query.admin_token).trim());
+    }
     const isAdminOrTrainer = Boolean(authUser && (authUser.role === 'admin' || authUser.role === 'trainer'));
     const isAuthorized = Boolean(
       isAdminOrTrainer ||
@@ -1872,15 +2069,15 @@ app.get('/api/registrations/:id/confirmation-pdf', async (req, res) => {
       return res.status(403).json({ error: 'Přístup k potvrzení o platbě odepřen.' });
     }
 
-    // Strict business rule: Payment confirmation must ONLY be issued once paid and matched in system
-    if (reg.status !== 'approved') {
-      return res.status(403).json({ error: 'Potvrzení o zaplacení nelze vystavit ani stáhnout – přihláška dosud není označena jako zaplacená a spárovaná v systému.' });
-    }
-
     // Find camp info
     const [campRows] = await pool.query('SELECT * FROM camps WHERE id = ?', [reg.campId]);
     const camp = (campRows as any[])[0];
     const campTitle = camp?.title || 'Letní tábor Olymp Dance';
+
+    // Strict business rule: Payment confirmation must ONLY be issued once paid and matched in system, unless issued by admin/trainer
+    if (reg.status !== 'approved' && !isAdminOrTrainer) {
+      return res.status(403).json({ error: 'Potvrzení o zaplacení nelze vystavit ani stáhnout – přihláška dosud není označena jako zaplacená a spárovaná v systému.' });
+    }
 
     // Find bank payment log for sender account & exact transaction info
     const [bankRows] = await pool.query(
@@ -2177,9 +2374,13 @@ app.get('/api/school-registrations/:id/confirmation-pdf', async (req, res) => {
     const reg = (rows as any[])[0];
 
     // Access control: admin, trainer, or parent credentials match
-    const authUser = (req as any).user;
+    let authUser = (req as any).user;
+    if (!authUser && (req.query.token || req.query.admin_token)) {
+      authUser = verifyToken(String(req.query.token || req.query.admin_token).trim());
+    }
+    const isAdminOrTrainer = Boolean(authUser && (authUser.role === 'admin' || authUser.role === 'trainer'));
     const isAuthorized = Boolean(
-      (authUser && (authUser.role === 'admin' || authUser.role === 'trainer')) ||
+      isAdminOrTrainer ||
       (authUser && authUser.type === 'school_portal' && authUser.id === reg.id) ||
       (req.query.password && String(req.query.password).trim() === reg.password) ||
       (req.query.vs && String(req.query.vs).trim() === reg.variableSymbol)
@@ -2188,8 +2389,11 @@ app.get('/api/school-registrations/:id/confirmation-pdf', async (req, res) => {
       return res.status(403).json({ error: 'Přístup k potvrzení o platbě odepřen.' });
     }
 
-    // Strict business rule: Payment confirmation must ONLY be issued once paid and matched in system
-    if (reg.status !== 'approved') {
+    // Strict business rule: Payment confirmation must ONLY be issued once paid and matched in system, unless issued by admin/trainer
+    if (reg.status !== 'approved' && !authUser) {
+      return res.status(403).json({ error: 'Potvrzení o zaplacení nelze vystavit ani stáhnout – přihláška dosud není označena jako zaplacená a spárovaná v systému.' });
+    }
+    if (reg.status !== 'approved' && !isAdminOrTrainer) {
       return res.status(403).json({ error: 'Potvrzení o zaplacení nelze vystavit ani stáhnout – přihláška dosud není označena jako zaplacená a spárovaná v systému.' });
     }
 
@@ -2361,6 +2565,51 @@ app.get('/api/sample-confirmation-pdf', async (req, res) => {
   } catch (err: any) {
     console.error('Error generating sample confirmation PDF:', err);
     res.status(500).json({ error: 'Chyba při generování vzoru potvrzení: ' + err.message });
+  }
+});
+
+// Endpoint to generate confirmation PDF from custom data directly
+app.post('/api/generate-custom-confirmation-pdf', async (req, res) => {
+  try {
+    const {
+      activityType,
+      activityName,
+      paymentDate,
+      senderAccount,
+      parentName,
+      childName,
+      childSurname,
+      childBirthDate,
+      childRodneCislo,
+      amount,
+      period,
+      issueDate
+    } = req.body;
+
+    const pdfBuffer = await generateSchoolPaymentPdf({
+      activityType: activityType || 'krouzek',
+      activityName: activityName || 'Taneční klub Olymp Olomouc, z. s.',
+      paymentDate: paymentDate || new Date(),
+      senderAccount: senderAccount || '',
+      parentName: parentName || 'Zákonný zástupce',
+      childName: childName || 'Účastník',
+      childSurname: childSurname || '',
+      childBirthDate: childBirthDate || '',
+      childRodneCislo: childRodneCislo || null,
+      amount: amount || 0,
+      period: period || null,
+      issueDate: issueDate || new Date()
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="Potvrzeni_o_prijeti_platby.pdf"');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.send(pdfBuffer);
+  } catch (err: any) {
+    console.error('Error generating custom confirmation PDF:', err);
+    res.status(500).json({ error: 'Chyba při generování PDF: ' + err.message });
   }
 });
 

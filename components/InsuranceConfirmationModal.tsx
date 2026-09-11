@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Printer, CheckCircle, ShieldCheck, Loader2, FileDown, Clock } from 'lucide-react';
-import { CONTACT_INFO } from '../constants';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Printer, ShieldCheck, Loader2, FileDown, ExternalLink, AlertCircle, RefreshCw } from 'lucide-react';
 
 interface ConfirmationData {
   id?: number | string;
@@ -15,6 +14,7 @@ interface ConfirmationData {
   periodOrDate: string;
   price: string;
   variableSymbol?: string;
+  password?: string;
   paymentStatus: string;
 }
 
@@ -24,287 +24,288 @@ interface InsuranceConfirmationModalProps {
 }
 
 export const InsuranceConfirmationModal: React.FC<InsuranceConfirmationModalProps> = ({ data, onClose }) => {
-  const today = new Date().toLocaleDateString('cs-CZ');
-  const [isPreparing, setIsPreparing] = useState(false);
-  const [logoLoaded, setLogoLoaded] = useState(false);
-  const isPaid = data.paymentStatus === 'approved';
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // Add print isolation classes to body while modal is active
+  const safeChildName = (data.childName || 'ucastnik').trim().replace(/[^a-zA-Z0-9á-žÁ-Ž_-]/g, '_');
+  const filename = `Potvrzeni_o_prijeti_platby_${safeChildName}.pdf`;
+
+  const fetchPdf = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const adminToken = localStorage.getItem('olymp_admin_token');
+      const headers: Record<string, string> = {};
+      if (adminToken) {
+        headers['Authorization'] = `Bearer ${adminToken}`;
+      }
+
+      let res: Response | null = null;
+
+      // 1. Try registration endpoint if ID is provided
+      if (data.id) {
+        const queryParams = new URLSearchParams();
+        if (adminToken) queryParams.set('token', adminToken);
+        if (data.variableSymbol) queryParams.set('vs', data.variableSymbol);
+        if (data.password) queryParams.set('password', data.password);
+        const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+
+        const endpoint = data.activityType === 'tabor'
+          ? `/api/registrations/${data.id}/confirmation-pdf${queryString}`
+          : `/api/school-registrations/${data.id}/confirmation-pdf${queryString}`;
+
+        res = await fetch(endpoint, { headers });
+      }
+
+      // 2. If no ID or primary endpoint returns error, fall back to custom generator
+      if (!res || !res.ok) {
+        // Parse numerical amount
+        const amountNum = parseFloat(String(data.price || '').replace(/[^0-9]/g, '')) || 0;
+
+        res = await fetch('/api/generate-custom-confirmation-pdf', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...headers
+          },
+          body: JSON.stringify({
+            activityType: data.activityType,
+            activityName: data.activityTitle,
+            paymentDate: new Date(),
+            senderAccount: '',
+            parentName: data.parentName || 'Zákonný zástupce',
+            childName: data.childName,
+            childBirthDate: data.childBirthDate,
+            amount: amountNum,
+            period: data.periodOrDate || null,
+            issueDate: new Date()
+          })
+        });
+      }
+
+      if (!res.ok) {
+        let errMessage = 'Nepodařilo se vygenerovat PDF potvrzení.';
+        try {
+          const errData = await res.json();
+          if (errData?.error) errMessage = errData.error;
+        } catch {}
+        throw new Error(errMessage);
+      }
+
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+      setPdfBlobUrl(blobUrl);
+    } catch (err: any) {
+      console.error('Failed to load confirmation PDF:', err);
+      setError(err?.message || 'Nastala chyba při přípravě PDF potvrzení.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    document.body.classList.add('has-print-modal', 'print-portrait');
-    
-    // Preload logo for crisp printing
-    const img = new Image();
-    img.src = "https://web2.itnahodinu.cz/olympdance/logo.png";
-    img.onload = () => setLogoLoaded(true);
+    fetchPdf();
 
     return () => {
-      document.body.classList.remove('has-print-modal', 'print-portrait');
+      if (pdfBlobUrl) {
+        URL.revokeObjectURL(pdfBlobUrl);
+      }
     };
-  }, []);
+  }, [data.id, data.childName]);
 
   const handlePrint = () => {
-    if (!isPaid) return;
-    setIsPreparing(true);
-    // Short timeout to ensure all DOM elements, fonts, and images are fully rasterized
-    setTimeout(() => {
-      window.print();
-      setIsPreparing(false);
-    }, 250);
+    if (!pdfBlobUrl) return;
+    setIsPrinting(true);
+
+    // Try printing from the embedded iframe directly (prints ONLY the PDF)
+    if (iframeRef.current && iframeRef.current.contentWindow) {
+      try {
+        iframeRef.current.contentWindow.focus();
+        iframeRef.current.contentWindow.print();
+        setTimeout(() => setIsPrinting(false), 800);
+        return;
+      } catch (err) {
+        console.warn('Direct iframe print blocked, falling back to window.open', err);
+      }
+    }
+
+    // Fallback: open PDF in a new tab where browser's native PDF print controls take over
+    const printWindow = window.open(pdfBlobUrl, '_blank');
+    if (printWindow) {
+      printWindow.focus();
+    }
+    setTimeout(() => setIsPrinting(false), 500);
+  };
+
+  const handleDownload = () => {
+    if (!pdfBlobUrl) return;
+    const a = document.createElement('a');
+    a.href = pdfBlobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const handleOpenInNewTab = () => {
+    if (!pdfBlobUrl) return;
+    window.open(pdfBlobUrl, '_blank');
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-fadeIn printable-modal-overlay printable-content-target print:p-0 print:bg-white print:overflow-visible">
-      {/* Container */}
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl my-8 relative overflow-hidden flex flex-col max-h-[92vh] printable-modal-card print:max-h-none print:shadow-none print:my-0 print:border-none print:rounded-none print:w-full print:overflow-visible">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-xs animate-fadeIn">
+      {/* Modal Container */}
+      <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-5xl h-[94vh] flex flex-col overflow-hidden border border-gray-200">
         
-        {/* Modal Top Bar (Hidden on print) */}
-        <div className="bg-brand-blue text-white px-6 py-4 flex justify-between items-center print:hidden">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-yellow-400">
-              <ShieldCheck size={24} />
+        {/* Modal Top Bar */}
+        <div className="bg-brand-blue text-white px-4 sm:px-6 py-3.5 flex flex-wrap justify-between items-center gap-3 shrink-0">
+          <div className="flex items-center space-x-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-yellow-400 shrink-0">
+              <ShieldCheck size={22} />
             </div>
-            <div>
-              <h3 className="font-bold text-lg leading-tight">Potvrzení pro pojišťovnu a FKSP</h3>
-              <p className="text-xs text-blue-200">Formulář pro čerpání příspěvku na pohybovou aktivitu dítěte</p>
+            <div className="truncate">
+              <h3 className="font-bold text-base sm:text-lg leading-tight truncate">
+                Potvrzení o úhradě pro pojišťovnu / FKSP
+              </h3>
+              <p className="text-xs text-blue-200 truncate">
+                {data.childName} • {data.activityTitle}
+              </p>
             </div>
           </div>
-          <div className="flex items-center space-x-3">
-            {isPaid && data.id ? (
-              <a
-                href={data.activityType === 'tabor' ? `/api/registrations/${data.id}/confirmation-pdf` : `/api/school-registrations/${data.id}/confirmation-pdf`}
-                target="_blank"
-                rel="noopener noreferrer"
-                download
-                className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold text-sm transition-colors flex items-center shadow-md"
-                title="Stáhnout oficiální PDF s razítkem a podpisem 1:1"
-              >
-                <FileDown size={16} className="mr-2" />
-                Oficiální PDF (1:1)
-              </a>
-            ) : (
-              <span className="text-xs font-semibold px-3 py-1.5 bg-amber-500/30 text-amber-200 rounded-lg border border-amber-400/40">
-                Čeká na zaplacení
-              </span>
+
+          {/* Top Actions */}
+          <div className="flex items-center space-x-2 shrink-0 ml-auto">
+            {pdfBlobUrl && (
+              <>
+                <button
+                  onClick={handlePrint}
+                  disabled={isPrinting}
+                  className="bg-white/15 hover:bg-white/25 text-white px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition-colors flex items-center shadow-xs disabled:opacity-50 cursor-pointer"
+                  title="Vytisknout pouze samotné PDF potvrzení"
+                >
+                  {isPrinting ? (
+                    <Loader2 size={16} className="mr-1.5 animate-spin" />
+                  ) : (
+                    <Printer size={16} className="mr-1.5" />
+                  )}
+                  <span className="hidden sm:inline">Vytisknout</span>
+                </button>
+
+                <button
+                  onClick={handleDownload}
+                  className="bg-emerald-500 hover:bg-emerald-600 text-white px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-colors flex items-center shadow-xs cursor-pointer"
+                  title="Stáhnout oficiální PDF soubor"
+                >
+                  <FileDown size={16} className="mr-1.5" />
+                  <span>Uložit PDF</span>
+                </button>
+
+                <button
+                  onClick={handleOpenInNewTab}
+                  className="bg-white/15 hover:bg-white/25 text-white p-2 rounded-xl transition-colors hidden md:flex items-center"
+                  title="Otevřít PDF v nové záložce prohlížeče"
+                >
+                  <ExternalLink size={17} />
+                </button>
+              </>
             )}
-            {isPaid && (
-              <button
-                onClick={handlePrint}
-                disabled={isPreparing}
-                className="bg-white text-brand-blue px-4 py-2 rounded-xl font-bold text-sm hover:bg-blue-50 transition-colors flex items-center shadow-md disabled:opacity-75"
-              >
-                {isPreparing ? (
-                  <>
-                    <Loader2 size={16} className="mr-2 animate-spin" />
-                    Načítám tisk...
-                  </>
-                ) : (
-                  <>
-                    <Printer size={16} className="mr-2" />
-                    Vytisknout / Uložit PDF
-                  </>
-                )}
-              </button>
-            )}
+
             <button
               onClick={onClose}
-              className="p-2 hover:bg-white/20 rounded-full transition-colors text-white"
+              className="p-2 hover:bg-white/20 rounded-full transition-colors text-white ml-1 cursor-pointer"
+              title="Zavřít okno"
             >
               <X size={20} />
             </button>
           </div>
         </div>
 
-        {/* Printable Certificate Body */}
-        <div className="p-8 sm:p-12 overflow-y-auto print:p-0 print:overflow-visible print:m-0 font-sans text-gray-900 bg-white print:w-full" id="printable-certificate">
-          
-          {!isPaid && (
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 text-amber-800 text-xs sm:text-sm flex items-start gap-3 print:hidden">
-              <ShieldCheck size={20} className="text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold text-amber-900">Upozornění: Platba za kroužek dosud nebyla spárována na účtu</p>
-                <p className="mt-0.5 text-amber-700">
-                  Oficiální potvrzení s razítkem a podpisem pro zdravotní pojišťovnu bude platné a zpřístupněno ke stažení ihned po přijetí a zaevidování platby v systému.
-                </p>
-              </div>
+        {/* Modal Body - Embedded PDF Viewer */}
+        <div className="flex-1 bg-gray-100 relative overflow-hidden flex flex-col">
+          {isLoading && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50/90 z-10">
+              <Loader2 size={42} className="text-brand-blue animate-spin mb-3" />
+              <p className="text-base font-bold text-gray-800">Generuji oficiální PDF potvrzení...</p>
+              <p className="text-xs text-gray-500 mt-1">Sestavuji doklad s logem TK Olymp a razítkem 1:1</p>
             </div>
           )}
 
-          {/* Header */}
-          <div className="border-b-2 border-brand-blue pb-5 mb-6 flex justify-between items-start">
-            <div className="flex items-center space-x-4">
-              <img 
-                src="/loloo.png" 
-                alt="TK Olymp Logo" 
-                className="h-16 w-auto object-contain rounded"
-                loading="eager"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = '/tk-olymp-logo-black.png';
-                }}
-              />
-              <div>
-                <h1 className="text-lg font-bold text-brand-blue uppercase tracking-wide">Taneční klub Olymp Olomouc, z. s.</h1>
-                <p className="text-xs text-gray-600">IČO: {CONTACT_INFO.ico} • Sídlo: {CONTACT_INFO.registeredOffice}</p>
-                <p className="text-xs text-gray-600">Tréninkové centrum: {CONTACT_INFO.trainingLocation}</p>
-                <p className="text-xs text-gray-600">Bankovní účet: 1806875329/5500 (Raiffeisenbank)</p>
-                <p className="text-xs text-gray-600">Email: {CONTACT_INFO.email} • Tel: {CONTACT_INFO.phone} • Web: www.olympdance.cz</p>
+          {error ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+              <div className="w-14 h-14 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mb-4">
+                <AlertCircle size={30} />
+              </div>
+              <h4 className="text-lg font-bold text-gray-900 mb-1">Chyba při přípravě potvrzení</h4>
+              <p className="text-sm text-gray-600 max-w-md mb-6">{error}</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={fetchPdf}
+                  className="bg-brand-blue text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-blue-700 transition-colors flex items-center shadow-sm"
+                >
+                  <RefreshCw size={16} className="mr-2" /> Zkusit znovu
+                </button>
+                <button
+                  onClick={onClose}
+                  className="border border-gray-300 text-gray-700 px-5 py-2.5 rounded-xl font-medium text-sm hover:bg-gray-50"
+                >
+                  Zavřít
+                </button>
               </div>
             </div>
-            <div className="text-right">
-              <span className="inline-block bg-blue-50 text-brand-blue text-xs font-bold px-3 py-1 rounded-full border border-blue-200 uppercase tracking-wider">
-                Oficiální doklad
-              </span>
-              <p className="text-xs text-gray-500 mt-2">Vystaveno dne: <strong>{today}</strong></p>
-            </div>
-          </div>
-
-          {/* Certificate Title */}
-          <div className="text-center mb-6">
-            <h2 className="text-xl sm:text-2xl font-black text-gray-900 uppercase tracking-tight">
-              POTVRZENÍ O ÚČASTI A ÚHRADĚ
-            </h2>
-            <p className="text-xs text-gray-500 mt-1 font-medium">
-              Doklad pro uplatnění preventivního příspěvku u zdravotní pojišťovny nebo fondu FKSP / zaměstnavatele
-            </p>
-          </div>
-
-          {/* Statement */}
-          <p className="text-xs sm:text-sm text-gray-700 leading-relaxed mb-5">
-            Taneční klub <strong>Olymp Olomouc, z. s.</strong> tímto potvrzuje, že níže uvedený účastník se účastní 
-            pravidelné sportovní a pohybové aktivity (taneční kroužek / tábor) zaměřené na zdravý tělesný rozvoj dětí a mládeže, 
-            a byl za něj v plné výši uhrazen účastnický poplatek.
-          </p>
-
-          {/* Participant & Course Details Table */}
-          <div className="bg-gray-50 rounded-2xl p-5 sm:p-6 border border-gray-200 mb-5 space-y-3 print:border-gray-300 print:bg-gray-50 print-avoid-break">
-            <div className="grid grid-cols-2 gap-4 pb-3 border-b border-gray-200 text-xs sm:text-sm">
-              <div>
-                <span className="text-gray-500 block text-[11px] font-bold uppercase tracking-wider">Jméno a příjmení dítěte:</span>
-                <span className="font-bold text-base text-gray-900">{data.childName}</span>
-              </div>
-              <div>
-                <span className="text-gray-500 block text-[11px] font-bold uppercase tracking-wider">Datum narození:</span>
-                <span className="font-bold text-base text-gray-900">{data.childBirthDate || 'Neuvedeno'}</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 pb-3 border-b border-gray-200 text-xs sm:text-sm">
-              <div>
-                <span className="text-gray-500 block text-[11px] font-bold uppercase tracking-wider">Zákonný zástupce (Rodič):</span>
-                <span className="font-semibold text-gray-900">{data.parentName}</span>
-              </div>
-              <div>
-                <span className="text-gray-500 block text-[11px] font-bold uppercase tracking-wider">Název aktivity:</span>
-                <span className="font-bold text-brand-blue">{data.activityTitle}</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 pb-3 border-b border-gray-200 text-xs sm:text-sm">
-              <div>
-                <span className="text-gray-500 block text-[11px] font-bold uppercase tracking-wider">Místo konání:</span>
-                <span className="font-medium text-gray-900">{data.location}</span>
-              </div>
-              <div>
-                <span className="text-gray-500 block text-[11px] font-bold uppercase tracking-wider">Období / Termín:</span>
-                <span className="font-medium text-gray-900">{data.periodOrDate}</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 pt-1 text-xs sm:text-sm">
-              <div>
-                <span className="text-gray-500 block text-[11px] font-bold uppercase tracking-wider">Uhrazená částka:</span>
-                <span className="text-lg sm:text-xl font-bold text-brand-red">{data.price}</span>
-                {data.variableSymbol && (
-                  <span className="block text-[11px] text-gray-500 mt-0.5">VS: {data.variableSymbol}</span>
-                )}
-              </div>
-              <div>
-                <span className="text-gray-500 block text-[11px] font-bold uppercase tracking-wider">Stav úhrady:</span>
-                {isPaid ? (
-                  <span className="inline-flex items-center text-green-700 font-bold mt-1">
-                    <CheckCircle size={16} className="mr-1.5 text-green-600 shrink-0" />
-                    Uhrazeno v plné výši (Bankovní převod)
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center text-amber-700 font-bold mt-1">
-                    <Clock size={16} className="mr-1.5 text-amber-600 shrink-0" />
-                    Čeká na připsání platby (Neuhrazeno)
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Insurance statement notes */}
-          <div className="text-[11px] text-gray-600 space-y-1 mb-8 leading-normal bg-blue-50/60 p-3.5 rounded-xl border border-blue-100 print:bg-transparent print:p-0 print:border-none print-avoid-break">
-            <p className="font-semibold text-gray-700">Potvrzení pro zdravotní pojišťovny:</p>
-            <p>• Tento doklad splňuje veškeré legislativní náležitosti zdravotních pojišťoven v ČR (VZP 111, VoZP 201, ČPZP 205, OZP 207, ZPŠ 209, ZP MV ČR 211, RBP 213) pro čerpání finančního příspěvku na sportovní a pohybové aktivity dětí.</p>
-            <p>• Doklad slouží rovněž pro uplatnění příspěvku ze sociálního fondu FKSP u zaměstnavatele.</p>
-          </div>
-
-          {/* Signature & Official Club Stamp Section */}
-          <div className="pt-4 flex justify-between items-end border-t-2 border-gray-200 print-avoid-break">
-            <div className="text-xs text-gray-600 space-y-0.5">
-              <p className="font-bold text-gray-800 text-sm">Taneční klub Olymp Olomouc, z. s.</p>
-              <p>Sídlo: {CONTACT_INFO.registeredOffice}</p>
-              <p>Tréninky: {CONTACT_INFO.trainingLocation}</p>
-              <p>IČO: {CONTACT_INFO.ico}</p>
-              <p>IBAN: CZ08 5500 0000 0018 0687 5329</p>
-            </div>
-
-            {/* Stamp and Signature Box */}
-            <div className="flex flex-col items-center text-center">
-              {isPaid ? (
-                <img 
-                  src="/stamp-signature.png" 
-                  alt="Oficiální razítko a podpis TK Olymp Olomouc" 
-                  className="w-56 sm:w-64 h-auto object-contain print:w-60"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className="w-56 sm:w-64 h-24 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center p-3 text-[11px] text-gray-400 italic">
-                  Razítko a podpis budou připojeny až po spárování platby
-                </div>
-              )}
-              <div className="text-center mt-1">
-                <span className="text-xs font-bold text-gray-900 block">Martin Matýsek</span>
-                <span className="text-[10px] text-gray-500 block">Taneční klub Olymp Olomouc, z. s.</span>
-              </div>
-            </div>
-          </div>
+          ) : pdfBlobUrl ? (
+            <iframe
+              ref={iframeRef}
+              src={`${pdfBlobUrl}#toolbar=1&navpanes=0&view=FitH`}
+              title="Oficiální PDF potvrzení o úhradě"
+              className="w-full h-full border-0 bg-white"
+            />
+          ) : null}
         </div>
 
-        {/* Footer actions on screen */}
-        <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-between items-center print:hidden">
-          <p className="text-xs text-gray-500">
-            Tip: V dialogu tisku můžete zvolit <strong>Uložit jako PDF</strong>.
-          </p>
-          <div className="flex space-x-3">
+        {/* Modal Footer */}
+        <div className="bg-white px-4 sm:px-6 py-3 border-t border-gray-200 flex flex-wrap justify-between items-center gap-3 shrink-0">
+          <div className="text-xs text-gray-500">
+            Oficiální doklad s razítkem a podpisem pro zdravotní pojišťovny ČR a fond FKSP.
+          </div>
+
+          <div className="flex items-center space-x-2.5 ml-auto">
+            {pdfBlobUrl && (
+              <>
+                <button
+                  onClick={handleOpenInNewTab}
+                  className="px-3.5 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors hidden sm:inline-flex items-center"
+                >
+                  <ExternalLink size={14} className="mr-1.5" /> Samostatné okno
+                </button>
+                <button
+                  onClick={handlePrint}
+                  disabled={isPrinting || !pdfBlobUrl}
+                  className="px-4 py-2 text-xs sm:text-sm font-bold text-brand-blue bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors inline-flex items-center"
+                >
+                  <Printer size={15} className="mr-1.5" /> Vytisknout PDF
+                </button>
+                <button
+                  onClick={handleDownload}
+                  disabled={!pdfBlobUrl}
+                  className="px-4 py-2 text-xs sm:text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors inline-flex items-center shadow-xs"
+                >
+                  <FileDown size={15} className="mr-1.5" /> Uložit PDF
+                </button>
+              </>
+            )}
             <button
               onClick={onClose}
-              className="px-5 py-2.5 rounded-xl border border-gray-300 text-gray-700 font-medium hover:bg-gray-100 transition-colors text-sm"
+              className="px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-100 border border-gray-300 rounded-xl transition-colors"
             >
               Zavřít
             </button>
-            <button
-              onClick={handlePrint}
-              disabled={isPreparing}
-              className="bg-brand-blue text-white px-6 py-2.5 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-md flex items-center text-sm disabled:opacity-75"
-            >
-              {isPreparing ? (
-                <>
-                  <Loader2 size={16} className="mr-2 animate-spin" />
-                  Načítám...
-                </>
-              ) : (
-                <>
-                  <Printer size={16} className="mr-2" />
-                  Vytisknout / Uložit PDF
-                </>
-              )}
-            </button>
           </div>
         </div>
+
       </div>
     </div>
   );

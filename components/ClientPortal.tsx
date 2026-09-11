@@ -507,7 +507,8 @@ const ClientPortal: React.FC = () => {
             location: camp?.location || 'Olomouc / Prostějov / Bílá',
             periodOrDate: camp?.date || 'Léto 2026',
             price: camp?.price || '0 Kč',
-            variableSymbol: camp?.variableSymbol,
+            variableSymbol: currentUser.variableSymbol || camp?.variableSymbol,
+            password: currentUser.password,
             paymentStatus: currentUser.status
           }}
           onClose={() => setShowInsuranceModal(false)}

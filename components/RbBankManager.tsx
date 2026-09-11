@@ -12,9 +12,11 @@ import {
   Check,
   Clock,
   ShieldCheck,
-  HelpCircle
+  HelpCircle,
+  Eye
 } from 'lucide-react';
 import { matchesSearch } from '../utils/search';
+import { SentConfirmationModal } from './SentConfirmationModal';
 
 interface RbStatus {
   clientId: string;
@@ -67,6 +69,8 @@ export const RbBankManager: React.FC = () => {
   const [certFile, setCertFile] = useState<File | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedLogIdForSentModal, setSelectedLogIdForSentModal] = useState<number | null>(null);
+  const adminToken = localStorage.getItem('olymp_admin_token') || '';
 
   // Simulation / Manual Match Test
   const [simVs, setSimVs] = useState('');
@@ -694,31 +698,79 @@ export const RbBankManager: React.FC = () => {
                     <td className="py-3 px-4">
                       {log.matchedType === 'school' ? (
                         <div>
-                          <span className="inline-flex items-center gap-1 text-xs font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded-full border border-green-200">
-                            <CheckCircle size={12} /> Schváleno & Odeslán email s PDF
-                          </span>
-                          {log.matchedId && (
-                            <div className="mt-1">
+                          <div>
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded-full border border-green-200">
+                              <CheckCircle size={12} /> Schváleno & Odeslán email s PDF
+                            </span>
+                          </div>
+                          <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                            <button
+                              onClick={() => setSelectedLogIdForSentModal(log.id)}
+                              className="inline-flex items-center gap-1 text-xs font-bold text-brand-blue bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200 transition-colors shadow-sm cursor-pointer"
+                              title="Zobrazit přesné znění odeslaného e-mailu a oficiální PDF potvrzení"
+                            >
+                              <Eye size={12} /> Zobrazit co se poslalo
+                            </button>
+                            {log.matchedId && (
                               <a
-                                href={`/api/school-registrations/${log.matchedId}/confirmation-pdf`}
+                                href={`/api/school-registrations/${log.matchedId}/confirmation-pdf?token=${encodeURIComponent(adminToken)}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200"
-                                title="Stáhnout / zobrazit vygenerované PDF 1:1"
+                                className="inline-flex items-center gap-1 text-xs font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200 transition-colors"
+                                title="Otevřít / stáhnout PDF potvrzení přímo"
                               >
-                                <FileCheck size={11} /> Stáhnout PDF potvrzení (1:1)
+                                <FileCheck size={12} className="text-emerald-600" /> PDF potvrzení (1:1)
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ) : log.matchedType === 'camp' ? (
+                        <div>
+                          <div>
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200" title="Tábor - automaticky spárováno v administraci">
+                              <CheckCircle size={12} /> Zaplaceno v adminu
+                            </span>
+                          </div>
+                          {log.matchedId && (
+                            <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                              <button
+                                onClick={() => setSelectedLogIdForSentModal(log.id)}
+                                className="inline-flex items-center gap-1 text-xs font-bold text-brand-blue bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200 transition-colors shadow-sm cursor-pointer"
+                                title="Zobrazit detail platby tábora a potvrzení"
+                              >
+                                <Eye size={12} /> Zobrazit detail
+                              </button>
+                              <a
+                                href={`/api/registrations/${log.matchedId}/confirmation-pdf?token=${encodeURIComponent(adminToken)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200 transition-colors"
+                                title="Stáhnout táborové PDF potvrzení"
+                              >
+                                <FileCheck size={12} className="text-emerald-600" /> PDF potvrzení (1:1)
                               </a>
                             </div>
                           )}
                         </div>
-                      ) : log.matchedType === 'camp' ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200" title="Tábor - automaticky označeno v adminu bez e-mailu dle zadání">
-                          <CheckCircle size={12} /> Zaplaceno v adminu
-                        </span>
                       ) : log.matchedType === 'merch' ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-bold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200">
-                          <CheckCircle size={12} /> Zaplaceno & Odeslán email
-                        </span>
+                        <div>
+                          <div>
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200">
+                              <CheckCircle size={12} /> Zaplaceno & Odeslán email
+                            </span>
+                          </div>
+                          {log.matchedId && (
+                            <div className="mt-1.5">
+                              <button
+                                onClick={() => setSelectedLogIdForSentModal(log.id)}
+                                className="inline-flex items-center gap-1 text-xs font-bold text-brand-blue bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200 transition-colors shadow-sm cursor-pointer"
+                                title="Zobrazit odeslaný potvrzovací e-mail k merchi"
+                              >
+                                <Eye size={12} /> Zobrazit co se poslalo
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       ) : (
                         <span className="text-xs text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
                           Přijato na účet (nespárováno)
@@ -732,6 +784,14 @@ export const RbBankManager: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Modal for displaying what was sent (Email + 1:1 PDF confirmation) */}
+      {selectedLogIdForSentModal !== null && (
+        <SentConfirmationModal
+          logId={selectedLogIdForSentModal}
+          onClose={() => setSelectedLogIdForSentModal(null)}
+        />
+      )}
     </div>
   );
 };
