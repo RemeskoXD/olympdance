@@ -3448,20 +3448,53 @@ const SchoolRegistrationManager: React.FC = () => {
     exportSchoolRegistrationsToCsv(filteredRegistrations, schools);
   };
 
-  const getStatusBadge = (status: SchoolRegistration['status']) => {
+  const getStatusBadge = (status: SchoolRegistration['status'], childName?: string) => {
     switch (status) {
       case 'approved':
-        return <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold flex items-center"><CheckCircleIcon size={12} className="mr-1" /> Schváleno</span>;
+        return (
+          <span className="bg-green-100 text-green-800 px-2.5 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1 border border-green-200">
+            <CheckCircleIcon size={12} className="text-green-600 shrink-0" />
+            <span>Schváleno</span>
+            {childName && <span className="font-semibold text-green-900 border-l border-green-300 pl-1.5 ml-0.5">• {childName}</span>}
+          </span>
+        );
       case 'pending_payment':
-        return <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold flex items-center"><Clock size={12} className="mr-1" /> Čeká na platbu</span>;
+        return (
+          <span className="bg-yellow-100 text-yellow-800 px-2.5 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1 border border-yellow-200">
+            <Clock size={12} className="text-yellow-600 shrink-0" />
+            <span>Čeká na platbu</span>
+            {childName && <span className="font-semibold text-yellow-900 border-l border-yellow-300 pl-1.5 ml-0.5">• {childName}</span>}
+          </span>
+        );
       case 'pending_approval':
-        return <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold flex items-center"><Clock size={12} className="mr-1" /> Čeká na schválení</span>;
+        return (
+          <span className="bg-blue-100 text-blue-800 px-2.5 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1 border border-blue-200">
+            <Clock size={12} className="text-blue-600 shrink-0" />
+            <span>Čeká na schválení</span>
+            {childName && <span className="font-semibold text-blue-900 border-l border-blue-300 pl-1.5 ml-0.5">• {childName}</span>}
+          </span>
+        );
       case 'action_required':
-        return <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold flex items-center"><AlertCircle size={12} className="mr-1" /> Vyžadována akce</span>;
+        return (
+          <span className="bg-red-100 text-red-800 px-2.5 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1 border border-red-200">
+            <AlertCircle size={12} className="text-red-600 shrink-0" />
+            <span>Vyžadována akce</span>
+            {childName && <span className="font-semibold text-red-900 border-l border-red-300 pl-1.5 ml-0.5">• {childName}</span>}
+          </span>
+        );
       case 'cancelled':
-        return <span className="bg-gray-100 text-gray-500 px-3 py-1 rounded-full text-xs font-bold flex items-center">Odhlášeno</span>;
+        return (
+          <span className="bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1 border border-gray-200">
+            <span>Odhlášeno</span>
+            {childName && <span className="text-gray-700 border-l border-gray-300 pl-1.5 ml-0.5">• {childName}</span>}
+          </span>
+        );
       default:
-        return <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-bold">{status}</span>;
+        return (
+          <span className="bg-gray-100 text-gray-700 px-2.5 py-1 rounded-full text-xs font-bold">
+            {status} {childName ? `• ${childName}` : ''}
+          </span>
+        );
     }
   };
 
@@ -3566,6 +3599,13 @@ const SchoolRegistrationManager: React.FC = () => {
                 filteredRegistrations.map((reg) => {
                   const school = schools.find(s => s.id === reg.schoolId);
                   const regExcuses = excuses.filter(e => e.registrationId === reg.id);
+                  const cleanParentEmail = (reg.parentEmail || '').toLowerCase().trim();
+                  const siblings = schoolRegistrations.filter(r => 
+                    r.id !== reg.id && 
+                    cleanParentEmail.length > 0 &&
+                    (r.parentEmail || '').toLowerCase().trim() === cleanParentEmail
+                  );
+                  const currentChildFullName = `${reg.childName} ${reg.childSurname || ''}`.trim();
                   return (
                     <tr key={reg.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4">
@@ -3598,7 +3638,37 @@ const SchoolRegistrationManager: React.FC = () => {
                         </a>
                       </td>
                       <td className="px-6 py-4">
-                        {getStatusBadge(reg.status)}
+                        <div className="space-y-2">
+                          <div>
+                            {getStatusBadge(reg.status, currentChildFullName)}
+                          </div>
+                          {siblings.length > 0 && (
+                            <div className="pt-2 border-t border-gray-150 space-y-1.5">
+                              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                                Další děti v přihlášce:
+                              </span>
+                              {siblings.map(sib => {
+                                const sibFullName = `${sib.childName} ${sib.childSurname || ''}`.trim();
+                                return (
+                                  <div key={sib.id} className="flex items-center justify-between gap-1.5 bg-gray-50 p-1.5 rounded-lg border border-gray-200">
+                                    <div>
+                                      {getStatusBadge(sib.status, sibFullName)}
+                                    </div>
+                                    {sib.status !== 'approved' && (
+                                      <button
+                                        onClick={() => handleUpdateStatus(sib.id, 'approved')}
+                                        className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-[10px] font-bold shrink-0 shadow-2xs cursor-pointer"
+                                        title={`Schválit platbu za ${sibFullName}`}
+                                      >
+                                        Schválit
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                          <div className="text-xs space-y-1 max-h-32 overflow-y-auto">

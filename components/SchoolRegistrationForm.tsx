@@ -10,7 +10,7 @@ import { getFirstTrainingDate } from '../utils/trainingDates';
 const SchoolRegistrationForm: React.FC = () => {
   const { schoolId } = useParams<{ schoolId: string }>();
   const navigate = useNavigate();
-  const { schools, addSchoolRegistration } = useData();
+  const { schools, addSchoolRegistration, addSchoolRegistrationsBatch } = useData();
   
   const initialSchool = schools.find(c => c.id === schoolId);
   
@@ -143,26 +143,30 @@ const SchoolRegistrationForm: React.FC = () => {
       try {
         const sharedPassword = Math.random().toString(36).slice(-8);
         
-        // Register all children
-        for (const child of children) {
-          await addSchoolRegistration({
-            schoolId: child.schoolId,
-            parentName: parentData.parentName,
-            parentEmail: parentData.parentEmail,
-            parentPhone: parentData.parentPhone,
-            parentAddress: parentData.parentAddress,
-            childName: child.childName,
-            childSurname: child.childSurname,
-            childRodneCislo: child.childRodneCislo,
-            childClass: child.childClass,
-            childPhone: child.childPhone,
-            afterSchoolClub: child.afterSchoolClub,
-            password: sharedPassword,
-            history: [{ date: new Date().toISOString(), message: 'Přihláška vytvořena' }]
-          });
-        }
+        // Prepare batch of children registrations
+        const batchToSubmit = children.map(child => ({
+          schoolId: child.schoolId,
+          parentName: parentData.parentName,
+          parentEmail: parentData.parentEmail,
+          parentPhone: parentData.parentPhone,
+          parentAddress: parentData.parentAddress,
+          childName: child.childName,
+          childSurname: child.childSurname,
+          childRodneCislo: child.childRodneCislo,
+          childClass: child.childClass,
+          childPhone: child.childPhone,
+          afterSchoolClub: child.afterSchoolClub,
+          password: sharedPassword,
+          history: [{ date: new Date().toISOString(), message: 'Přihláška vytvořena' }]
+        }));
+
+        const createdRegistrations = await addSchoolRegistrationsBatch(batchToSubmit);
         
-        setRegistrationResult({ password: sharedPassword, childrenCount: children.length });
+        setRegistrationResult({ 
+          password: sharedPassword, 
+          childrenCount: children.length,
+          registrations: createdRegistrations
+        });
         setStep(3);
       } catch (error) {
         console.error('Registration failed:', error);
@@ -483,10 +487,12 @@ const SchoolRegistrationForm: React.FC = () => {
                 </div>
 
                 <div className="space-y-4">
-                  {children.map((child) => {
+                  {children.map((child, idx) => {
                     const childSchool = schools.find(s => s.id === child.schoolId);
                     const amount = childSchool ? parseFloat(String(childSchool.price).replace(/\s/g, '').replace('Kč', '')) || 0 : 0;
-                    const childVs = String(child.childRodneCislo || child.id || '').replace(/\D/g, '').slice(0, 10) || '2026';
+                    const matchedReg = registrationResult?.registrations?.[idx] || 
+                      (registrationResult?.registrations || []).find((r: any) => r.childName === child.childName && r.childSurname === child.childSurname);
+                    const childVs = matchedReg?.variableSymbol || String(child.childRodneCislo || child.id || '').replace(/\D/g, '').slice(0, 10) || '2026';
                     const childQrData = `SPD*1.0*ACC:${BANK_INFO.iban}*AM:${amount}*CC:CZK*X-VS:${childVs}*MSG:${child.childName} ${child.childSurname}`;
 
                     return (

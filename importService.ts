@@ -34,6 +34,44 @@ export interface QueueItem {
   updatedAt: string;
 }
 
+export interface GroupedCustomerChild {
+  id: string; // queue item id
+  registrationId: string | null;
+  childName: string;
+  childSurname: string;
+  childRodneCislo: string;
+  childClass?: string;
+  afterSchoolClub?: boolean;
+  address: string;
+  phone: string;
+  schoolId: string;
+  schoolName: string;
+  schoolRaw: string;
+  schoolPrice: string;
+  numericPrice: number;
+  variableSymbol: string;
+  status?: string; // registration status e.g. 'approved' | 'pending_payment'
+  day?: string;
+  time?: string;
+}
+
+export interface GroupedParentItem {
+  id: string; // primary item id
+  email: string;
+  phone: string;
+  address: string;
+  password: string;
+  variableSymbol: string;
+  batchNumber: number;
+  emailStatus: 'pending' | 'sending' | 'sent' | 'failed';
+  emailSentAt: string | null;
+  emailError: string | null;
+  totalPrice: number;
+  children: GroupedCustomerChild[];
+  childrenCount: number;
+  allQueueIds: string[];
+}
+
 export const SCHOOL_MAPPING: Record<string, { id: string; name: string; city: string; price?: string }> = {
   "MŠ AURORA": { id: "30", name: "MŠ Aurora", city: "Olomouc", price: "1550 Kč / pololetí" },
   "ZŠ BOHUŇOVICE": { id: "2", name: "ZŠ a MŠ Bohuňovice", city: "Bohuňovice", price: "1700 Kč / pololetí" },
@@ -339,19 +377,249 @@ export async function syncCustomersToDatabase(pool: Pool, csvContent?: string): 
   };
 }
 
-export function generateCustomerEmailHtml(item: QueueItem, school?: any, hostBaseUrl?: string): { subject: string; html: string } {
+export function groupQueueItemsByParent(
+  items: QueueItem[], 
+  schoolMap?: Map<string, any>,
+  regStatusMap?: Map<string, string>
+): GroupedParentItem[] {
+  const map = new Map<string, QueueItem[]>();
+
+  for (const item of items) {
+    const emailKey = (item.email || '').toLowerCase().trim();
+    if (!emailKey) continue;
+    if (!map.has(emailKey)) {
+      map.set(emailKey, []);
+    }
+    map.get(emailKey)!.push(item);
+  }
+
+  const result: GroupedParentItem[] = [];
+
+  for (const [email, groupItems] of map.entries()) {
+    // Deduplicate children with identical normalized name+surname
+    const uniqueChildrenMap = new Map<string, GroupedCustomerChild>();
+    const allQueueIds: string[] = [];
+    let minBatch = Infinity;
+    let anySending = false;
+    let anyFailed = false;
+    let allSent = true;
+    let latestSentAt: string | null = null;
+    let firstError: string | null = null;
+    let parentPhone = '';
+    let parentAddress = '';
+    let parentPassword = '';
+    let primaryVs = '';
+
+    for (const raw of groupItems) {
+      allQueueIds.push(raw.id);
+      if (raw.batchNumber < minBatch) minBatch = raw.batchNumber;
+      if (raw.emailStatus === 'sending') anySending = true;
+      if (raw.emailStatus === 'failed') {
+        anyFailed = true;
+        if (!firstError && raw.emailError) firstError = raw.emailError;
+      }
+      if (raw.emailStatus !== 'sent') allSent = false;
+      if (raw.emailSentAt && (!latestSentAt || new Date(raw.emailSentAt) > new Date(latestSentAt))) {
+        latestSentAt = raw.emailSentAt;
+      }
+      if (!parentPhone && raw.phone) parentPhone = raw.phone;
+      if (!parentAddress && raw.address) parentAddress = raw.address;
+      if (!parentPassword && raw.password) parentPassword = raw.password;
+      if (!primaryVs && raw.variableSymbol) primaryVs = raw.variableSymbol;
+
+      const normKey = `${(raw.childName || '').toLowerCase().trim()}_${(raw.childSurname || '').toLowerCase().trim()}`;
+      if (!uniqueChildrenMap.has(normKey)) {
+        const school = (schoolMap && raw.schoolId ? schoolMap.get(raw.schoolId) : null) 
+          || SCHOOL_MAPPING[(raw.schoolRaw || '').toUpperCase()];
+        const schoolName = school?.name ? `${school.name} (${school.city})` : (raw.schoolName || raw.schoolRaw);
+        const schoolPrice = school?.price || '1700 Kč / pololetí';
+        const numericPrice = parseInt(schoolPrice.replace(/\D/g, ''), 10) || 1700;
+
+        const childStatus = (raw.registrationId && regStatusMap?.get(String(raw.registrationId)))
+          || (regStatusMap?.get(String(raw.id)))
+          || 'pending_payment';
+
+        uniqueChildrenMap.set(normKey, {
+          id: raw.id,
+          registrationId: raw.registrationId,
+          childName: raw.childName,
+          childSurname: raw.childSurname,
+          childRodneCislo: raw.childRodneCislo,
+          address: raw.address,
+          phone: raw.phone,
+          schoolId: raw.schoolId,
+          schoolName,
+          schoolRaw: raw.schoolRaw,
+          schoolPrice,
+          numericPrice,
+          variableSymbol: raw.variableSymbol,
+          status: childStatus,
+          day: school?.day,
+          time: school?.time
+        });
+      }
+    }
+
+    const children = Array.from(uniqueChildrenMap.values());
+    const totalPrice = children.reduce((sum, ch) => sum + ch.numericPrice, 0);
+
+    let status: 'pending' | 'sending' | 'sent' | 'failed' = 'pending';
+    if (allSent && groupItems.length > 0) status = 'sent';
+    else if (anySending) status = 'sending';
+    else if (anyFailed) status = 'failed';
+
+    result.push({
+      id: groupItems[0].id,
+      email,
+      phone: parentPhone || groupItems[0].phone || '',
+      address: parentAddress || groupItems[0].address || '',
+      password: parentPassword || groupItems[0].password || '',
+      variableSymbol: primaryVs || groupItems[0].variableSymbol || '',
+      batchNumber: minBatch === Infinity ? 1 : minBatch,
+      emailStatus: status,
+      emailSentAt: latestSentAt,
+      emailError: firstError,
+      totalPrice,
+      children,
+      childrenCount: children.length,
+      allQueueIds
+    });
+  }
+
+  return result;
+}
+
+export function generateCustomerEmailHtml(
+  item: QueueItem | GroupedParentItem, 
+  school?: any, 
+  hostBaseUrl?: string
+): { subject: string; html: string; totalPrice: number; childrenCount: number } {
   const safeHost = hostBaseUrl ? hostBaseUrl.replace(/\/$/, '') : 'https://olympdance.cz';
   const portalUrl = `${safeHost}/skoly-portal`;
-  const schoolName = school?.name ? `${school.name} (${school.city})` : (item.schoolName || item.schoolRaw);
-  const schoolPrice = school?.price || '1700 Kč / pololetí';
-  const numericPrice = parseInt(schoolPrice.replace(/\D/g, ''), 10) || 1700;
-  
-  const cleanMsg = `${item.childSurname} ${item.childName}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9\s]/g, '').slice(0, 50);
-  const safeVs = (item.variableSymbol || '').replace(/\D/g, '').slice(0, 10) || '2026';
-  const spayd = `SPD*1.0*ACC:CZ0855000000001806875329*AM:${numericPrice.toFixed(2)}*CC:CZK*X-VS:${safeVs}*MSG:${cleanMsg}`;
+
+  let children: GroupedCustomerChild[] = [];
+  let isMultiChild = false;
+  let totalPrice = 0;
+  let primaryVs = (item.variableSymbol || '').replace(/\D/g, '').slice(0, 10) || '2026';
+  const parentEmail = item.email;
+  const parentPassword = item.password;
+
+  if ('children' in item && Array.isArray(item.children) && item.children.length > 0) {
+    children = item.children;
+    isMultiChild = children.length > 1;
+    totalPrice = item.totalPrice || children.reduce((sum, c) => sum + c.numericPrice, 0);
+  } else {
+    const raw = item as QueueItem;
+    const sName = school?.name ? `${school.name} (${school.city})` : (raw.schoolName || raw.schoolRaw);
+    const sPrice = school?.price || '1700 Kč / pololetí';
+    const numPrice = parseInt(sPrice.replace(/\D/g, ''), 10) || 1700;
+    children = [{
+      id: raw.id,
+      registrationId: raw.registrationId,
+      childName: raw.childName,
+      childSurname: raw.childSurname,
+      childRodneCislo: raw.childRodneCislo,
+      address: raw.address,
+      phone: raw.phone,
+      schoolId: raw.schoolId,
+      schoolName: sName,
+      schoolRaw: raw.schoolRaw,
+      schoolPrice: sPrice,
+      numericPrice: numPrice,
+      variableSymbol: raw.variableSymbol,
+      day: school?.day,
+      time: school?.time
+    }];
+    isMultiChild = false;
+    totalPrice = numPrice;
+  }
+
+  // Construct Clean Msg for QR Code
+  let cleanMsg = '';
+  if (children.length === 1) {
+    cleanMsg = `${children[0].childSurname} ${children[0].childName}`;
+  } else {
+    cleanMsg = children.map(c => `${c.childSurname} ${c.childName}`).join(' a ');
+  }
+  cleanMsg = cleanMsg.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9\s]/g, '').slice(0, 50);
+
+  const safeVs = (primaryVs || (children[0]?.variableSymbol || '')).replace(/\D/g, '').slice(0, 10) || '2026';
+  const spayd = `SPD*1.0*ACC:CZ0855000000001806875329*AM:${totalPrice.toFixed(2)}*CC:CZK*X-VS:${safeVs}*MSG:${cleanMsg}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&margin=10&data=${encodeURIComponent(spayd)}`;
 
-  const subject = `Přihláška do tanečního kroužku a přihlašovací údaje - ${item.childName} ${item.childSurname} (Olymp Dance)`;
+  // Subject line
+  const childrenNamesStr = children.map(c => `${c.childName} ${c.childSurname}`).join(', ');
+  const subject = isMultiChild 
+    ? `Přihláška do tanečních kroužků a přihlašovací údaje - ${childrenNamesStr} (Olymp Dance)`
+    : `Přihláška do tanečního kroužku a přihlašovací údaje - ${children[0].childName} ${children[0].childSurname} (Olymp Dance)`;
+
+  // Generate Children markup
+  let childrenBlocksHtml = '';
+  const parentName = (item as any).parentName || 'Zákonný zástupce';
+  const parentPhone = item.phone || (children[0]?.phone) || 'Neuvedeno';
+
+  childrenBlocksHtml = children.map((ch, idx) => {
+    const childCleanAmount = ch.numericPrice || 1700;
+    const childVs = (ch.variableSymbol || '').replace(/\D/g, '').slice(0, 10) || '2026';
+    const childFullName = `${ch.childName} ${ch.childSurname}`.trim();
+    let childMsg = `${ch.childSurname} ${ch.childName}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9\s]/g, '').slice(0, 50);
+    const childSpayd = `SPD*1.0*ACC:CZ0855000000001806875329*AM:${childCleanAmount.toFixed(2)}*CC:CZK*X-VS:${childVs}*MSG:${childMsg}`;
+    const childQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=8&data=${encodeURIComponent(childSpayd)}`;
+
+    return `
+      <div style="margin: 24px 0; border: 2px solid #002B49; border-radius: 12px; overflow: hidden; background-color: #ffffff; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+        <!-- Rekapitulace přihlášky dítěte -->
+        <div style="background-color: #f8fafc; padding: 18px; border-bottom: 1px solid #e2e8f0;">
+          <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">
+            <h3 style="margin: 0; color: #002B49; font-size: 16px;">
+              📋 Rekapitulace přihlášky ${isMultiChild ? `(${idx + 1}. dítě)` : ''}
+            </h3>
+            <span style="color: #b91c1c; font-weight: bold; font-size: 13px; background: #fee2e2; padding: 2px 8px; border-radius: 6px;">
+              ${ch.schoolPrice}
+            </span>
+          </div>
+          
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Dítě:</strong> ${childFullName}</p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Škola / Kroužek:</strong> ${ch.schoolName}</p>
+          ${ch.day ? `<p style="margin: 4px 0; font-size: 14px;"><strong>Den & čas lekcí:</strong> ${ch.day} ${ch.time ? `(${ch.time})` : ''}</p>` : ''}
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Třída:</strong> ${ch.childClass || 'Neuvedeno'}</p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Datum narození / RČ:</strong> ${ch.childRodneCislo || 'Neuvedeno'}</p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Vyzvedávání z družiny:</strong> ${ch.afterSchoolClub ? 'Ano' : 'Ne'}</p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Zákonný zástupce:</strong> ${parentName}</p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Telefon:</strong> ${parentPhone}</p>
+        </div>
+
+        <!-- Pod tím Rychlá platba mobilem (QR kód) -->
+        <div style="padding: 18px; text-align: center; background-color: #ffffff;">
+          <p style="font-weight: bold; margin: 0 0 12px 0; color: #002B49; font-size: 15px;">
+            📲 Rychlá platba mobilem (QR kód): pro dítě ${childFullName}
+          </p>
+          
+          <div style="margin: 12px 0;">
+            <img src="${childQrUrl}" alt="QR platba - ${childFullName}" width="190" height="190" style="display: block; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff; padding: 4px;" />
+            <p style="font-size: 12px; color: #64748b; margin: 6px 0 0 0;">Naskenujte v mobilní aplikaci své banky</p>
+          </div>
+
+          <!-- Pod tím platební údaje -->
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-top: 14px; text-align: left;">
+            <h4 style="margin: 0 0 8px 0; color: #002B49; font-size: 14px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+              💳 Platební údaje pro dítě ${childFullName}
+            </h4>
+            <p style="margin: 3px 0; font-size: 13px;"><strong>Banka:</strong> Raiffeisenbank a.s.</p>
+            <p style="margin: 3px 0; font-size: 13px;"><strong>Číslo účtu:</strong> 1806875329 / 5500</p>
+            <p style="margin: 3px 0; font-size: 13px;"><strong>IBAN:</strong> CZ0855000000001806875329</p>
+            <p style="margin: 3px 0; font-size: 13px;"><strong>Pololetní kurzovné:</strong> <span style="color: #E30613; font-weight: bold; font-size: 14px;">${childCleanAmount.toLocaleString('cs-CZ')} Kč</span></p>
+            <p style="margin: 3px 0; font-size: 13px;"><strong>Variabilní symbol:</strong> <span style="font-weight: bold; font-family: monospace; color: #002B49; font-size: 15px;">${childVs}</span></p>
+            <p style="margin: 3px 0; font-size: 13px;"><strong>Zpráva pro příjemce:</strong> ${childFullName}</p>
+            <p style="margin: 6px 0 0 0; font-size: 11px; color: #64748b; line-height: 1.4;">
+              ℹ️ Po zaplacení tohoto dítěte Vám zašleme potvrzení a v portálu si budete moci stáhnout potvrzení pro pojišťovnu.
+            </p>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
       <div style="background-color: #002B49; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
@@ -359,33 +627,27 @@ export function generateCustomerEmailHtml(item: QueueItem, school?: any, hostBas
         <p style="color: #93c5fd; margin: 6px 0 0 0; font-size: 15px;">Potvrzení přihlášky a přístupové údaje do Školního portálu</p>
       </div>
       <div style="background-color: #ffffff; padding: 32px 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
-        <p style="font-size: 16px; margin-top: 0;">Vážený rodiči,</p>
-        <p>zasíláme Vám potvrzení přihlášky dítěte <strong>${item.childName} ${item.childSurname}</strong> do tanečního kroužku v tanečním klubu <strong>Olymp Dance</strong> spolu s Vašimi přihlašovacími údaji do Školního portálu a platebními instrukcemi.</p>
+        <p style="font-size: 16px; margin-top: 0; font-weight: bold; color: #002B49;">Vážení rodiče,</p>
+        <p>děkujeme, že jste s námi byli v minulém školním roce! ❤️ Moc si vážíme Vaší přízně a už se těšíme na nový taneční rok s Olymp Dance.</p>
+        <p>Letos jsme pro Vás připravili novinku – nový web a přihlašovací portál, který Vám usnadní správu kroužků. V portálu budete mít na jednom místě například:</p>
+        <div style="margin: 12px 0 16px 0; padding: 12px 16px; background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 14px;">
+          <p style="margin: 4px 0;">💳 možnost stáhnout si potvrzení o platbě pro pojišťovnu,</p>
+          <p style="margin: 4px 0;">📋 přehled docházky ${isMultiChild ? 'Vašich dětí' : 'Vašeho dítěte'},</p>
+          <p style="margin: 4px 0;">📅 přehled aktuálních lekcí a termínů,</p>
+          <p style="margin: 4px 0;">📌 důležité informace ke kroužku na jednom místě.</p>
+        </div>
         
-        <!-- Informace o kroužku a škole -->
-        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin: 20px 0;">
-          <h3 style="margin: 0 0 10px 0; color: #002B49; font-size: 16px;">📍 Informace o kroužku</h3>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Škola / Místo:</strong> ${schoolName}</p>
-          ${school?.day ? `<p style="margin: 4px 0; font-size: 14px;"><strong>Den tréninků:</strong> ${school.day}</p>` : ''}
-          ${school?.time ? `<p style="margin: 4px 0; font-size: 14px;"><strong>Čas tréninků:</strong> ${school.time}</p>` : ''}
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Pololetní kurzovné:</strong> <span style="color: #E30613; font-weight: bold;">${schoolPrice}</span></p>
-        </div>
-
-        <!-- Rekapitulace údajů -->
-        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin: 20px 0;">
-          <h3 style="margin: 0 0 10px 0; color: #002B49; font-size: 16px;">📋 Údaje přihlášeného žáka</h3>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Jméno a příjmení:</strong> ${item.childName} ${item.childSurname}</p>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Rodné číslo / Datum narození:</strong> ${item.childRodneCislo || 'Neuvedeno'}</p>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Bydliště:</strong> ${item.address || 'Neuvedeno'}</p>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Telefonický kontakt:</strong> ${item.phone || 'Neuvedeno'}</p>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>E-mail rodiče:</strong> ${item.email}</p>
-        </div>
+        <h4 style="margin: 16px 0 6px 0; color: #002B49; font-size: 16px; font-weight: bold;">Nemusíte se znovu přihlašovat</h4>
+        <p style="margin: 6px 0;">Protože ${isMultiChild ? 'Vaše děti chodily do našeho kroužku' : 'Vaše dítě chodilo do našeho kroužku'} už minulý rok, není potřeba vytvářet ${isMultiChild ? 'nové přihlášky' : 'novou přihlášku'}. Vše jsme pro Vás připravili v novém systému.</p>
+        <p style="margin: 6px 0;">Níže Vám proto zasíláme přihlašovací údaje do kroužkového portálu, kde si můžete zkontrolovat a případně doplnit potřebné údaje.</p>
+        <p style="margin: 12px 0; font-weight: bold; color: #002B49;">Kroužky začínají v říjnu. 💃🕺</p>
+        <p style="margin: 6px 0;">Budeme moc rádi, když s námi budete pokračovat i letos, a těšíme se na další společný taneční rok! ❤️</p>
 
         <!-- Přihlašovací údaje do Školního portálu -->
         <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 20px; margin: 20px 0;">
           <h3 style="margin: 0 0 10px 0; color: #1e40af; font-size: 16px;">🔑 Vaše přihlašovací údaje do Školního portálu</h3>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Přihlašovací e-mail:</strong> ${item.email}</p>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Heslo pro přihlášení:</strong> <span style="font-family: monospace; background: #ffffff; padding: 4px 10px; border-radius: 6px; font-weight: bold; border: 1px solid #93c5fd; color: #1e40af; font-size: 16px;">${item.password}</span></p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Přihlašovací e-mail:</strong> ${parentEmail}</p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Heslo pro přihlášení:</strong> <span style="font-family: monospace; background: #ffffff; padding: 4px 10px; border-radius: 6px; font-weight: bold; border: 1px solid #93c5fd; color: #1e40af; font-size: 16px;">${parentPassword}</span></p>
           
           <div style="margin: 16px 0 8px 0; text-align: center;">
             <a href="${portalUrl}" style="background-color: #002B49; color: #ffffff; text-decoration: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block;">
@@ -395,29 +657,13 @@ export function generateCustomerEmailHtml(item: QueueItem, school?: any, hostBas
 
           <p style="margin: 10px 0 0 0; font-size: 12px; color: #475569; line-height: 1.5;">
             Ve Školním portálu můžete:
-            <br />• Sledovat docházku dítěte na všech 14 tanečních lekcích
+            <br />• ${isMultiChild ? 'Sledovat docházku a lekce všech dětí na jednom společném účtu' : 'Sledovat docházku dítěte na všech 14 tanečních lekcích'}
             <br />• Omlouvat absenci z lekcí jedním kliknutím
-            <br />• Po úhradě si stáhnout oficiální potvrzení pro zdravotní pojišťovnu (příspěvek na sport až 1 500 Kč)
+            <br />• Po úhradě si stáhnout oficiální potvrzení pro zdravotní pojišťovnu (příspěvek na sport až 1 500 Kč na dítě)
           </p>
         </div>
 
-        <!-- Platební údaje -->
-        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin: 20px 0;">
-          <h3 style="margin: 0 0 10px 0; color: #002B49; font-size: 16px;">💳 Platební údaje pro úhradu kurzovného</h3>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Banka:</strong> Raiffeisenbank a.s.</p>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Číslo účtu:</strong> 1806875329 / 5500</p>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>IBAN:</strong> CZ0855000000001806875329</p>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Částka:</strong> <span style="color: #E30613; font-weight: bold; font-size: 15px;">${schoolPrice}</span></p>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Variabilní symbol:</strong> <span style="font-weight: bold; color: #002B49; font-size: 15px;">${item.variableSymbol}</span></p>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Zpráva pro příjemce:</strong> ${item.childSurname} ${item.childName} - ${schoolName}</p>
-        </div>
-
-        <!-- QR Platba -->
-        <div style="text-align: center; margin: 20px 0; padding: 16px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
-          <p style="font-weight: bold; margin: 0 0 10px 0; color: #002B49; font-size: 15px;">📲 Rychlá platba mobilem (QR kód):</p>
-          <img src="${qrUrl}" alt="QR platba" width="220" height="220" style="display: block; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 8px;" />
-          <p style="font-size: 12px; color: #64748b; margin: 8px 0 0 0;">Naskenujte v mobilní aplikaci své banky (Raiffeisenbank, ČSOB, Česká spořitelna, Komerční banka, AirBank, Moneta atd.)</p>
-        </div>
+        ${childrenBlocksHtml}
 
         <p>Těšíme se na naše společné taneční hodiny!</p>
         <p style="margin-bottom: 0;">S pozdravem,<br /><strong>Tým Olymp Dance</strong></p>
@@ -429,7 +675,7 @@ export function generateCustomerEmailHtml(item: QueueItem, school?: any, hostBas
     </div>
   `;
 
-  return { subject, html };
+  return { subject, html, totalPrice, childrenCount: children.length };
 }
 
 export async function getImportQueueStats(pool: Pool) {
@@ -456,7 +702,19 @@ export async function getImportQueueStats(pool: Pool) {
     ORDER BY batchNumber ASC
   `);
 
+  // Count unique parent emails
+  const [uniqueParentRows] = await pool.query(`
+    SELECT 
+      COUNT(DISTINCT LOWER(TRIM(email))) as totalParents,
+      COUNT(DISTINCT CASE WHEN emailStatus = 'sent' THEN LOWER(TRIM(email)) END) as sentParents,
+      COUNT(DISTINCT CASE WHEN emailStatus = 'pending' THEN LOWER(TRIM(email)) END) as pendingParents,
+      COUNT(DISTINCT CASE WHEN emailStatus = 'failed' THEN LOWER(TRIM(email)) END) as failedParents
+    FROM customer_import_queue
+  `);
+
   const stat = (totalRows as any[])[0] || {};
+  const parentStat = (uniqueParentRows as any[])[0] || {};
+
   return {
     total: Number(stat.total || 0),
     sent: Number(stat.sent || 0),
@@ -464,6 +722,10 @@ export async function getImportQueueStats(pool: Pool) {
     failed: Number(stat.failed || 0),
     sending: Number(stat.sending || 0),
     totalBatches: Number(stat.totalBatches || 0),
+    totalParents: Number(parentStat.totalParents || 0),
+    sentParents: Number(parentStat.sentParents || 0),
+    pendingParents: Number(parentStat.pendingParents || 0),
+    failedParents: Number(parentStat.failedParents || 0),
     batches: (batchRows as any[]).map(b => ({
       batchNumber: Number(b.batchNumber),
       total: Number(b.total || 0),

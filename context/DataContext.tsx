@@ -50,6 +50,7 @@ interface DataContextType {
   updateRegistration: (id: string, updatedRegistration: Partial<Registration>) => Promise<void>;
   deleteRegistration: (id: string) => Promise<void>;
   addSchoolRegistration: (registration: Omit<SchoolRegistration, 'id' | 'createdAt' | 'status'>) => Promise<SchoolRegistration>;
+  addSchoolRegistrationsBatch: (registrations: Array<Omit<SchoolRegistration, 'id' | 'createdAt' | 'status'>>) => Promise<SchoolRegistration[]>;
   updateSchoolRegistration: (id: string, updatedRegistration: Partial<SchoolRegistration>) => Promise<void>;
   deleteSchoolRegistration: (id: string) => Promise<void>;
   addMerchOrder: (order: Omit<MerchOrder, 'id' | 'createdAt' | 'status' | 'variableSymbol'>) => Promise<MerchOrder>;
@@ -505,6 +506,31 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return newRegistration;
   };
 
+  const addSchoolRegistrationsBatch = async (batchRegistrations: Array<Omit<SchoolRegistration, 'id' | 'createdAt' | 'status'>>): Promise<SchoolRegistration[]> => {
+    const createdList: SchoolRegistration[] = batchRegistrations.map((registration, idx) => {
+      const cleanRc = (registration.childRodneCislo || '').replace(/\D/g, '').slice(0, 10);
+      const vs = (registration.variableSymbol || (cleanRc && cleanRc.length >= 6 ? cleanRc : `261${(Date.now() + idx).toString().slice(-6)}`)).replace(/\D/g, '').slice(0, 10);
+      return {
+        ...registration,
+        id: `sr${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
+        variableSymbol: vs,
+        status: 'pending_payment',
+        createdAt: new Date().toISOString(),
+        password: registration.password || Math.random().toString(36).slice(-8)
+      };
+    });
+
+    setSchoolRegistrations(prev => {
+      const updated = [...prev, ...createdList];
+      setStored('olymp_school_registrations', updated);
+      return updated;
+    });
+
+    await apiCall('/api/school-registrations', 'POST', createdList);
+    await refreshData();
+    return createdList;
+  };
+
   const updateSchoolRegistration = async (id: string, updatedRegistration: Partial<SchoolRegistration>) => {
     setSchoolRegistrations(prev => {
       const updated = prev.map(r => r.id === id ? { ...r, ...updatedRegistration } : r);
@@ -747,7 +773,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       addGalleryImage, deleteGalleryImage,
       addProduct, updateProduct, deleteProduct, 
       addRegistration, updateRegistration, deleteRegistration,
-      addSchoolRegistration, updateSchoolRegistration, deleteSchoolRegistration,
+      addSchoolRegistration, addSchoolRegistrationsBatch, updateSchoolRegistration, deleteSchoolRegistration,
       addMerchOrder, updateMerchOrder, deleteMerchOrder,
       addUser, updateUser, deleteUser,
       addExcuse, deleteExcuse, updateAttendance,

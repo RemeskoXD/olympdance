@@ -9,7 +9,7 @@ import pool, { initDb, isDbConfigured } from './db.ts';
 import { SCHOOLS, CAMPS, GALLERY_IMAGES, PRODUCTS } from './constants.ts';
 import { getRbConfig, testRbConnection, syncRbPayments, getRbLogs, processSinglePayment } from './rbService.ts';
 import { generateSchoolPaymentPdf } from './pdfGenerator.ts';
-import { syncCustomersToDatabase, generateCustomerEmailHtml, getImportQueueStats } from './importService.ts';
+import { syncCustomersToDatabase, generateCustomerEmailHtml, getImportQueueStats, groupQueueItemsByParent, GroupedParentItem } from './importService.ts';
 import sharp from 'sharp';
 import dns from 'dns';
 import crypto from 'crypto';
@@ -968,6 +968,11 @@ const generateCampWelcomeEmailHtml = (registration: any, camp: any, variableSymb
 const generateSchoolWelcomeEmailHtml = (registration: any, school: any, vs: string, qrUrl: string) => {
   const schoolName = school?.name ? `${school.name} (${school.city})` : 'Taneční kroužek';
   const schoolPrice = school?.price || 'Dle ceníku školy';
+  const numericPrice = parseInt((schoolPrice || '').replace(/\D/g, ''), 10) || 1600;
+  const childFullName = `${registration.childName || ''} ${registration.childSurname || ''}`.trim();
+  const parentName = registration.parentName || 'Zákonný zástupce';
+  const parentPhone = registration.parentPhone || 'Neuvedeno';
+
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
       <div style="background-color: #002B49; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
@@ -975,55 +980,168 @@ const generateSchoolWelcomeEmailHtml = (registration: any, school: any, vs: stri
         <p style="color: #93c5fd; margin: 6px 0 0 0; font-size: 15px;">Potvrzení přihlášky do tanečního kroužku</p>
       </div>
       <div style="background-color: #ffffff; padding: 32px 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
-        <p style="font-size: 16px;">Vážený rodiči <strong>${registration.parentName || ''}</strong>,</p>
-        <p>děkujeme za přihlášení dítěte <strong>${registration.childName || ''} ${registration.childSurname || ''}</strong> do tanečního kroužku v tanečním klubu <strong>Olymp Dance</strong>.</p>
+        <p style="font-size: 16px;">Vážený rodiči <strong>${parentName}</strong>,</p>
+        <p>děkujeme za přihlášení dítěte <strong>${childFullName}</strong> do tanečního kroužku v tanečním klubu <strong>Olymp Dance</strong>.</p>
         
-        <!-- Informace o kroužku a škole -->
-        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin: 20px 0;">
-          <h3 style="margin: 0 0 10px 0; color: #002B49; font-size: 16px;">📍 Informace o kroužku</h3>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Škola / Místo:</strong> ${schoolName}</p>
-          ${school?.day ? `<p style="margin: 4px 0; font-size: 14px;"><strong>Den tréninků:</strong> ${school.day}</p>` : ''}
-          ${school?.time ? `<p style="margin: 4px 0; font-size: 14px;"><strong>Čas tréninků:</strong> ${school.time}</p>` : ''}
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Pololetní kurzovné:</strong> <span style="color: #E30613; font-weight: bold;">${schoolPrice}</span></p>
-        </div>
-
-        <!-- Rekapitulace údajů -->
-        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin: 20px 0;">
-          <h3 style="margin: 0 0 10px 0; color: #002B49; font-size: 16px;">📋 Rekapitulace přihlášky</h3>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Dítě:</strong> ${registration.childName || ''} ${registration.childSurname || ''}</p>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Třída:</strong> ${registration.childClass || 'Neuvedeno'}</p>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Datum narození / RČ:</strong> ${registration.childBirthDate || registration.childRodneCislo || 'Neuvedeno'}</p>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Vyzvedávání z družiny:</strong> ${registration.afterSchoolClub ? 'Ano' : 'Ne'}</p>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Zákonný zástupce:</strong> ${registration.parentName || ''}</p>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Telefon:</strong> ${registration.parentPhone || ''}</p>
-        </div>
-
-        <!-- Přihlašovací údaje -->
+        <!-- Přihlašovací údaje do Školního portálu -->
         <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 18px; margin: 20px 0;">
           <h3 style="margin: 0 0 10px 0; color: #1e40af; font-size: 16px;">🔑 Vaše přihlašovací údaje do Školního portálu</h3>
           <p style="margin: 4px 0; font-size: 14px;"><strong>Přihlašovací e-mail:</strong> ${registration.parentEmail || ''}</p>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Heslo:</strong> <span style="font-family: monospace; background: #ffffff; padding: 3px 8px; border-radius: 4px; font-weight: bold; border: 1px solid #93c5fd; color: #1e40af;">${registration.password || ''}</span></p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Heslo:</strong> <span style="font-family: monospace; background: #ffffff; padding: 3px 8px; border-radius: 4px; font-weight: bold; border: 1px solid #93c5fd; color: #1e40af; font-size: 15px;">${registration.password || ''}</span></p>
           <p style="margin: 8px 0 0 0; font-size: 12px; color: #475569;">Ve Školním portálu můžete sledovat docházku na všech 14 lekcích, omlouvat dítě z tréninků a stáhnout potvrzení o platbě pro pojišťovnu.</p>
         </div>
 
-        <!-- Platební údaje -->
+        <!-- Rekapitulace přihlášky -->
         <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; margin: 20px 0;">
-          <h3 style="margin: 0 0 10px 0; color: #002B49; font-size: 16px;">💳 Platební údaje (Raiffeisenbank)</h3>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Číslo účtu:</strong> ${BANK_DETAILS.account} (${BANK_DETAILS.bankName})</p>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>IBAN:</strong> ${BANK_DETAILS.ibanFormatted}</p>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Částka:</strong> <span style="color: #E30613; font-weight: bold; font-size: 15px;">${schoolPrice}</span></p>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Variabilní symbol:</strong> <span style="font-weight: bold; color: #002B49;">${vs}</span></p>
-          <p style="margin: 4px 0; font-size: 14px;"><strong>Zpráva pro příjemce:</strong> ${registration.parentName || ''} ${registration.childName || ''}</p>
+          <h3 style="margin: 0 0 12px 0; color: #002B49; font-size: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">📋 Rekapitulace přihlášky</h3>
+          <p style="margin: 5px 0; font-size: 14px;"><strong>Dítě:</strong> ${childFullName}</p>
+          <p style="margin: 5px 0; font-size: 14px;"><strong>Škola / Kroužek:</strong> ${schoolName}</p>
+          ${school?.day ? `<p style="margin: 5px 0; font-size: 14px;"><strong>Den & čas lekcí:</strong> ${school.day} ${school?.time ? `(${school.time})` : ''}</p>` : ''}
+          <p style="margin: 5px 0; font-size: 14px;"><strong>Třída:</strong> ${registration.childClass || 'Neuvedeno'}</p>
+          <p style="margin: 5px 0; font-size: 14px;"><strong>Datum narození / RČ:</strong> ${registration.childBirthDate || registration.childRodneCislo || 'Neuvedeno'}</p>
+          <p style="margin: 5px 0; font-size: 14px;"><strong>Vyzvedávání z družiny:</strong> ${registration.afterSchoolClub ? 'Ano' : 'Ne'}</p>
+          <p style="margin: 5px 0; font-size: 14px;"><strong>Zákonný zástupce:</strong> ${parentName}</p>
+          <p style="margin: 5px 0; font-size: 14px;"><strong>Telefon:</strong> ${parentPhone}</p>
         </div>
 
-        <!-- QR Platba -->
-        <div style="text-align: center; margin: 20px 0; padding: 16px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
-          <p style="font-weight: bold; margin: 0 0 10px 0; color: #002B49; font-size: 15px;">📲 Rychlá platba mobilem (QR kód):</p>
-          <img src="${qrUrl}" alt="QR platba" width="220" height="220" style="display: block; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 8px;" />
-          <p style="font-size: 12px; color: #64748b; margin: 8px 0 0 0;">Naskenujte v mobilní aplikaci své banky (Raiffeisenbank, ČSOB, KB, Spořitelna, AirBank atd.)</p>
+        <!-- Rychlá platba mobilem (QR kód) a platební údaje -->
+        <div style="background-color: #ffffff; border: 2px solid #002B49; border-radius: 12px; padding: 20px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+          <p style="font-weight: bold; margin: 0 0 12px 0; color: #002B49; font-size: 16px; text-align: center;">
+            📲 Rychlá platba mobilem (QR kód): pro dítě ${childFullName}
+          </p>
+          
+          <div style="text-align: center; margin: 14px 0;">
+            <img src="${qrUrl}" alt="QR platba - ${childFullName}" width="200" height="200" style="display: block; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff; padding: 4px;" />
+            <p style="font-size: 12px; color: #64748b; margin: 8px 0 0 0;">Naskenujte v mobilní aplikaci své banky (Raiffeisenbank, ČSOB, KB, Spořitelna, AirBank apod.)</p>
+          </div>
+
+          <!-- Pod tím platební údaje -->
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-top: 14px;">
+            <h4 style="margin: 0 0 10px 0; color: #002B49; font-size: 14px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">
+              💳 Platební údaje pro dítě ${childFullName}
+            </h4>
+            <p style="margin: 4px 0; font-size: 14px;"><strong>Banka:</strong> ${BANK_DETAILS.bankName} a.s.</p>
+            <p style="margin: 4px 0; font-size: 14px;"><strong>Číslo účtu:</strong> ${BANK_DETAILS.account}</p>
+            <p style="margin: 4px 0; font-size: 14px;"><strong>IBAN:</strong> ${BANK_DETAILS.ibanFormatted}</p>
+            <p style="margin: 4px 0; font-size: 14px;"><strong>Pololetní kurzovné:</strong> <span style="color: #E30613; font-weight: bold; font-size: 15px;">${numericPrice.toLocaleString('cs-CZ')} Kč</span></p>
+            <p style="margin: 4px 0; font-size: 14px;"><strong>Variabilní symbol:</strong> <span style="font-weight: bold; font-family: monospace; color: #002B49; font-size: 15px;">${vs}</span></p>
+            <p style="margin: 4px 0; font-size: 14px;"><strong>Zpráva pro příjemce:</strong> ${childFullName}</p>
+            <p style="margin: 8px 0 0 0; font-size: 12px; color: #64748b; line-height: 1.4;">
+              ℹ️ Po zaplacení tohoto dítěte Vám zašleme potvrzení a v portálu si budete moci stáhnout potvrzení pro pojišťovnu.
+            </p>
+          </div>
         </div>
 
         <p>Těšíme se na naše taneční lekce s vaším dítětem!</p>
+        <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
+        <p style="font-size: 13px; color: #94a3b8; text-align: center; margin: 0;">
+          Taneční klub Olymp Olomouc • info@olympdance.cz • +420 722 017 700
+        </p>
+      </div>
+    </div>
+  `;
+};
+
+// Multi-children welcome email for families registering 2+ children at once
+const generateMultiSchoolWelcomeEmailHtml = (
+  itemsWithSchools: Array<{ registration: any; school: any; vs: string; qrUrl: string }>,
+  parentEmail: string,
+  parentPassword: string,
+  parentName: string,
+  parentPhone?: string
+) => {
+  const childrenCount = itemsWithSchools.length;
+  const childrenNames = itemsWithSchools.map(i => `${i.registration.childName} ${i.registration.childSurname || ''}`.trim()).join(', ');
+
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
+      <div style="background-color: #002B49; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Olymp Dance Olomouc</h1>
+        <p style="color: #93c5fd; margin: 6px 0 0 0; font-size: 15px;">Potvrzení přihlášky do tanečních kroužků</p>
+      </div>
+      <div style="background-color: #ffffff; padding: 32px 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
+        <p style="font-size: 16px;">Vážený rodiči <strong>${parentName || ''}</strong>,</p>
+        <p>děkujeme za přihlášení Vašich dětí (<strong>${childrenNames}</strong>) do tanečních kroužků v tanečním klubu <strong>Olymp Dance</strong>.</p>
+        
+        <!-- Společné přihlašovací údaje do Školního portálu -->
+        <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 18px; margin: 20px 0;">
+          <h3 style="margin: 0 0 10px 0; color: #1e40af; font-size: 16px;">🔑 Vaše společné přihlašovací údaje do Školního portálu</h3>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Přihlašovací e-mail:</strong> ${parentEmail}</p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Heslo:</strong> <span style="font-family: monospace; background: #ffffff; padding: 3px 8px; border-radius: 4px; font-weight: bold; border: 1px solid #93c5fd; color: #1e40af; font-size: 15px;">${parentPassword}</span></p>
+          <p style="margin: 8px 0 0 0; font-size: 12px; color: #475569;">
+            Ve Školním portálu uvidíte všechny své děti na jednom místě, můžete sledovat jejich docházku, omlouvat je z tréninků a po zaplacení stahovat potvrzení pro pojišťovnu.
+          </p>
+        </div>
+
+        <p style="margin: 16px 0 10px 0; font-size: 14px; color: #334155; line-height: 1.5;">
+          V přihlášce máte <strong>${childrenCount} děti</strong>. Níže naleznete rekapitulaci a platební údaje s QR kódem pro každé dítě zvlášť:
+        </p>
+
+        <!-- Blok pro každé dítě: Rekapitulace přihlášky -> QR kód -> Platební údaje -->
+        ${itemsWithSchools.map((item, idx) => {
+          const reg = item.registration;
+          const school = item.school;
+          const schoolName = school?.name ? `${school.name} (${school.city})` : 'Taneční kroužek';
+          const schoolPrice = school?.price || 'Dle ceníku školy';
+          const numericPrice = parseInt((schoolPrice || '').replace(/\D/g, ''), 10) || 1600;
+          const childFullName = `${reg.childName} ${reg.childSurname || ''}`.trim();
+          const phone = parentPhone || reg.parentPhone || 'Neuvedeno';
+
+          return `
+            <div style="margin: 24px 0; border: 2px solid #002B49; border-radius: 12px; overflow: hidden; background-color: #ffffff; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+              <!-- Rekapitulace přihlášky dítěte -->
+              <div style="background-color: #f8fafc; padding: 18px; border-bottom: 1px solid #e2e8f0;">
+                <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px;">
+                  <h3 style="margin: 0; color: #002B49; font-size: 16px;">
+                    📋 Rekapitulace přihlášky (${idx + 1}. dítě)
+                  </h3>
+                  <span style="color: #b91c1c; font-weight: bold; font-size: 13px; background: #fee2e2; padding: 2px 8px; border-radius: 6px;">
+                    ${schoolPrice}
+                  </span>
+                </div>
+                
+                <p style="margin: 4px 0; font-size: 14px;"><strong>Dítě:</strong> ${childFullName}</p>
+                <p style="margin: 4px 0; font-size: 14px;"><strong>Škola / Kroužek:</strong> ${schoolName}</p>
+                ${school?.day ? `<p style="margin: 4px 0; font-size: 14px;"><strong>Den & čas lekcí:</strong> ${school.day} ${school?.time ? `(${school.time})` : ''}</p>` : ''}
+                <p style="margin: 4px 0; font-size: 14px;"><strong>Třída:</strong> ${reg.childClass || 'Neuvedeno'}</p>
+                <p style="margin: 4px 0; font-size: 14px;"><strong>Datum narození / RČ:</strong> ${reg.childBirthDate || reg.childRodneCislo || 'Neuvedeno'}</p>
+                <p style="margin: 4px 0; font-size: 14px;"><strong>Vyzvedávání z družiny:</strong> ${reg.afterSchoolClub ? 'Ano' : 'Ne'}</p>
+                <p style="margin: 4px 0; font-size: 14px;"><strong>Zákonný zástupce:</strong> ${parentName || reg.parentName || ''}</p>
+                <p style="margin: 4px 0; font-size: 14px;"><strong>Telefon:</strong> ${phone}</p>
+              </div>
+
+              <!-- Pod tím Rychlá platba mobilem (QR kód) -->
+              <div style="padding: 18px; text-align: center; background-color: #ffffff;">
+                <p style="font-weight: bold; margin: 0 0 12px 0; color: #002B49; font-size: 15px;">
+                  📲 Rychlá platba mobilem (QR kód): pro dítě ${childFullName}
+                </p>
+                
+                <div style="margin: 12px 0;">
+                  <img src="${item.qrUrl}" alt="QR platba - ${childFullName}" width="190" height="190" style="display: block; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff; padding: 4px;" />
+                  <p style="font-size: 12px; color: #64748b; margin: 6px 0 0 0;">Naskenujte v mobilní aplikaci své banky</p>
+                </div>
+
+                <!-- Pod tím platební údaje -->
+                <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-top: 14px; text-align: left;">
+                  <h4 style="margin: 0 0 8px 0; color: #002B49; font-size: 14px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
+                    💳 Platební údaje pro dítě ${childFullName}
+                  </h4>
+                  <p style="margin: 3px 0; font-size: 13px;"><strong>Banka:</strong> ${BANK_DETAILS.bankName} a.s.</p>
+                  <p style="margin: 3px 0; font-size: 13px;"><strong>Číslo účtu:</strong> ${BANK_DETAILS.account}</p>
+                  <p style="margin: 3px 0; font-size: 13px;"><strong>IBAN:</strong> ${BANK_DETAILS.ibanFormatted}</p>
+                  <p style="margin: 3px 0; font-size: 13px;"><strong>Pololetní kurzovné:</strong> <span style="color: #E30613; font-weight: bold; font-size: 14px;">${numericPrice.toLocaleString('cs-CZ')} Kč</span></p>
+                  <p style="margin: 3px 0; font-size: 13px;"><strong>Variabilní symbol:</strong> <span style="font-weight: bold; font-family: monospace; color: #002B49; font-size: 15px;">${item.vs}</span></p>
+                  <p style="margin: 3px 0; font-size: 13px;"><strong>Zpráva pro příjemce:</strong> ${childFullName}</p>
+                  <p style="margin: 6px 0 0 0; font-size: 11px; color: #64748b; line-height: 1.4;">
+                    ℹ️ Po zaplacení tohoto dítěte Vám zašleme potvrzení a v portálu si budete moci stáhnout potvrzení pro pojišťovnu.
+                  </p>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+
+        <p>Těšíme se na naše taneční lekce s Vašimi dětmi!</p>
         <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
         <p style="font-size: 13px; color: #94a3b8; text-align: center; margin: 0;">
           Taneční klub Olymp Olomouc • info@olympdance.cz • +420 722 017 700
@@ -2426,68 +2544,129 @@ app.get('/api/registrations/:id/confirmation-pdf', async (req, res) => {
 
 app.post('/api/school-registrations', async (req, res) => {
   try {
-    const registration = req.body;
-    
-    // Determine unique specific variable symbol (RC if available or 261 + 6 digits)
-    const cleanRc = (registration.childRodneCislo || '').replace(/\D/g, '').slice(0, 10);
-    const vs = (registration.variableSymbol || (cleanRc && cleanRc.length >= 6 ? cleanRc : '') || `261${Date.now().toString().slice(-6)}`).replace(/\D/g, '').slice(0, 10);
-    registration.variableSymbol = vs;
+    const payload = req.body;
+    const rawItems: any[] = Array.isArray(payload) 
+      ? payload 
+      : (Array.isArray(payload?.registrations) ? payload.registrations : [payload]);
 
-    const sqlRegistration = {
-      ...registration,
-      variableSymbol: vs,
-      createdAt: toSqlDateTime(registration.createdAt),
-      paidUntil: registration.paidUntil ? toSqlDateTime(registration.paidUntil) : null,
-      history: typeof registration.history === 'string' ? registration.history : JSON.stringify(registration.history || [])
-    };
-    await pool.query('INSERT INTO school_registrations SET ?', sqlRegistration);
+    if (rawItems.length === 0) {
+      return res.status(400).json({ error: 'Žádná data registrace' });
+    }
 
-    // Look up school details
-    const [schoolRows] = await pool.query('SELECT * FROM schools WHERE id = ?', [registration.schoolId]);
-    const school = (schoolRows as any[])[0] || {};
-    const schoolName = school.name ? `${school.name} (${school.city})` : 'Taneční kroužek';
-    const schoolPrice = school.price || 'Dle ceníku školy';
-    const numericPrice = parseInt((schoolPrice || '').replace(/\D/g, ''), 10) || 1600;
-    const qrUrl = generateQrPaymentUrl(numericPrice, vs, `${registration.childName} ${school.name || ''}`);
+    const savedItems: any[] = [];
+    const itemsWithSchools: Array<{ registration: any; school: any; vs: string; qrUrl: string }> = [];
 
-    // Send confirmation email to parent WITH LOGIN CREDENTIALS, SCHOOL SCHEDULE, RECAP & QR CODE
-    const emailHtml = generateSchoolWelcomeEmailHtml(registration, school, vs, qrUrl);
+    // Cache schools
+    const [allSchoolRows] = await pool.query('SELECT * FROM schools');
+    const schoolCache = new Map<string, any>();
+    (allSchoolRows as any[]).forEach(s => schoolCache.set(String(s.id), s));
+
+    let vsOffset = 0;
+    for (const raw of rawItems) {
+      // Determine unique variable symbol per child
+      const cleanRc = (raw.childRodneCislo || '').replace(/\D/g, '').slice(0, 10);
+      let vs = raw.variableSymbol;
+      if (!vs) {
+        if (cleanRc && cleanRc.length >= 6) {
+          vs = cleanRc;
+        } else {
+          vs = `261${(Date.now() + vsOffset).toString().slice(-6)}`;
+          vsOffset++;
+        }
+      }
+      vs = String(vs).replace(/\D/g, '').slice(0, 10);
+      raw.variableSymbol = vs;
+
+      const sqlRegistration = {
+        ...raw,
+        variableSymbol: vs,
+        createdAt: toSqlDateTime(raw.createdAt || new Date()),
+        paidUntil: raw.paidUntil ? toSqlDateTime(raw.paidUntil) : null,
+        history: typeof raw.history === 'string' ? raw.history : JSON.stringify(raw.history || [{ date: new Date().toISOString(), message: 'Přihláška vytvořena' }])
+      };
+      
+      const [insertResult] = await pool.query('INSERT INTO school_registrations SET ?', sqlRegistration);
+      const insertedId = (insertResult as any)?.insertId ? String((insertResult as any).insertId) : raw.id;
+      const finalReg = { ...raw, id: insertedId, variableSymbol: vs };
+      savedItems.push(finalReg);
+
+      const school = schoolCache.get(String(raw.schoolId)) || {};
+      const schoolName = school.name ? `${school.name} (${school.city})` : 'Taneční kroužek';
+      const schoolPrice = school.price || 'Dle ceníku školy';
+      const numericPrice = parseInt((schoolPrice || '').replace(/\D/g, ''), 10) || 1600;
+      const qrUrl = generateQrPaymentUrl(numericPrice, vs, `${raw.childName} ${school.name || ''}`);
+
+      itemsWithSchools.push({
+        registration: finalReg,
+        school,
+        vs,
+        qrUrl
+      });
+    }
+
+    const firstItem = savedItems[0];
+    const parentEmail = (firstItem.parentEmail || '').trim();
+    const parentName = firstItem.parentName || 'Zákonný zástupce';
+    const parentPassword = firstItem.password || '';
 
     // Send emails in background
     (async () => {
       try {
-        const customerEmail = (registration.parentEmail || '').trim();
-        if (customerEmail && customerEmail.includes('@')) {
-          console.log(`[School Registration] Sending confirmation email to customer/parent: ${customerEmail}`);
-          await sendEmail(customerEmail, `Potvrzení přihlášky do tanečního kroužku (${registration.childName}) - Olymp Dance`, emailHtml);
+        if (parentEmail && parentEmail.includes('@')) {
+          if (itemsWithSchools.length === 1) {
+            // Single child registration
+            const single = itemsWithSchools[0];
+            const emailHtml = generateSchoolWelcomeEmailHtml(single.registration, single.school, single.vs, single.qrUrl);
+            console.log(`[School Registration] Sending single confirmation email to parent: ${parentEmail}`);
+            await sendEmail(parentEmail, `Potvrzení přihlášky do tanečního kroužku (${single.registration.childName}) - Olymp Dance`, emailHtml);
+          } else {
+            // Multiple children registration: 1 email with individual QR codes for each child!
+            const multiEmailHtml = generateMultiSchoolWelcomeEmailHtml(
+              itemsWithSchools,
+              parentEmail,
+              parentPassword,
+              parentName,
+              firstItem.parentPhone
+            );
+            const childrenNames = itemsWithSchools.map(i => i.registration.childName).join(', ');
+            console.log(`[School Registration] Sending multi-child confirmation email to parent (${itemsWithSchools.length} dětí): ${parentEmail}`);
+            await sendEmail(parentEmail, `Potvrzení přihlášky do tanečních kroužků (${childrenNames}) - Olymp Dance`, multiEmailHtml);
+          }
         } else {
-          console.warn('[School Registration] Invalid parent email address:', registration.parentEmail);
+          console.warn('[School Registration] Invalid parent email address:', parentEmail);
         }
-        
-        // Also notify all admin recipients (info@olympdance.cz)
+
+        // Notify admins
         const adminRecipients = await getAdminEmails();
         const adminHtml = `
-          <h2>Nová přihláška do tanečního kroužku</h2>
-          <p><strong>Dítě:</strong> ${registration.childName} ${registration.childSurname || ''} (${registration.childClass || 'Třída neuvedena'})</p>
-          <p><strong>Škola:</strong> ${schoolName}</p>
-          <p><strong>Den a čas:</strong> ${school.day || ''} ${school.time || ''}</p>
-          <p><strong>Vyzvedávání z družiny:</strong> ${registration.afterSchoolClub ? 'Ano' : 'Ne'}</p>
-          <p><strong>Rodič:</strong> ${registration.parentName}</p>
-          <p><strong>Email zákazníka:</strong> ${registration.parentEmail}</p>
-          <p><strong>Telefon:</strong> ${registration.parentPhone}</p>
-          <p><strong>Vygenerované heslo do portálu:</strong> ${registration.password}</p>
-          <p><strong>Variabilní symbol:</strong> ${vs}</p>
+          <h2>Nová přihláška do tanečního kroužku (${itemsWithSchools.length} ${itemsWithSchools.length > 1 ? 'dětí' : 'dítě'})</h2>
+          <p><strong>Rodič:</strong> ${parentName} (${parentEmail}, ${firstItem.parentPhone || 'bez telefonu'})</p>
+          <p><strong>Vygenerované heslo do portálu:</strong> ${parentPassword}</p>
+          <hr />
+          ${itemsWithSchools.map((item, idx) => `
+            <div style="margin-bottom: 12px; padding: 10px; background: #f8fafc; border-left: 4px solid #002B49;">
+              <p style="margin: 2px 0;"><strong>${idx + 1}. Dítě:</strong> ${item.registration.childName} ${item.registration.childSurname || ''} (${item.registration.childClass || 'Třída neuvedena'})</p>
+              <p style="margin: 2px 0;"><strong>Škola:</strong> ${item.school?.name || 'Kroužek'} (${item.school?.city || ''})</p>
+              <p style="margin: 2px 0;"><strong>Den & čas:</strong> ${item.school?.day || ''} ${item.school?.time || ''}</p>
+              <p style="margin: 2px 0;"><strong>Vyzvedávání z družiny:</strong> ${item.registration.afterSchoolClub ? 'Ano' : 'Ne'}</p>
+              <p style="margin: 2px 0;"><strong>Variabilní symbol dítěte:</strong> ${item.vs}</p>
+            </div>
+          `).join('')}
         `;
         for (const adm of adminRecipients) {
-          console.log(`[School Registration] Sending notification email to club admin: ${adm}`);
-          await sendEmail(adm, `[Nová registrace Kroužek] ${registration.childName} - ${schoolName}`, adminHtml);
+          await sendEmail(adm, `[Nová registrace Kroužky] ${parentName} (${itemsWithSchools.length} dětí)`, adminHtml);
         }
       } catch (err) {
-        console.error('Failed to send school registration email:', err);
+        console.error('Failed to send school registration emails:', err);
       }
     })();
 
-    res.json(registration);
+    // Respond back
+    if (!Array.isArray(payload) && !payload?.registrations) {
+      res.json(savedItems[0]);
+    } else {
+      res.json({ success: true, count: savedItems.length, registrations: savedItems });
+    }
   } catch (error) {
     console.error('School registration error:', error);
     res.status(500).json({ error: 'Database error' });
@@ -3013,7 +3192,7 @@ app.delete('/api/school-registrations/:id', requireAdmin, async (req, res) => {
 // CUSTOMER BULK IMPORT & CONTROLLED BATCH EMAIL SENDER
 // =========================================================================
 
-// Get import queue with stats, filter by batch/status/search/school
+// Get import queue with stats, filter by batch/status/search/school (grouped by parent family)
 app.get('/api/admin/import-queue', requireAdmin, async (req, res) => {
   try {
     const batch = req.query.batch ? parseInt(req.query.batch as string, 10) : undefined;
@@ -3024,52 +3203,64 @@ app.get('/api/admin/import-queue', requireAdmin, async (req, res) => {
     const limit = parseInt((req.query.limit as string) || '50', 10);
     const offset = (page - 1) * limit;
 
-    let whereClauses: string[] = ['1=1'];
-    const params: any[] = [];
+    // Cache all schools
+    const [schoolRows] = await pool.query('SELECT * FROM schools');
+    const schoolMap = new Map<string, any>();
+    (schoolRows as any[]).forEach(s => schoolMap.set(String(s.id), s));
 
-    if (batch && !isNaN(batch)) {
-      whereClauses.push('batchNumber = ?');
-      params.push(batch);
-    }
-    if (status && status !== 'all') {
-      whereClauses.push('emailStatus = ?');
-      params.push(status);
-    }
-    if (schoolId && schoolId !== 'all') {
-      whereClauses.push('schoolId = ?');
-      params.push(schoolId);
-    }
-    if (search) {
-      whereClauses.push('(LOWER(childName) LIKE ? OR LOWER(childSurname) LIKE ? OR LOWER(email) LIKE ? OR LOWER(phone) LIKE ? OR LOWER(variableSymbol) LIKE ?)');
-      const s = `%${search}%`;
-      params.push(s, s, s, s, s);
-    }
+    // Preload registration statuses
+    const [regRows] = await pool.query('SELECT id, status FROM school_registrations');
+    const regStatusMap = new Map<string, string>();
+    (regRows as any[]).forEach(r => regStatusMap.set(String(r.id), r.status));
 
-    const whereSql = whereClauses.join(' AND ');
+    // Fetch all raw queue items to group cleanly by parent
+    const [rawRows] = await pool.query('SELECT * FROM customer_import_queue ORDER BY batchNumber ASC, id ASC');
+    const groupedParents = groupQueueItemsByParent(rawRows as any[], schoolMap, regStatusMap);
 
-    // Total count for current filter
-    const [countRows] = await pool.query(`SELECT COUNT(*) as totalFiltered FROM customer_import_queue WHERE ${whereSql}`, params);
-    const totalFiltered = (countRows as any[])[0]?.totalFiltered || 0;
+    // Filter grouped parent items
+    const filtered = groupedParents.filter(item => {
+      if (batch !== undefined && !isNaN(batch) && item.batchNumber !== batch) {
+        return false;
+      }
+      if (status && status !== 'all' && item.emailStatus !== status) {
+        return false;
+      }
+      if (schoolId && schoolId !== 'all') {
+        const hasSchool = item.children.some(c => String(c.schoolId) === String(schoolId));
+        if (!hasSchool) return false;
+      }
+      if (search) {
+        const matchesEmail = (item.email || '').toLowerCase().includes(search);
+        const matchesPhone = (item.phone || '').toLowerCase().includes(search);
+        const matchesVs = (item.variableSymbol || '').toLowerCase().includes(search);
+        const matchesChildren = item.children.some(c => 
+          `${c.childName} ${c.childSurname}`.toLowerCase().includes(search) ||
+          (c.childRodneCislo && c.childRodneCislo.toLowerCase().includes(search)) ||
+          (c.schoolName && c.schoolName.toLowerCase().includes(search))
+        );
+        if (!matchesEmail && !matchesPhone && !matchesVs && !matchesChildren) {
+          return false;
+        }
+      }
+      return true;
+    });
 
-    // Fetch page of items
-    const [items] = await pool.query(
-      `SELECT * FROM customer_import_queue WHERE ${whereSql} ORDER BY batchNumber ASC, id ASC LIMIT ? OFFSET ?`,
-      [...params, limit, offset]
-    );
+    const totalFiltered = filtered.length;
+    const pagedItems = filtered.slice(offset, offset + limit);
 
     // Fetch overall queue statistics
     const stats = await getImportQueueStats(pool);
     const smtpConfig = await getSmtpConfig();
 
     res.json({
-      items,
+      items: pagedItems,
       stats,
       smtpConfigured: smtpConfig.isConfigured,
       pagination: {
         page,
         limit,
         totalFiltered,
-        totalPages: Math.ceil(totalFiltered / limit)
+        totalPages: Math.ceil(totalFiltered / limit) || 1
       }
     });
   } catch (error: any) {
@@ -3097,28 +3288,64 @@ app.post('/api/admin/import-queue/sync', requireAdmin, async (req, res) => {
   }
 });
 
-// Preview email template for a single queue item
+// Preview email template for a single parent queue item (consolidated for all children)
 app.get('/api/admin/import-queue/preview/:id', requireAdmin, async (req, res) => {
   try {
-    const { id } = req.params;
+    const rawId = req.params.id;
+    const id = Array.isArray(rawId) ? rawId[0] : (rawId || '');
+    let targetEmail = '';
+
     const [rows] = await pool.query('SELECT * FROM customer_import_queue WHERE id = ?', [id]);
     const item = (rows as any[])[0];
-    if (!item) {
+    if (item) {
+      targetEmail = item.email;
+    } else {
+      // maybe id is an email
+      targetEmail = decodeURIComponent(id);
+    }
+
+    if (!targetEmail) {
       return res.status(404).json({ error: 'Záznam nenalezen v databázi.' });
     }
 
-    const [schoolRows] = await pool.query('SELECT * FROM schools WHERE id = ?', [item.schoolId]);
-    const school = (schoolRows as any[])[0] || { name: item.schoolName, city: 'Olomouc', price: '1700 Kč / pololetí' };
+    const [allRows] = await pool.query('SELECT * FROM customer_import_queue WHERE LOWER(TRIM(email)) = LOWER(TRIM(?))', [targetEmail]);
+    const groupRows = allRows as any[];
+    if (groupRows.length === 0) {
+      return res.status(404).json({ error: 'Záznam nenalezen v databázi.' });
+    }
+
+    const [allSchools] = await pool.query('SELECT * FROM schools');
+    const schoolMap = new Map<string, any>();
+    (allSchools as any[]).forEach(s => schoolMap.set(String(s.id), s));
+
+    const grouped = groupQueueItemsByParent(groupRows, schoolMap);
+    const parentItem = grouped[0] || {
+      ...groupRows[0],
+      children: [],
+      childrenCount: 1,
+      totalPrice: 1700
+    };
 
     const host = `${req.protocol}://${req.get('host')}`;
-    const preview = generateCustomerEmailHtml(item, school, host);
+    const preview = generateCustomerEmailHtml(parentItem, null, host);
+
+    const childNamesStr = parentItem.children && parentItem.children.length > 0
+      ? parentItem.children.map(c => `${c.childName} ${c.childSurname}`).join(', ')
+      : `${groupRows[0].childName} ${groupRows[0].childSurname}`;
+
+    const schoolNamesStr = parentItem.children && parentItem.children.length > 0
+      ? Array.from(new Set(parentItem.children.map(c => c.schoolName))).join(', ')
+      : groupRows[0].schoolName;
 
     res.json({
-      recipient: item.email,
-      childName: `${item.childName} ${item.childSurname}`,
-      schoolName: school.name,
-      variableSymbol: item.variableSymbol,
-      password: item.password,
+      recipient: parentItem.email,
+      childName: childNamesStr,
+      children: parentItem.children,
+      childrenCount: parentItem.childrenCount,
+      totalPrice: preview.totalPrice,
+      schoolName: schoolNamesStr,
+      variableSymbol: parentItem.variableSymbol,
+      password: parentItem.password,
       subject: preview.subject,
       html: preview.html
     });
@@ -3184,48 +3411,64 @@ app.get(['/api/admin/import-queue/:id/pdf', '/api/import-queue/:id/pdf'], requir
   }
 });
 
-// Send email to a single queue item
+// Send email to a single parent family (consolidated for all children)
 app.post('/api/admin/import-queue/send-single', requireAdmin, async (req, res) => {
   try {
-    const { id } = req.body;
-    if (!id) return res.status(400).json({ error: 'Chybí ID záznamu.' });
+    const { id, email } = req.body;
+    if (!id && !email) return res.status(400).json({ error: 'Chybí ID záznamu nebo e-mail.' });
 
-    const [rows] = await pool.query('SELECT * FROM customer_import_queue WHERE id = ?', [id]);
-    const item = (rows as any[])[0];
-    if (!item) return res.status(404).json({ error: 'Záznam nenalezen.' });
+    let targetEmail = (email || '').trim();
+    if (!targetEmail) {
+      const [rows] = await pool.query('SELECT email FROM customer_import_queue WHERE id = ?', [id]);
+      targetEmail = (rows as any[])[0]?.email;
+    }
+    if (!targetEmail) return res.status(404).json({ error: 'Záznam nenalezen.' });
 
-    const [schoolRows] = await pool.query('SELECT * FROM schools WHERE id = ?', [item.schoolId]);
-    const school = (schoolRows as any[])[0] || { name: item.schoolName, city: 'Olomouc', price: '1700 Kč / pololetí' };
+    // Fetch all records for this parent email
+    const [allRows] = await pool.query('SELECT * FROM customer_import_queue WHERE LOWER(TRIM(email)) = LOWER(TRIM(?))', [targetEmail]);
+    const items = allRows as any[];
+    if (items.length === 0) return res.status(404).json({ error: 'Záznam nenalezen.' });
 
+    const [allSchools] = await pool.query('SELECT * FROM schools');
+    const schoolMap = new Map<string, any>();
+    (allSchools as any[]).forEach(s => schoolMap.set(String(s.id), s));
+
+    const grouped = groupQueueItemsByParent(items, schoolMap);
+    const parent = grouped[0];
     const host = `${req.protocol}://${req.get('host')}`;
-    const { subject, html } = generateCustomerEmailHtml(item, school, host);
+    const { subject, html, totalPrice, childrenCount } = generateCustomerEmailHtml(parent, null, host);
 
-    // Update status to sending
-    await pool.query('UPDATE customer_import_queue SET emailStatus = "sending" WHERE id = ?', [id]);
+    // Update status to sending for all items of this parent
+    await pool.query('UPDATE customer_import_queue SET emailStatus = "sending" WHERE LOWER(TRIM(email)) = LOWER(TRIM(?))', [targetEmail]);
 
-    const result = await sendEmail(item.email, subject, html);
+    const result = await sendEmail(targetEmail, subject, html);
     if (result) {
       await pool.query(`
         UPDATE customer_import_queue 
         SET emailStatus = "sent", emailSentAt = NOW(), emailError = NULL 
-        WHERE id = ?
-      `, [id]);
+        WHERE LOWER(TRIM(email)) = LOWER(TRIM(?))
+      `, [targetEmail]);
 
-      // Add to registration history
-      if (item.registrationId) {
-        try {
-          const [regRows] = await pool.query('SELECT history FROM school_registrations WHERE id = ?', [item.registrationId]);
-          const currentHist = (regRows as any[])[0]?.history || [];
-          const histArr = Array.isArray(currentHist) ? currentHist : (typeof currentHist === 'string' ? JSON.parse(currentHist) : []);
-          histArr.push({ date: new Date().toISOString(), message: `Odeslán e-mail s přihlášením (${item.email})` });
-          await pool.query('UPDATE school_registrations SET history = ? WHERE id = ?', [JSON.stringify(histArr), item.registrationId]);
-        } catch (e) {}
+      // Add to registration history for each child
+      for (const item of items) {
+        if (item.registrationId) {
+          try {
+            const [regRows] = await pool.query('SELECT history FROM school_registrations WHERE id = ?', [item.registrationId]);
+            const currentHist = (regRows as any[])[0]?.history || [];
+            const histArr = Array.isArray(currentHist) ? currentHist : (typeof currentHist === 'string' ? JSON.parse(currentHist) : []);
+            histArr.push({ date: new Date().toISOString(), message: `Odeslán e-mail s přihlášením a platbou (${targetEmail})` });
+            await pool.query('UPDATE school_registrations SET history = ? WHERE id = ?', [JSON.stringify(histArr), item.registrationId]);
+          } catch (e) {}
+        }
       }
 
-      res.json({ success: true, message: `E-mail úspěšně odeslán na ${item.email}.` });
+      res.json({ 
+        success: true, 
+        message: `E-mail úspěšně odeslán na ${targetEmail} (${childrenCount} ${childrenCount > 1 ? 'děti' : 'dítě'}, kurzovné: ${totalPrice.toLocaleString('cs-CZ')} Kč).` 
+      });
     } else {
       const errorMsg = 'Odeslání selhalo - ověřte konfiguraci SMTP v sekci Nastavení.';
-      await pool.query('UPDATE customer_import_queue SET emailStatus = "failed", emailError = ? WHERE id = ?', [errorMsg, id]);
+      await pool.query('UPDATE customer_import_queue SET emailStatus = "failed", emailError = ? WHERE LOWER(TRIM(email)) = LOWER(TRIM(?))', [errorMsg, targetEmail]);
       res.status(500).json({ success: false, error: errorMsg });
     }
   } catch (error: any) {
@@ -3234,96 +3477,132 @@ app.post('/api/admin/import-queue/send-single', requireAdmin, async (req, res) =
   }
 });
 
-// Send batch of emails with strict 1.8s delay between messages to protect Gmail SMTP
+// Send batch of emails to parents with strict 1.8s delay between messages to protect Gmail SMTP
 app.post('/api/admin/import-queue/send-batch', requireAdmin, async (req, res) => {
   try {
     const { batchNumber, count = 10, specificIds } = req.body;
 
-    let items: any[] = [];
+    // Cache schools
+    const [allSchools] = await pool.query('SELECT * FROM schools');
+    const schoolMap = new Map<string, any>();
+    (allSchools as any[]).forEach(s => schoolMap.set(String(s.id), s));
+
+    let queueRows: any[] = [];
     if (Array.isArray(specificIds) && specificIds.length > 0) {
-      const [rows] = await pool.query('SELECT * FROM customer_import_queue WHERE id IN (?)', [specificIds]);
-      items = rows as any[];
+      // Find emails of specificIds, then include all items of those emails!
+      const [emailRows] = await pool.query('SELECT DISTINCT email FROM customer_import_queue WHERE id IN (?)', [specificIds]);
+      const emails = (emailRows as any[]).map(r => r.email);
+      if (emails.length > 0) {
+        const [rows] = await pool.query('SELECT * FROM customer_import_queue WHERE email IN (?)', [emails]);
+        queueRows = rows as any[];
+      }
     } else if (batchNumber) {
       const [rows] = await pool.query(
-        'SELECT * FROM customer_import_queue WHERE batchNumber = ? AND emailStatus != "sent" ORDER BY id ASC LIMIT ?',
-        [batchNumber, count]
+        'SELECT * FROM customer_import_queue WHERE batchNumber = ? AND emailStatus != "sent" ORDER BY id ASC',
+        [batchNumber]
       );
-      items = rows as any[];
+      queueRows = rows as any[];
     } else {
       // Send next pending items across the queue
       const [rows] = await pool.query(
-        'SELECT * FROM customer_import_queue WHERE emailStatus = "pending" ORDER BY batchNumber ASC, id ASC LIMIT ?',
-        [count]
+        'SELECT * FROM customer_import_queue WHERE emailStatus = "pending" ORDER BY batchNumber ASC, id ASC'
       );
-      items = rows as any[];
+      queueRows = rows as any[];
     }
 
-    if (items.length === 0) {
+    // Group queue items by parent!
+    const groupedParents = groupQueueItemsByParent(queueRows, schoolMap);
+    // Filter to parents whose status is not yet sent
+    const pendingParents = groupedParents.filter(p => p.emailStatus !== 'sent');
+    // Take at most `count` distinct parents (e.g. 10 families)
+    const parentsToSend = pendingParents.slice(0, count);
+
+    if (parentsToSend.length === 0) {
       return res.json({
         success: true,
         processed: 0,
         succeeded: 0,
         failed: 0,
-        message: 'Žádné čekající e-maily k odeslání pro vybranou dávku.'
+        message: 'Žádné čekající rodiny k odeslání pro vybranou dávku.'
       });
     }
 
-    console.log(`[Batch Email Dispatch] Starting batch sending of ${items.length} emails with 1.8s delay...`);
+    console.log(`[Batch Email Dispatch] Starting batch sending to ${parentsToSend.length} families with 1.8s delay...`);
 
     const host = `${req.protocol}://${req.get('host')}`;
-    const results: Array<{ id: string; email: string; childName: string; success: boolean; error?: string }> = [];
+    const results: Array<{ id: string; email: string; childName: string; childrenCount: number; totalPrice: number; success: boolean; error?: string }> = [];
     let succeeded = 0;
     let failed = 0;
 
-    // Cache schools
-    const [allSchools] = await pool.query('SELECT * FROM schools');
-    const schoolMap = new Map<string, any>();
-    (allSchools as any[]).forEach(s => schoolMap.set(s.id, s));
-
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      const school = schoolMap.get(item.schoolId) || { name: item.schoolName, city: 'Olomouc', price: '1700 Kč / pololetí' };
-      const { subject, html } = generateCustomerEmailHtml(item, school, host);
+    for (let i = 0; i < parentsToSend.length; i++) {
+      const parent = parentsToSend[i];
+      const { subject, html, totalPrice, childrenCount } = generateCustomerEmailHtml(parent, null, host);
+      const childNames = parent.children.map(c => `${c.childName} ${c.childSurname}`).join(', ');
 
       try {
-        console.log(`[Batch Progress ${i + 1}/${items.length}] Sending to: ${item.email} (${item.childName} ${item.childSurname})...`);
-        const sendRes = await sendEmail(item.email, subject, html);
+        console.log(`[Batch Progress ${i + 1}/${parentsToSend.length}] Sending to: ${parent.email} (${childNames} - ${childrenCount} dětí, ${totalPrice} Kč)...`);
+        const sendRes = await sendEmail(parent.email, subject, html);
 
         if (sendRes) {
           await pool.query(`
             UPDATE customer_import_queue 
             SET emailStatus = "sent", emailSentAt = NOW(), emailError = NULL 
-            WHERE id = ?
-          `, [item.id]);
+            WHERE LOWER(TRIM(email)) = LOWER(TRIM(?))
+          `, [parent.email]);
 
-          // Update registration history
-          if (item.registrationId) {
-            try {
-              const [regRows] = await pool.query('SELECT history FROM school_registrations WHERE id = ?', [item.registrationId]);
-              const currentHist = (regRows as any[])[0]?.history || [];
-              const histArr = Array.isArray(currentHist) ? currentHist : (typeof currentHist === 'string' ? JSON.parse(currentHist) : []);
-              histArr.push({ date: new Date().toISOString(), message: `Odeslán e-mail s přihlášením (${item.email})` });
-              await pool.query('UPDATE school_registrations SET history = ? WHERE id = ?', [JSON.stringify(histArr), item.registrationId]);
-            } catch (e) {}
+          // Update registration history for each child
+          for (const ch of parent.children) {
+            if (ch.registrationId) {
+              try {
+                const [regRows] = await pool.query('SELECT history FROM school_registrations WHERE id = ?', [ch.registrationId]);
+                const currentHist = (regRows as any[])[0]?.history || [];
+                const histArr = Array.isArray(currentHist) ? currentHist : (typeof currentHist === 'string' ? JSON.parse(currentHist) : []);
+                histArr.push({ date: new Date().toISOString(), message: `Odeslán e-mail s přihlášením (${parent.email})` });
+                await pool.query('UPDATE school_registrations SET history = ? WHERE id = ?', [JSON.stringify(histArr), ch.registrationId]);
+              } catch (e) {}
+            }
           }
 
           succeeded++;
-          results.push({ id: item.id, email: item.email, childName: `${item.childName} ${item.childSurname}`, success: true });
+          results.push({ 
+            id: parent.id, 
+            email: parent.email, 
+            childName: childNames, 
+            childrenCount, 
+            totalPrice, 
+            success: true 
+          });
         } else {
           const err = 'SMTP odeslání vrátilo prázdnou odpověď nebo není nakonfigurováno';
-          await pool.query('UPDATE customer_import_queue SET emailStatus = "failed", emailError = ? WHERE id = ?', [err, item.id]);
+          await pool.query('UPDATE customer_import_queue SET emailStatus = "failed", emailError = ? WHERE LOWER(TRIM(email)) = LOWER(TRIM(?))', [err, parent.email]);
           failed++;
-          results.push({ id: item.id, email: item.email, childName: `${item.childName} ${item.childSurname}`, success: false, error: err });
+          results.push({ 
+            id: parent.id, 
+            email: parent.email, 
+            childName: childNames, 
+            childrenCount, 
+            totalPrice, 
+            success: false, 
+            error: err 
+          });
         }
       } catch (err: any) {
-        console.error(`[Batch Error] Failed sending to ${item.email}:`, err.message);
-        await pool.query('UPDATE customer_import_queue SET emailStatus = "failed", emailError = ? WHERE id = ?', [err.message, item.id]);
+        console.error(`[Batch Error] Failed sending to ${parent.email}:`, err.message);
+        await pool.query('UPDATE customer_import_queue SET emailStatus = "failed", emailError = ? WHERE LOWER(TRIM(email)) = LOWER(TRIM(?))', [err.message, parent.email]);
         failed++;
-        results.push({ id: item.id, email: item.email, childName: `${item.childName} ${item.childSurname}`, success: false, error: err.message });
+        results.push({ 
+          id: parent.id, 
+          email: parent.email, 
+          childName: childNames, 
+          childrenCount, 
+          totalPrice, 
+          success: false, 
+          error: err.message 
+        });
       }
 
       // Respect Gmail SMTP rate-limit: 1.8 seconds delay between emails
-      if (i < items.length - 1) {
+      if (i < parentsToSend.length - 1) {
         await new Promise(resolve => setTimeout(resolve, 1800));
       }
     }
@@ -3332,12 +3611,12 @@ app.post('/api/admin/import-queue/send-batch', requireAdmin, async (req, res) =>
 
     res.json({
       success: true,
-      processed: items.length,
+      processed: parentsToSend.length,
       succeeded,
       failed,
       results,
       stats: updatedStats,
-      message: `Dávka dokončena: ${succeeded} odesláno úspěšně, ${failed} chyb.`
+      message: `Dávka dokončena: ${succeeded} rodinám odesláno úspěšně, ${failed} chyb.`
     });
   } catch (error: any) {
     console.error('Error in send-batch:', error);
@@ -3354,7 +3633,12 @@ app.post('/api/admin/import-queue/reset-status', requireAdmin, async (req, res) 
     } else if (resetFailedOnly) {
       await pool.query('UPDATE customer_import_queue SET emailStatus = "pending", emailError = NULL WHERE emailStatus = "failed"');
     } else if (Array.isArray(ids) && ids.length > 0) {
-      await pool.query('UPDATE customer_import_queue SET emailStatus = "pending", emailError = NULL WHERE id IN (?)', [ids]);
+      // Find emails of given ids and reset all records for those emails
+      const [emailRows] = await pool.query('SELECT DISTINCT email FROM customer_import_queue WHERE id IN (?)', [ids]);
+      const emails = (emailRows as any[]).map(r => r.email);
+      if (emails.length > 0) {
+        await pool.query('UPDATE customer_import_queue SET emailStatus = "pending", emailError = NULL WHERE email IN (?)', [emails]);
+      }
     }
     const stats = await getImportQueueStats(pool);
     res.json({ success: true, stats });

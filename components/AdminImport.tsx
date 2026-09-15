@@ -5,7 +5,7 @@ import {
   ShieldCheck, ArrowRight, UserCheck, Key, FileText, Download, Check,
   X, AlertTriangle, Building2, Phone, MapPin, Sparkles, Users
 } from 'lucide-react';
-import { QueueItem } from '../importService';
+import { GroupedParentItem, GroupedCustomerChild } from '../importService';
 
 interface QueueStats {
   total: number;
@@ -14,6 +14,10 @@ interface QueueStats {
   failed: number;
   sending: number;
   totalBatches: number;
+  totalParents?: number;
+  sentParents?: number;
+  pendingParents?: number;
+  failedParents?: number;
   batches: Array<{
     batchNumber: number;
     total: number;
@@ -24,7 +28,7 @@ interface QueueStats {
 }
 
 export const AdminImport: React.FC = () => {
-  const [items, setItems] = useState<QueueItem[]>([]);
+  const [items, setItems] = useState<GroupedParentItem[]>([]);
   const [stats, setStats] = useState<QueueStats | null>(null);
   const [smtpConfigured, setSmtpConfigured] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -47,6 +51,9 @@ export const AdminImport: React.FC = () => {
   const [previewItem, setPreviewItem] = useState<{
     recipient: string;
     childName: string;
+    children?: GroupedCustomerChild[];
+    childrenCount?: number;
+    totalPrice?: number;
     schoolName: string;
     variableSymbol: string;
     password: string;
@@ -62,9 +69,38 @@ export const AdminImport: React.FC = () => {
 
   // Password visibility map
   const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
+  const [approvingChildId, setApprovingChildId] = useState<string | null>(null);
 
   const togglePasswordVisibility = (id: string) => {
     setVisiblePasswords(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const handleApproveChild = async (registrationId: string, childName: string) => {
+    if (!confirm(`Opravdu chcete schválit platbu za dítě "${childName}"? Rodiči bude automaticky odesláno potvrzení o platbě a v portálu si bude moci stáhnout potvrzení pro pojišťovnu.`)) {
+      return;
+    }
+    setApprovingChildId(registrationId);
+    try {
+      const token = getAuthToken();
+      const res = await fetch(`/api/school-registrations/${registrationId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: 'approved' })
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Chyba při schvalování registrace dítěte');
+      }
+      alert(`Platba za dítě "${childName}" byla úspěšně schválena! Potvrzení bylo odesláno na e-mail.`);
+      await fetchQueue();
+    } catch (err: any) {
+      alert(`Chyba: ${err.message}`);
+    } finally {
+      setApprovingChildId(null);
+    }
   };
 
   // Get Auth Token
@@ -117,14 +153,15 @@ export const AdminImport: React.FC = () => {
   }, [searchQuery]);
 
   // Send single email
-  const handleSendSingle = async (id: string, email: string, childName: string) => {
-    if (!confirm(`Opravdu si přejete odeslat e-mail s přihlášením pro ${childName} na adresu ${email}?`)) {
+  const handleSendSingle = async (id: string, email: string, childNames: string, totalPrice?: number) => {
+    const priceText = totalPrice ? ` (souhrnná částka v QR kódu: ${totalPrice.toLocaleString('cs-CZ')} Kč)` : '';
+    if (!confirm(`Opravdu si přejete odeslat 1 společný e-mail pro ${childNames}${priceText} na adresu ${email}?`)) {
       return;
     }
 
     try {
       const token = getAuthToken();
-      setSendingLog(prev => [`[${new Date().toLocaleTimeString('cs-CZ')}] Odesílám e-mail na ${email} (${childName})...`, ...prev]);
+      setSendingLog(prev => [`[${new Date().toLocaleTimeString('cs-CZ')}] Odesílám e-mail na ${email} (${childNames})...`, ...prev]);
       
       const res = await fetch('/api/admin/import-queue/send-single', {
         method: 'POST',
@@ -132,12 +169,12 @@ export const AdminImport: React.FC = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ id })
+        body: JSON.stringify({ id, email })
       });
 
       const data = await res.json();
       if (res.ok && data.success) {
-        setSendingLog(prev => [`[${new Date().toLocaleTimeString('cs-CZ')}] ✓ ÚSPĚCH: E-mail pro ${childName} (${email}) byl v pořádku doručen.`, ...prev]);
+        setSendingLog(prev => [`[${new Date().toLocaleTimeString('cs-CZ')}] ✓ ÚSPĚCH: E-mail pro ${childNames} (${email}) byl v pořádku doručen.`, ...prev]);
       } else {
         setSendingLog(prev => [`[${new Date().toLocaleTimeString('cs-CZ')}] ✗ CHYBA: ${data.error || 'Neznámá chyba odeslání.'}`, ...prev]);
       }
@@ -257,7 +294,7 @@ export const AdminImport: React.FC = () => {
     setIsPreviewLoading(true);
     try {
       const token = getAuthToken();
-      const res = await fetch(`/api/admin/import-queue/preview/${id}`, {
+      const res = await fetch(`/api/admin/import-queue/preview/${encodeURIComponent(id)}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -332,14 +369,22 @@ export const AdminImport: React.FC = () => {
   const schoolOptions = useMemo(() => {
     const map = new Map<string, string>();
     items.forEach(item => {
-      if (item.schoolId && item.schoolName) {
-        map.set(item.schoolId, item.schoolName);
+      if (item.children && item.children.length > 0) {
+        item.children.forEach(ch => {
+          if (ch.schoolId && ch.schoolName) {
+            map.set(ch.schoolId, ch.schoolName);
+          }
+        });
       }
     });
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
   }, [items]);
 
-  const sentPercentage = stats && stats.total > 0 ? Math.round((stats.sent / stats.total) * 100) : 0;
+  const totalParentsCount = stats?.totalParents || stats?.total || 0;
+  const sentParentsCount = stats?.sentParents !== undefined ? stats.sentParents : (stats?.sent || 0);
+  const pendingParentsCount = stats?.pendingParents !== undefined ? stats.pendingParents : (stats?.pending || 0);
+  const failedParentsCount = stats?.failedParents !== undefined ? stats.failedParents : (stats?.failed || 0);
+  const sentPercentage = totalParentsCount > 0 ? Math.round((sentParentsCount / totalParentsCount) * 100) : 0;
 
   return (
     <div className="space-y-6">
@@ -353,7 +398,7 @@ export const AdminImport: React.FC = () => {
             <div>
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Hromadný import zákazníků</h2>
               <p className="text-xs sm:text-sm text-gray-500">
-                Přímý import žáků do kroužků a řízené, bezpečné odesílání přihlašovacích údajů po dávkách 10 e-mailů.
+                Přímý import žáků a rodin do kroužků. Rodiče s více dětmi obdrží <strong>1 společný e-mail</strong> se součtem kurzovného a jedním QR kódem.
               </p>
             </div>
           </div>
@@ -405,23 +450,25 @@ export const AdminImport: React.FC = () => {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-gray-100">
           <div className="flex items-center justify-between text-gray-500 mb-1">
-            <span className="text-xs font-bold uppercase tracking-wider">Celkem žáků</span>
+            <span className="text-xs font-bold uppercase tracking-wider">Celkem rodin</span>
             <Users size={18} className="text-brand-blue" />
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-gray-900">{stats?.total || 0}</div>
-          <div className="text-xs text-gray-400 mt-1">Rozděleno do {stats?.totalBatches || 0} dávek</div>
+          <div className="text-2xl sm:text-3xl font-black text-gray-900">{totalParentsCount}</div>
+          <div className="text-xs text-gray-500 mt-1">
+            Celkem <strong>{stats?.total || 0}</strong> dětí ({stats?.totalBatches || 0} dávek)
+          </div>
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-green-100 bg-green-50/20">
           <div className="flex items-center justify-between text-green-600 mb-1">
-            <span className="text-xs font-bold uppercase tracking-wider">Odesláno e-mailů</span>
+            <span className="text-xs font-bold uppercase tracking-wider">Odesláno rodinám</span>
             <CheckCircle2 size={18} />
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-green-700">{stats?.sent || 0}</div>
+          <div className="text-2xl sm:text-3xl font-black text-green-700">{sentParentsCount}</div>
           <div className="w-full bg-gray-200 h-1.5 rounded-full mt-2 overflow-hidden">
             <div className="bg-green-500 h-full rounded-full transition-all duration-500" style={{ width: `${sentPercentage}%` }}></div>
           </div>
-          <div className="text-[11px] text-green-600 font-bold mt-1">{sentPercentage}% dokončeno</div>
+          <div className="text-[11px] text-green-600 font-bold mt-1">{sentPercentage}% hotovo ({stats?.sent || 0} dětí)</div>
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-yellow-100 bg-yellow-50/20">
@@ -429,8 +476,8 @@ export const AdminImport: React.FC = () => {
             <span className="text-xs font-bold uppercase tracking-wider">Čeká na odeslání</span>
             <Clock size={18} />
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-yellow-700">{stats?.pending || 0}</div>
-          <div className="text-xs text-yellow-600 mt-1">Připraveno k odeslání</div>
+          <div className="text-2xl sm:text-3xl font-black text-yellow-700">{pendingParentsCount}</div>
+          <div className="text-xs text-yellow-600 mt-1">Připraveno ({stats?.pending || 0} dětí)</div>
         </div>
 
         <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-red-100 bg-red-50/20">
@@ -438,8 +485,8 @@ export const AdminImport: React.FC = () => {
             <span className="text-xs font-bold uppercase tracking-wider">Chyby odeslání</span>
             <AlertCircle size={18} />
           </div>
-          <div className="text-2xl sm:text-3xl font-black text-red-700">{stats?.failed || 0}</div>
-          {stats && stats.failed > 0 && (
+          <div className="text-2xl sm:text-3xl font-black text-red-700">{failedParentsCount}</div>
+          {failedParentsCount > 0 && (
             <button
               onClick={handleResetFailed}
               className="text-[11px] text-red-600 hover:text-red-800 font-bold underline mt-1 block"
@@ -473,10 +520,10 @@ export const AdminImport: React.FC = () => {
           <div>
             <h3 className="text-lg font-bold flex items-center gap-2">
               <Mail className="text-blue-300" size={20} />
-              Řízené odesílání e-mailů s přihlašovacími údaji
+              Řízené odesílání e-mailů s přihlašovacími údaji a QR platbou
             </h3>
             <p className="text-xs sm:text-sm text-blue-200 mt-0.5">
-              Gmail má bezpečnostní limit na počet odeslaných zpráv za minutu. Náš systém proto dělí příjemce do dávek po 10 a mezi každým e-mailem aplikuje 1.8sekundovou prodlevu.
+              Gmail má bezpečnostní limit na počet odeslaných zpráv za minutu. Náš systém dělí rodiny do dávek po 10 a mezi každým e-mailem aplikuje 1.8sekundovou prodlevu.
             </p>
           </div>
 
@@ -484,18 +531,18 @@ export const AdminImport: React.FC = () => {
             {/* Primary Action Button: Send Next 10 */}
             <button
               onClick={() => handleSendBatch(undefined, 10)}
-              disabled={isSendingBatch || autoRunnerActive || (stats?.pending || 0) === 0}
+              disabled={isSendingBatch || autoRunnerActive || pendingParentsCount === 0}
               className="px-5 py-2.5 bg-brand-red hover:bg-red-700 text-white font-bold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Send size={16} className={isSendingBatch && !autoRunnerActive ? 'animate-bounce' : ''} />
-              <span>{isSendingBatch && !autoRunnerActive ? 'Odesílám dávku...' : 'Odeslat dalších 10 e-mailů'}</span>
+              <span>{isSendingBatch && !autoRunnerActive ? 'Odesílám dávku...' : 'Odeslat dalších 10 rodin'}</span>
             </button>
 
             {/* Continuous Safe Slow Runner */}
             {!autoRunnerActive ? (
               <button
                 onClick={startContinuousRunner}
-                disabled={isSendingBatch || (stats?.pending || 0) === 0}
+                disabled={isSendingBatch || pendingParentsCount === 0}
                 className="px-4 py-2.5 bg-white/15 hover:bg-white/25 text-white font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-40"
                 title="Pomalé automatické odeslání všech zbývajících dávek s rozestupem"
               >
@@ -518,7 +565,7 @@ export const AdminImport: React.FC = () => {
         <div>
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold uppercase tracking-wider text-blue-200">
-              Přehled dávek (po 10 žácích) – kliknutím vyfiltrujete nebo odešlete konkrétní dávku:
+              Přehled dávek (po 10 rodinách) – kliknutím vyfiltrujete nebo odešlete konkrétní dávku:
             </span>
             <button
               onClick={() => setSelectedBatch('all')}
@@ -526,7 +573,7 @@ export const AdminImport: React.FC = () => {
                 selectedBatch === 'all' ? 'bg-white text-brand-blue' : 'text-blue-200 hover:text-white'
               }`}
             >
-              Zobrazit všechny ({stats?.total || 0})
+              Zobrazit všechny ({totalParentsCount} rodin)
             </button>
           </div>
 
@@ -662,7 +709,7 @@ export const AdminImport: React.FC = () => {
           </select>
 
           <span className="text-xs text-gray-500 font-medium px-2">
-            Nalezeno: <strong>{totalFiltered}</strong> žáků
+            Nalezeno: <strong>{totalFiltered}</strong> rodin
           </span>
         </div>
       </div>
@@ -674,26 +721,27 @@ export const AdminImport: React.FC = () => {
             <thead className="bg-gray-50 text-gray-500 font-bold text-xs uppercase tracking-wider border-b border-gray-100">
               <tr>
                 <th className="py-3 px-4">Dávka</th>
-                <th className="py-3 px-4">Žák & Rodné číslo</th>
+                <th className="py-3 px-4">Žák / Děti v rodině</th>
                 <th className="py-3 px-4">Škola / Kroužek</th>
                 <th className="py-3 px-4">Rodič & Kontakt</th>
+                <th className="py-3 px-4">Kurzovné & QR platby</th>
                 <th className="py-3 px-4">VS & Heslo portálu</th>
-                <th className="py-3 px-4">Stav e-mailu</th>
+                <th className="py-3 px-4">Stav přihlášky dětí</th>
                 <th className="py-3 px-4 text-right">Akce</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {isLoading && items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-gray-400">
+                  <td colSpan={8} className="py-12 text-center text-gray-400">
                     <RefreshCw size={24} className="animate-spin mx-auto mb-2 text-brand-blue" />
-                    <span>Načítám data zákazníků...</span>
+                    <span>Načítám data rodin...</span>
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-gray-400">
-                    Nenalezeny žádné záznamy odpovídající filtru.
+                  <td colSpan={8} className="py-12 text-center text-gray-400">
+                    Nenalezeny žádné rodiny odpovídající filtru.
                   </td>
                 </tr>
               ) : (
@@ -702,9 +750,11 @@ export const AdminImport: React.FC = () => {
                   const isSent = item.emailStatus === 'sent';
                   const isFailed = item.emailStatus === 'failed';
                   const isSending = item.emailStatus === 'sending';
+                  const hasMultipleKids = item.children && item.children.length > 1;
+                  const allChildNames = (item.children || []).map(c => `${c.childName} ${c.childSurname}`).join(', ');
 
                   return (
-                    <tr key={item.id} className="hover:bg-gray-50/70 transition-colors">
+                    <tr key={item.id} className={`hover:bg-gray-50/70 transition-colors ${hasMultipleKids ? 'bg-purple-50/20' : ''}`}>
                       {/* Batch Badge */}
                       <td className="py-3 px-4 whitespace-nowrap">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-700">
@@ -712,26 +762,66 @@ export const AdminImport: React.FC = () => {
                         </span>
                       </td>
 
-                      {/* Child Name & RC */}
+                      {/* Child / Children List */}
                       <td className="py-3 px-4">
-                        <div className="font-bold text-gray-900">
-                          {item.childName} {item.childSurname}
-                        </div>
-                        <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                          <span>RČ:</span>
-                          <span className="font-mono text-gray-700">{item.childRodneCislo || '–'}</span>
-                        </div>
+                        {hasMultipleKids ? (
+                          <div className="space-y-2">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-purple-100 text-purple-800 shadow-xs">
+                              <Users size={12} />
+                              {item.children.length} děti v rodině
+                            </span>
+                            <div className="space-y-1 pl-1">
+                              {item.children.map((ch, idx) => (
+                                <div key={ch.id || idx} className="border-l-2 border-purple-400 pl-2 py-0.5">
+                                  <div className="font-bold text-gray-900 text-xs sm:text-sm">
+                                    {ch.childName} {ch.childSurname}
+                                  </div>
+                                  <div className="text-[11px] text-gray-500 font-mono flex items-center gap-1">
+                                    <span>RČ: {ch.childRodneCislo || '–'}</span>
+                                    <span>•</span>
+                                    <span className="font-bold text-gray-700">{ch.numericPrice.toLocaleString('cs-CZ')} Kč</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="font-bold text-gray-900">
+                              {item.children?.[0]?.childName} {item.children?.[0]?.childSurname}
+                            </div>
+                            <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                              <span>RČ:</span>
+                              <span className="font-mono text-gray-700">{item.children?.[0]?.childRodneCislo || '–'}</span>
+                            </div>
+                          </div>
+                        )}
                       </td>
 
                       {/* School */}
                       <td className="py-3 px-4">
-                        <div className="font-semibold text-brand-blue text-xs sm:text-sm flex items-center gap-1">
-                          <Building2 size={13} className="shrink-0 text-brand-blue/70" />
-                          <span>{item.schoolName || item.schoolRaw}</span>
-                        </div>
-                        {item.address && (
-                          <div className="text-[11px] text-gray-400 truncate max-w-[180px]" title={item.address}>
-                            {item.address}
+                        {hasMultipleKids ? (
+                          <div className="space-y-1.5">
+                            {item.children.map((ch, idx) => (
+                              <div key={ch.id || idx} className="text-xs text-brand-blue flex items-center gap-1">
+                                <Building2 size={12} className="shrink-0 text-brand-blue/70" />
+                                <span className="font-semibold truncate max-w-[160px]" title={ch.schoolName}>
+                                  {ch.schoolName || ch.schoolRaw}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="font-semibold text-brand-blue text-xs sm:text-sm flex items-center gap-1">
+                              <Building2 size={13} className="shrink-0 text-brand-blue/70" />
+                              <span>{item.children?.[0]?.schoolName || item.children?.[0]?.schoolRaw}</span>
+                            </div>
+                            {item.children?.[0]?.address && (
+                              <div className="text-[11px] text-gray-400 truncate max-w-[180px]" title={item.children[0].address}>
+                                {item.children[0].address}
+                              </div>
+                            )}
                           </div>
                         )}
                       </td>
@@ -750,20 +840,56 @@ export const AdminImport: React.FC = () => {
                         )}
                       </td>
 
-                      {/* VS & Portal Password */}
-                      <td className="py-3 px-4 whitespace-nowrap">
-                        <div className="text-xs font-mono font-bold text-gray-800 flex items-center gap-1">
-                          <span className="text-gray-400 font-sans font-normal">VS:</span>
-                          <span>{item.variableSymbol}</span>
+                      {/* Total Price & QR Info */}
+                      <td className="py-3 px-4">
+                        <div className={`font-mono font-bold text-sm ${hasMultipleKids ? 'text-purple-700 font-black' : 'text-gray-900'}`}>
+                          {item.totalPrice.toLocaleString('cs-CZ')} Kč
                         </div>
-                        <div className="text-xs flex items-center gap-1.5 mt-1">
+                        {hasMultipleKids ? (
+                          <div className="space-y-1 mt-1">
+                            <span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-800 text-[10px] font-bold rounded">
+                              1 dítě = 1 QR platba ({item.children.length} děti)
+                            </span>
+                            <div className="space-y-0.5">
+                              {item.children.map((ch, idx) => (
+                                <div key={ch.id || idx} className="text-[11px] text-gray-600 flex items-center justify-between gap-2 border-b border-gray-100 pb-0.5 last:border-0 last:pb-0">
+                                  <span className="truncate max-w-[110px] font-medium">{ch.childName}:</span>
+                                  <span className="font-mono font-bold text-gray-900">{ch.numericPrice.toLocaleString('cs-CZ')} Kč</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-gray-500 font-medium mt-0.5">1 dítě (1 QR kód)</div>
+                        )}
+                      </td>
+
+                      {/* VS & Portal Password */}
+                      <td className="py-3 px-4">
+                        {hasMultipleKids ? (
+                          <div className="space-y-1">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">VS dětí:</span>
+                            {item.children.map((ch, idx) => (
+                              <div key={ch.id || idx} className="text-xs font-mono font-bold text-gray-800 flex items-center justify-between gap-1.5 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-200">
+                                <span className="font-sans text-[10px] text-gray-600 font-medium truncate max-w-[80px]">{ch.childName}:</span>
+                                <span className="text-brand-blue font-mono">{ch.variableSymbol}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-xs font-mono font-bold text-gray-800 flex items-center gap-1">
+                            <span className="text-gray-400 font-sans font-normal">VS:</span>
+                            <span>{item.variableSymbol}</span>
+                          </div>
+                        )}
+                        <div className="text-xs flex items-center gap-1.5 mt-2">
                           <span className="text-gray-400">Heslo:</span>
                           <span className="font-mono font-bold text-brand-blue bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
                             {isPassVisible ? item.password : '••••••••'}
                           </span>
                           <button
                             onClick={() => togglePasswordVisibility(item.id)}
-                            className="text-gray-400 hover:text-gray-600 text-[10px]"
+                            className="text-gray-400 hover:text-gray-600 text-[10px] cursor-pointer"
                             title={isPassVisible ? 'Skrýt heslo' : 'Zobrazit heslo'}
                           >
                             <Eye size={12} />
@@ -771,48 +897,71 @@ export const AdminImport: React.FC = () => {
                         </div>
                       </td>
 
-                      {/* Email Status */}
-                      <td className="py-3 px-4 whitespace-nowrap">
-                        {isSent ? (
-                          <div>
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
-                              <CheckCircle2 size={13} />
-                              Odesláno
-                            </span>
-                            {item.emailSentAt && (
-                              <div className="text-[10px] text-gray-400 mt-0.5">
-                                {new Date(item.emailSentAt).toLocaleString('cs-CZ', {
-                                  day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
-                                })}
+                      {/* Child Status (with child name) & Email Status */}
+                      <td className="py-3 px-4">
+                        <div className="space-y-1.5 min-w-[200px]">
+                          {item.children.map((ch, idx) => {
+                            const isChildApproved = ch.status === 'approved';
+                            const childFullName = `${ch.childName} ${ch.childSurname || ''}`.trim();
+                            return (
+                              <div key={ch.id || idx} className="flex items-center justify-between gap-1.5 p-1.5 bg-gray-50/90 rounded-lg border border-gray-200">
+                                <div className="flex items-center gap-1">
+                                  {isChildApproved ? (
+                                    <span className="bg-green-100 text-green-800 px-2.5 py-0.5 rounded-full text-[11px] font-bold inline-flex items-center gap-1 border border-green-200">
+                                      <CheckCircle2 size={11} className="text-green-600 shrink-0" />
+                                      <span>Schváleno</span>
+                                      <span className="font-semibold text-green-950 border-l border-green-300 pl-1.5 ml-0.5">• {childFullName}</span>
+                                    </span>
+                                  ) : (
+                                    <span className="bg-yellow-100 text-yellow-800 px-2.5 py-0.5 rounded-full text-[11px] font-bold inline-flex items-center gap-1 border border-yellow-200">
+                                      <Clock size={11} className="text-yellow-600 shrink-0" />
+                                      <span>Čeká na platbu</span>
+                                      <span className="font-semibold text-yellow-950 border-l border-yellow-300 pl-1.5 ml-0.5">• {childFullName}</span>
+                                    </span>
+                                  )}
+                                </div>
+                                {ch.registrationId && !isChildApproved && (
+                                  <button
+                                    onClick={() => handleApproveChild(ch.registrationId, childFullName)}
+                                    disabled={approvingChildId === ch.registrationId}
+                                    className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-[10px] font-bold shrink-0 shadow-2xs cursor-pointer flex items-center gap-1 transition-all"
+                                    title={`Schválit platbu za ${childFullName} a vystavit potvrzení`}
+                                  >
+                                    {approvingChildId === ch.registrationId ? (
+                                      <RefreshCw size={10} className="animate-spin" />
+                                    ) : (
+                                      <CheckCircle2 size={10} />
+                                    )}
+                                    Schválit
+                                  </button>
+                                )}
                               </div>
+                            );
+                          })}
+
+                          {/* Email notification status */}
+                          <div className="pt-1 flex items-center gap-1.5 text-[11px] border-t border-gray-100">
+                            <Mail size={11} className="text-gray-400 shrink-0" />
+                            <span className="text-gray-500">E-mail:</span>
+                            {isSent ? (
+                              <span className="text-green-700 font-bold flex items-center gap-0.5">
+                                <CheckCircle2 size={11} /> Odesláno ({item.children.length} {item.children.length > 1 ? 'děti' : 'dítě'})
+                              </span>
+                            ) : isFailed ? (
+                              <span className="text-red-600 font-bold flex items-center gap-0.5" title={item.emailError || ''}>
+                                <AlertCircle size={11} /> Chyba odeslání
+                              </span>
+                            ) : isSending ? (
+                              <span className="text-blue-600 font-medium flex items-center gap-1">
+                                <RefreshCw size={10} className="animate-spin" /> Odesílám...
+                              </span>
+                            ) : (
+                              <span className="text-yellow-700 font-medium flex items-center gap-0.5">
+                                <Clock size={11} /> Čeká na odeslání
+                              </span>
                             )}
                           </div>
-                        ) : isFailed ? (
-                          <div>
-                            <span 
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800 cursor-help"
-                              title={item.emailError || 'Chyba odeslání'}
-                            >
-                              <AlertCircle size={13} />
-                              Chyba
-                            </span>
-                            {item.emailError && (
-                              <div className="text-[10px] text-red-500 max-w-[140px] truncate" title={item.emailError}>
-                                {item.emailError}
-                              </div>
-                            )}
-                          </div>
-                        ) : isSending ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
-                            <RefreshCw size={13} className="animate-spin" />
-                            Odesílám...
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800">
-                            <Clock size={13} />
-                            Čeká
-                          </span>
-                        )}
+                        </div>
                       </td>
 
                       {/* Actions */}
@@ -823,31 +972,49 @@ export const AdminImport: React.FC = () => {
                             onClick={() => handlePreview(item.id)}
                             disabled={isPreviewLoading}
                             className="p-1.5 text-gray-500 hover:text-brand-blue hover:bg-gray-100 rounded-lg transition-colors"
-                            title="Zobrazit náhled e-mailu (s platebními údaji a QR kódem)"
+                            title="Zobrazit náhled e-mailu (s platebními údaji, dětmi a QR kódem)"
                           >
                             <Eye size={16} />
                           </button>
 
-                          {/* PDF Confirmation Button */}
-                          <a
-                            href={`/api/import-queue/${item.id}/pdf`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1.5 text-gray-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
-                            title="Zobrazit a stáhnout PDF potvrzení o přijetí platby pro pojišťovnu"
-                          >
-                            <FileText size={16} />
-                          </a>
+                          {/* PDF Confirmation Links */}
+                          {hasMultipleKids ? (
+                            <div className="flex items-center gap-1">
+                              {item.children.map((ch, cIdx) => (
+                                <a
+                                  key={ch.id || cIdx}
+                                  href={`/api/import-queue/${ch.id}/pdf`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-1.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[10px] font-bold rounded flex items-center gap-0.5 transition-colors"
+                                  title={`Stáhnout PDF potvrzení pro pojišťovnu: ${ch.childName}`}
+                                >
+                                  <FileText size={11} />
+                                  <span>{ch.childName}</span>
+                                </a>
+                              ))}
+                            </div>
+                          ) : (
+                            <a
+                              href={`/api/import-queue/${item.children?.[0]?.id || item.id}/pdf`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 text-gray-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                              title="Zobrazit a stáhnout PDF potvrzení o přijetí platby pro pojišťovnu"
+                            >
+                              <FileText size={16} />
+                            </a>
+                          )}
 
-                          {/* Send Single Button */}
+                          {/* Send Single Consolidated Email */}
                           <button
-                            onClick={() => handleSendSingle(item.id, item.email, `${item.childName} ${item.childSurname}`)}
+                            onClick={() => handleSendSingle(item.id, item.email, allChildNames, item.totalPrice)}
                             className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
                               isSent 
                                 ? 'bg-gray-100 hover:bg-gray-200 text-gray-600' 
                                 : 'bg-brand-blue hover:bg-blue-800 text-white shadow-sm'
                             }`}
-                            title={isSent ? 'Znovu odeslat e-mail' : 'Odeslat e-mail nyní'}
+                            title={isSent ? 'Znovu odeslat 1 společný e-mail' : 'Odeslat 1 společný e-mail rodině'}
                           >
                             <Send size={12} />
                             <span>{isSent ? 'Znovu' : 'Odeslat'}</span>
@@ -901,7 +1068,7 @@ export const AdminImport: React.FC = () => {
                   Náhled e-mailu pro zákazníka
                 </h3>
                 <p className="text-xs text-blue-200 mt-0.5">
-                  Příjemce: <strong>{previewItem.recipient}</strong> • Žák: <strong>{previewItem.childName}</strong>
+                  Příjemce: <strong>{previewItem.recipient}</strong> • Žáci: <strong>{previewItem.childName}</strong>
                 </p>
               </div>
               <button
@@ -911,6 +1078,19 @@ export const AdminImport: React.FC = () => {
                 <X size={20} />
               </button>
             </div>
+
+            {/* Sibling Banner if multi-children */}
+            {previewItem.childrenCount && previewItem.childrenCount > 1 ? (
+              <div className="p-3 bg-purple-50 border-b border-purple-100 flex items-center justify-between text-xs text-purple-900 font-medium">
+                <span className="flex items-center gap-1.5">
+                  <Users size={14} className="text-purple-600" />
+                  Sloučený e-mail pro <strong>{previewItem.childrenCount} děti</strong> v rodině.
+                </span>
+                <span className="font-bold text-purple-950 font-mono">
+                  Celková částka v QR kódu: {previewItem.totalPrice?.toLocaleString('cs-CZ')} Kč
+                </span>
+              </div>
+            ) : null}
 
             <div className="p-3 bg-gray-100 border-b border-gray-200 text-xs text-gray-700">
               <strong>Předmět e-mailu:</strong> {previewItem.subject}
@@ -923,29 +1103,26 @@ export const AdminImport: React.FC = () => {
               />
             </div>
 
-            <div className="p-4 bg-white border-t border-gray-200 flex justify-between items-center">
+            <div className="p-4 bg-white border-t border-gray-200 flex flex-wrap justify-between items-center gap-2">
               <span className="text-xs text-gray-500">
                 Škola: <strong>{previewItem.schoolName}</strong> • VS: <strong>{previewItem.variableSymbol}</strong>
               </span>
-              <div className="flex items-center gap-2">
-                {(() => {
-                  const matchedItem = items.find(i => i.email === previewItem.recipient);
-                  if (matchedItem) {
-                    return (
-                      <a
-                        href={`/api/import-queue/${matchedItem.id}/pdf`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3.5 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold hover:bg-emerald-100 flex items-center gap-1.5 transition-colors shadow-sm"
-                        title="Otevřít PDF potvrzení pro pojišťovnu"
-                      >
-                        <FileText size={14} />
-                        <span>PDF potvrzení</span>
-                      </a>
-                    );
-                  }
-                  return null;
-                })()}
+              <div className="flex flex-wrap items-center gap-2">
+                {previewItem.children && previewItem.children.length > 0 ? (
+                  previewItem.children.map((ch, idx) => (
+                    <a
+                      key={ch.id || idx}
+                      href={`/api/import-queue/${ch.id}/pdf`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold hover:bg-emerald-100 flex items-center gap-1 transition-colors shadow-xs"
+                      title={`PDF potvrzení pro pojišťovnu: ${ch.childName}`}
+                    >
+                      <FileText size={13} />
+                      <span>PDF: {ch.childName}</span>
+                    </a>
+                  ))
+                ) : null}
                 <button
                   onClick={() => setPreviewItem(null)}
                   className="px-4 py-2 border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50"
@@ -957,7 +1134,8 @@ export const AdminImport: React.FC = () => {
                     const matchedItem = items.find(i => i.email === previewItem.recipient);
                     if (matchedItem) {
                       setPreviewItem(null);
-                      handleSendSingle(matchedItem.id, matchedItem.email, previewItem.childName);
+                      const allNames = (matchedItem.children || []).map(c => `${c.childName} ${c.childSurname}`).join(', ') || previewItem.childName;
+                      handleSendSingle(matchedItem.id, matchedItem.email, allNames, matchedItem.totalPrice);
                     }
                   }}
                   className="px-4 py-2 bg-brand-blue text-white rounded-xl text-xs font-bold hover:bg-blue-800 flex items-center gap-1.5 shadow-md"
