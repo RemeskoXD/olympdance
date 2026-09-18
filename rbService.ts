@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 import crypto from 'crypto';
 import pool from './db.ts';
-import { generateSchoolPaymentPdf } from './pdfGenerator.ts';
+import { generateSchoolPaymentPdf, getDefaultConfirmationPeriod } from './pdfGenerator.ts';
 
 export type SendEmailFn = (
   to: string,
@@ -705,7 +705,7 @@ export const syncRbPayments = async (
               childBirthDate: schoolReg.childBirthDate,
               childRodneCislo: schoolReg.childRodneCislo,
               amount: amountVal || 1700,
-              period: null, // defaults to únor [year] - květen [year]
+              period: getDefaultConfirmationPeriod(),
               issueDate: bookingDate || new Date()
             });
 
@@ -1061,7 +1061,7 @@ export const processSinglePayment = async (
             childBirthDate: schoolReg.childBirthDate,
             childRodneCislo: schoolReg.childRodneCislo,
             amount: amountVal || 1700,
-            period: null,
+            period: getDefaultConfirmationPeriod(),
             issueDate: bookingDate || new Date()
           });
 

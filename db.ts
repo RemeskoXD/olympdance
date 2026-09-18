@@ -336,6 +336,9 @@ export const initDb = async () => {
     try {
       await connection.query('ALTER TABLE settings ADD COLUMN smtpSecure VARCHAR(20)');
     } catch (e) {}
+    try {
+      await connection.query('ALTER TABLE settings ADD COLUMN paymentConfirmationPeriod VARCHAR(255) DEFAULT "říjen 2026 až únor 2026"');
+    } catch (e) {}
 
     // 11. Password Resets table
     await connection.query(`

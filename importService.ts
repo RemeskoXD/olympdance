@@ -58,6 +58,7 @@ export interface GroupedCustomerChild {
 export interface GroupedParentItem {
   id: string; // primary item id
   email: string;
+  parentName?: string;
   phone: string;
   address: string;
   password: string;

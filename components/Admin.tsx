@@ -3372,6 +3372,16 @@ const SchoolRegistrationManager: React.FC = () => {
   const [selectedSchoolForSheet, setSelectedSchoolForSheet] = useState<School | null>(null);
   const [insuranceReg, setInsuranceReg] = useState<SchoolRegistration | null>(null);
   const [isStampModalOpen, setIsStampModalOpen] = useState(false);
+  const [paymentConfirmationPeriod, setPaymentConfirmationPeriod] = useState<string>('říjen 2026 až únor 2026');
+
+  useEffect(() => {
+    fetch('/api/admin/stamp')
+      .then(res => res.json())
+      .then(data => {
+        if (data.period) setPaymentConfirmationPeriod(data.period);
+      })
+      .catch(() => {});
+  }, []);
   const [deletingReg, setDeletingReg] = useState<SchoolRegistration | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [sendingWelcomeEmailId, setSendingWelcomeEmailId] = useState<string | null>(null);
@@ -3837,7 +3847,7 @@ const SchoolRegistrationManager: React.FC = () => {
             activityTitle: `Taneční kroužek: ${schools.find(s => s.id === insuranceReg.schoolId)?.name || 'Kroužek'}`,
             activityType: 'krouzek',
             location: `${schools.find(s => s.id === insuranceReg.schoolId)?.name}, ${schools.find(s => s.id === insuranceReg.schoolId)?.city}`,
-            periodOrDate: 'Školní rok 2025/2026 (Pololetí)',
+            periodOrDate: paymentConfirmationPeriod || 'říjen 2026 až únor 2026',
             price: schools.find(s => s.id === insuranceReg.schoolId)?.price || '1 800 Kč',
             variableSymbol: insuranceReg.variableSymbol,
             paymentStatus: insuranceReg.status
@@ -3850,6 +3860,7 @@ const SchoolRegistrationManager: React.FC = () => {
       <StampManagerModal
         isOpen={isStampModalOpen}
         onClose={() => setIsStampModalOpen(false)}
+        onPeriodChange={(newPeriod) => setPaymentConfirmationPeriod(newPeriod)}
       />
 
       {/* Delete Confirmation Modal */}

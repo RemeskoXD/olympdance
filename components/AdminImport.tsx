@@ -70,6 +70,36 @@ export const AdminImport: React.FC = () => {
   // Password visibility map
   const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
   const [approvingChildId, setApprovingChildId] = useState<string | null>(null);
+  const [isSendingSimulation, setIsSendingSimulation] = useState<boolean>(false);
+
+  const handleSendSimulation = async (defaultEmail: string = 'ludvikremesekwork@gmail.com') => {
+    const customEmail = prompt('Zadejte e-mail pro doručení simulovaného kroužkového e-mailu:', defaultEmail);
+    if (!customEmail) return;
+
+    setIsSendingSimulation(true);
+    try {
+      const token = getAuthToken();
+      const res = await fetch('/api/admin/import-queue/send-simulated', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ email: customEmail })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(`✓ Simulovaný e-mail byl úspěšně odeslán na adresu: ${customEmail}! Zkontrolujte si doručenou poštu.`);
+        setSendingLog(prev => [`[${new Date().toLocaleTimeString('cs-CZ')}] ✓ Odeslána simulace e-mailu na ${customEmail}`, ...prev]);
+      } else {
+        alert(`✗ Odeslání selhalo: ${data.error || 'Neznámá chyba'}`);
+      }
+    } catch (err: any) {
+      alert(`✗ Chyba spojení: ${err.message}`);
+    } finally {
+      setIsSendingSimulation(false);
+    }
+  };
 
   const togglePasswordVisibility = (id: string) => {
     setVisiblePasswords(prev => ({ ...prev, [id]: !prev[id] }));
@@ -432,6 +462,16 @@ export const AdminImport: React.FC = () => {
           >
             <FileText size={16} />
             <span>Vložit vlastní CSV</span>
+          </button>
+
+          <button
+            onClick={() => handleSendSimulation('ludvikremesekwork@gmail.com')}
+            disabled={isSendingSimulation}
+            className="flex-1 md:flex-initial px-4 py-2 bg-purple-50 border border-purple-300 text-purple-700 hover:bg-purple-100 text-xs sm:text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+            title="Odešle ukázkový e-mail se dvěma dětmi, samostatnými QR kódy a údaji do portálu na vybranou adresu"
+          >
+            <Mail size={16} className={isSendingSimulation ? 'animate-bounce' : ''} />
+            <span>{isSendingSimulation ? 'Odesílám...' : 'Odeslat testovací e-mail'}</span>
           </button>
         </div>
       </div>

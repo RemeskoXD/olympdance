@@ -8,7 +8,7 @@ import { createServer as createViteServer } from 'vite';
 import pool, { initDb, isDbConfigured } from './db.ts';
 import { SCHOOLS, CAMPS, GALLERY_IMAGES, PRODUCTS } from './constants.ts';
 import { getRbConfig, testRbConnection, syncRbPayments, getRbLogs, processSinglePayment } from './rbService.ts';
-import { generateSchoolPaymentPdf } from './pdfGenerator.ts';
+import { generateSchoolPaymentPdf, setDefaultConfirmationPeriod, getDefaultConfirmationPeriod } from './pdfGenerator.ts';
 import { syncCustomersToDatabase, generateCustomerEmailHtml, getImportQueueStats, groupQueueItemsByParent, GroupedParentItem } from './importService.ts';
 import sharp from 'sharp';
 import dns from 'dns';
@@ -179,7 +179,17 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // Initialize Database
-initDb();
+initDb().then(async () => {
+  try {
+    const [rows] = await pool.query('SELECT paymentConfirmationPeriod FROM settings WHERE id = 1');
+    const period = (rows as any[])?.[0]?.paymentConfirmationPeriod;
+    if (period && String(period).trim()) {
+      setDefaultConfirmationPeriod(String(period).trim());
+    }
+  } catch (e) {
+    // Column might not exist before migration completes
+  }
+}).catch(() => {});
 
 // Seed endpoint
 app.get('/api/seed', async (req, res) => {
@@ -1829,7 +1839,7 @@ app.get('/api/rb/logs/:id/sent-details', requireAdmin, async (req, res) => {
           activityTitle: `Taneční kroužek: ${schoolName}`,
           activityType: 'krouzek',
           location: school ? `${school.name}, ${school.city}` : 'Olomouc',
-          periodOrDate: 'Školní rok 2025/2026 (Pololetí)',
+          periodOrDate: getDefaultConfirmationPeriod(),
           price: `${formattedAmt} Kč`,
           variableSymbol: log.variableSymbol || reg.variableSymbol,
           paymentStatus: reg.status
@@ -3011,7 +3021,7 @@ app.get('/api/sample-confirmation-pdf', async (req, res) => {
       childSurname: 'Nováková',
       childBirthDate: '2016-05-12',
       amount: 1700,
-      period: 'únor 2026 – květen 2026',
+      period: getDefaultConfirmationPeriod(),
       issueDate: new Date()
     });
 
@@ -3072,6 +3082,59 @@ app.post('/api/generate-custom-confirmation-pdf', async (req, res) => {
   }
 });
 
+// Helper to generate the sample confirmation preview image (PNG)
+async function updateSamplePreviewImage(customPeriod?: string) {
+  try {
+    const publicStampPath = path.join(process.cwd(), 'public', 'stamp-signature.png');
+    let stampBase64 = '';
+    if (fs.existsSync(publicStampPath)) {
+      stampBase64 = (await fs.readFile(publicStampPath)).toString('base64');
+    }
+    const logoFile = fs.existsSync(path.join(process.cwd(), 'public', 'loloo.png'))
+      ? path.join(process.cwd(), 'public', 'loloo.png')
+      : (fs.existsSync(path.join(process.cwd(), 'public', 'tk-olymp-logo-black.png'))
+          ? path.join(process.cwd(), 'public', 'tk-olymp-logo-black.png')
+          : '');
+    const logoBase64 = logoFile ? fs.readFileSync(logoFile).toString('base64') : '';
+    const activePeriod = customPeriod || getDefaultConfirmationPeriod();
+
+    const previewSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 595 842" width="595" height="842" style="background:#ffffff">
+      <!-- Pure white background -->
+      <rect x="0" y="0" width="595" height="842" fill="#ffffff" />
+      
+      <!-- Red Header Banner -->
+      <rect x="0" y="0" width="595" height="104" fill="#b91c24" />
+      <text x="42" y="32" font-family="'Liberation Sans', Arial, sans-serif" font-weight="bold" font-size="11" fill="#ffffff">Taneční klub Olymp Olomouc, z. s.</text>
+      <text x="42" y="48" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#ffffff">Jiráskova 25, Olomouc - Hodolany 779 00</text>
+      <text x="42" y="61" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#ffffff">IČO: 68347286</text>
+      <text x="42" y="74" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#ffffff">L 4133 vedený u Krajského soudu v Ostravě</text>
+      <text x="42" y="87" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#ffffff">zastoupený předsedou Mgr. Miroslavem Hýžou</text>
+      
+      ${logoBase64 ? `<image href="data:image/png;base64,${logoBase64}" x="455" y="12" width="66" height="80" />` : ''}
+
+      <text x="297" y="165" font-family="'Liberation Sans', Arial, sans-serif" font-weight="bold" font-size="20" fill="#111827" text-anchor="middle">Potvrzení o přijetí platby</text>
+      <text x="55" y="220" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">Tímto potvrzuji,</text>
+      <text x="55" y="254" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">Že dne 26. 2. 2026 byl z bankovního účtu č. 123456789/0800 vedeného na Jana Nováková</text>
+      <text x="55" y="274" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">za tanečnici Eliška Nováková (r.č. 155425/1234) uhrazen členský příspěvek a účastnický poplatek</text>
+      <text x="55" y="294" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">do tanečního kroužku (ZŠ Za Mlýnem, Přerov):</text>
+      <text x="55" y="335" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827" font-weight="bold">Částka: <tspan font-weight="normal">Kč 1 550,- (slovy: jeden tisíc pět set padesát korun českých)</tspan></text>
+      <text x="55" y="362" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">Účet příjemce: 1806875329/5500 Tanečnímu klubu Olymp Olomouc, z.s.</text>
+      <text x="55" y="390" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">za období :  ${activePeriod}.</text>
+      <text x="55" y="445" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">V Olomouci dne 26. 2. 2026</text>
+      ${stampBase64 ? `<image href="data:image/png;base64,${stampBase64}" x="330" y="460" width="205" height="110" />` : ''}
+      <text x="432" y="580" font-family="'Liberation Sans', Arial, sans-serif" font-weight="bold" font-size="10.5" fill="#111827" text-anchor="middle">Martin Matýsek</text>
+      <text x="432" y="596" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#4b5563" text-anchor="middle">Taneční klub Olymp Olomouc, z. s.</text>
+    </svg>`;
+    const previewBuffer = await sharp(Buffer.from(previewSvg)).png().toBuffer();
+    await fs.writeFile(path.join(process.cwd(), 'public', 'sample-confirmation-preview.png'), previewBuffer);
+    if (fs.existsSync(path.join(process.cwd(), 'dist'))) {
+      await fs.writeFile(path.join(process.cwd(), 'dist', 'sample-confirmation-preview.png'), previewBuffer).catch(() => {});
+    }
+  } catch (previewErr) {
+    console.warn('Could not update sample confirmation preview image:', previewErr);
+  }
+}
+
 // Admin endpoint to upload custom stamp & signature image (PNG, JPG, etc.)
 app.post('/api/admin/stamp', requireAdmin, upload.single('stampImage'), async (req, res) => {
   try {
@@ -3110,56 +3173,25 @@ app.post('/api/admin/stamp', requireAdmin, upload.single('stampImage'), async (r
     // Clean up temporary file
     await fs.remove(inputPath).catch(() => {});
 
-    // Try to regenerate the sample preview image if script is available
-    try {
-      const stampBase64 = processedBuffer.toString('base64');
-      const logoFile = fs.existsSync(path.join(process.cwd(), 'public', 'loloo.png'))
-        ? path.join(process.cwd(), 'public', 'loloo.png')
-        : (fs.existsSync(path.join(process.cwd(), 'public', 'tk-olymp-logo-black.png'))
-            ? path.join(process.cwd(), 'public', 'tk-olymp-logo-black.png')
-            : '');
-      const logoBase64 = logoFile ? fs.readFileSync(logoFile).toString('base64') : '';
-
-      const previewSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 595 842" width="595" height="842" style="background:#ffffff">
-        <!-- Pure white background -->
-        <rect x="0" y="0" width="595" height="842" fill="#ffffff" />
-        
-        <!-- Red Header Banner -->
-        <rect x="0" y="0" width="595" height="104" fill="#b91c24" />
-        <text x="42" y="32" font-family="'Liberation Sans', Arial, sans-serif" font-weight="bold" font-size="11" fill="#ffffff">Taneční klub Olymp Olomouc, z. s.</text>
-        <text x="42" y="48" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#ffffff">Jiráskova 25, Olomouc - Hodolany 779 00</text>
-        <text x="42" y="61" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#ffffff">IČO: 68347286</text>
-        <text x="42" y="74" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#ffffff">L 4133 vedený u Krajského soudu v Ostravě</text>
-        <text x="42" y="87" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#ffffff">zastoupený předsedou Mgr. Miroslavem Hýžou</text>
-        
-        ${logoBase64 ? `<image href="data:image/png;base64,${logoBase64}" x="455" y="12" width="66" height="80" />` : ''}
-
-        <text x="297" y="165" font-family="'Liberation Sans', Arial, sans-serif" font-weight="bold" font-size="20" fill="#111827" text-anchor="middle">Potvrzení o přijetí platby</text>
-        <text x="55" y="220" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">Tímto potvrzuji,</text>
-        <text x="55" y="254" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">Že dne 26. 2. 2026 byl z bankovního účtu č. 123456789/0800 vedeného na Jana Nováková</text>
-        <text x="55" y="274" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">za tanečnici Eliška Nováková (r.č. 155425/1234) uhrazen členský příspěvek a účastnický poplatek</text>
-        <text x="55" y="294" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">do tanečního kroužku (ZŠ Za Mlýnem, Přerov):</text>
-        <text x="55" y="335" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827" font-weight="bold">Částka: <tspan font-weight="normal">Kč 1 550,- (slovy: jeden tisíc pět set padesát korun českých)</tspan></text>
-        <text x="55" y="362" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">Účet příjemce: 1806875329/5500 Tanečnímu klubu Olymp Olomouc, z.s.</text>
-        <text x="55" y="390" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">za období : únor 2026 – květen 2026.</text>
-        <text x="55" y="445" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">V Olomouci dne 26. 2. 2026</text>
-        <image href="data:image/png;base64,${stampBase64}" x="330" y="460" width="205" height="110" />
-        <text x="432" y="580" font-family="'Liberation Sans', Arial, sans-serif" font-weight="bold" font-size="10.5" fill="#111827" text-anchor="middle">Martin Matýsek</text>
-        <text x="432" y="596" font-family="'Liberation Sans', Arial, sans-serif" font-size="8.5" fill="#4b5563" text-anchor="middle">Taneční klub Olymp Olomouc, z. s.</text>
-      </svg>`;
-      const previewBuffer = await sharp(Buffer.from(previewSvg)).png().toBuffer();
-      await fs.writeFile(path.join(process.cwd(), 'public', 'sample-confirmation-preview.png'), previewBuffer);
-      if (fs.existsSync(path.join(process.cwd(), 'dist'))) {
-        await fs.writeFile(path.join(process.cwd(), 'dist', 'sample-confirmation-preview.png'), previewBuffer).catch(() => {});
+    // Check if period was also provided in the request
+    if (req.body && req.body.period && typeof req.body.period === 'string' && req.body.period.trim()) {
+      const newPeriod = req.body.period.trim();
+      setDefaultConfirmationPeriod(newPeriod);
+      try {
+        await pool.query('UPDATE settings SET paymentConfirmationPeriod = ? WHERE id = 1', [newPeriod]);
+      } catch (dbErr) {
+        console.warn('Could not update confirmation period in DB:', dbErr);
       }
-    } catch (previewErr) {
-      console.warn('Could not update sample confirmation preview image:', previewErr);
     }
+
+    // Regenerate sample preview
+    await updateSamplePreviewImage();
 
     res.json({
       success: true,
       message: 'Originální razítko a podpis bylo úspěšně nahráno a je aktivní pro všechna PDF potvrzení!',
-      stampUrl: `/stamp-signature.png?t=${Date.now()}`
+      stampUrl: `/stamp-signature.png?t=${Date.now()}`,
+      period: getDefaultConfirmationPeriod()
     });
   } catch (err: any) {
     console.error('Error uploading stamp:', err);
@@ -3167,14 +3199,56 @@ app.post('/api/admin/stamp', requireAdmin, upload.single('stampImage'), async (r
   }
 });
 
-// Admin endpoint to get stamp status
+// Admin endpoint to get stamp status and active period
 app.get('/api/admin/stamp', async (req, res) => {
   const publicStampPath = path.join(process.cwd(), 'public', 'stamp-signature.png');
   const exists = fs.existsSync(publicStampPath);
+  let period = getDefaultConfirmationPeriod();
+  try {
+    const [rows] = await pool.query('SELECT paymentConfirmationPeriod FROM settings WHERE id = 1');
+    const dbPeriod = (rows as any[])?.[0]?.paymentConfirmationPeriod;
+    if (dbPeriod && String(dbPeriod).trim()) {
+      period = String(dbPeriod).trim();
+      setDefaultConfirmationPeriod(period);
+    }
+  } catch (e) {}
+
   res.json({
     exists,
-    url: exists ? `/stamp-signature.png?t=${Date.now()}` : null
+    url: exists ? `/stamp-signature.png?t=${Date.now()}` : null,
+    period
   });
+});
+
+// Admin endpoint to update the active payment confirmation period
+app.post('/api/admin/stamp-period', requireAdmin, async (req, res) => {
+  try {
+    const { period } = req.body;
+    if (!period || typeof period !== 'string' || !period.trim()) {
+      return res.status(400).json({ error: 'Zadejte prosím platné období (např. říjen 2026 až únor 2026).' });
+    }
+
+    const cleanPeriod = period.trim();
+    setDefaultConfirmationPeriod(cleanPeriod);
+
+    try {
+      await pool.query('UPDATE settings SET paymentConfirmationPeriod = ? WHERE id = 1', [cleanPeriod]);
+    } catch (dbErr) {
+      console.warn('Could not update paymentConfirmationPeriod in DB:', dbErr);
+    }
+
+    // Regenerate the preview image with the new period
+    await updateSamplePreviewImage(cleanPeriod);
+
+    res.json({
+      success: true,
+      period: cleanPeriod,
+      message: 'Platné období pro potvrzení o přijetí platby bylo úspěšně uloženo.'
+    });
+  } catch (err: any) {
+    console.error('Error updating confirmation period:', err);
+    res.status(500).json({ error: 'Chyba při ukládání období: ' + err.message });
+  }
 });
 
 app.delete('/api/school-registrations/:id', requireAdmin, async (req, res) => {
@@ -3392,7 +3466,7 @@ app.get(['/api/admin/import-queue/:id/pdf', '/api/import-queue/:id/pdf'], requir
       childSurname: item.childSurname,
       childRodneCislo: item.childRodneCislo,
       amount: amountVal,
-      period: 'únor 2026 – květen 2026',
+      period: getDefaultConfirmationPeriod(),
       issueDate: new Date()
     });
 
@@ -3473,6 +3547,100 @@ app.post('/api/admin/import-queue/send-single', requireAdmin, async (req, res) =
     }
   } catch (error: any) {
     console.error('Error sending single email:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Send simulated customer import email (for testing / previewing exact email appearance)
+app.post(['/api/admin/import-queue/send-simulated', '/api/import-queue/send-simulated'], async (req, res) => {
+  try {
+    const targetEmail = (req.body.email || 'ludvikremesekwork@gmail.com').trim();
+    if (!targetEmail || !targetEmail.includes('@')) {
+      return res.status(400).json({ error: 'Neplatná e-mailová adresa příjemce.' });
+    }
+
+    const host = `${req.protocol}://${req.get('host')}`;
+
+    // Create a realistic multi-child customer import data item (AA & BB)
+    const sampleParent: GroupedParentItem = {
+      id: 'sim-parent-1',
+      email: targetEmail,
+      parentName: req.body.parentName || 'Ludvík Remešek',
+      phone: req.body.phone || '+420 666 777 888',
+      address: 'Jiráskova 25, Olomouc',
+      password: 'olymp' + Math.floor(1000 + Math.random() * 9000),
+      batchNumber: 1,
+      emailStatus: 'pending',
+      emailSentAt: null,
+      emailError: null,
+      childrenCount: 2,
+      totalPrice: 3400,
+      variableSymbol: '2026101',
+      allQueueIds: ['sim-child-1', 'sim-child-2'],
+      children: [
+        {
+          id: 'sim-child-1',
+          registrationId: 'sim-reg-1',
+          childName: 'Anna (AA)',
+          childSurname: 'Nováková',
+          childClass: '3.A',
+          childRodneCislo: '155512/3456',
+          afterSchoolClub: true,
+          address: 'Jiráskova 25, Olomouc',
+          phone: '+420 666 777 888',
+          schoolId: '1',
+          schoolName: 'ZŠ Hálkova (Olomouc)',
+          schoolRaw: 'ZŠ Hálkova',
+          schoolPrice: '1 700 Kč / pololetí',
+          numericPrice: 1700,
+          variableSymbol: '2026101',
+          day: 'Úterý',
+          time: '14:00 - 15:00'
+        },
+        {
+          id: 'sim-child-2',
+          registrationId: 'sim-reg-2',
+          childName: 'Jakub (BB)',
+          childSurname: 'Novák',
+          childClass: '5.B',
+          childRodneCislo: '130823/4567',
+          afterSchoolClub: false,
+          address: 'Jiráskova 25, Olomouc',
+          phone: '+420 666 777 888',
+          schoolId: '1',
+          schoolName: 'ZŠ Hálkova (Olomouc)',
+          schoolRaw: 'ZŠ Hálkova',
+          schoolPrice: '1 700 Kč / pololetí',
+          numericPrice: 1700,
+          variableSymbol: '2026102',
+          day: 'Úterý',
+          time: '15:00 - 16:00'
+        }
+      ]
+    };
+
+    const { subject, html, totalPrice, childrenCount } = generateCustomerEmailHtml(sampleParent, null, host);
+
+    console.log(`[Simulated Email Dispatch] Sending test multi-child customer email to ${targetEmail}...`);
+    const result = await sendEmail(targetEmail, `[TEST / SIMULACE] ${subject}`, html);
+
+    if (result) {
+      return res.json({
+        success: true,
+        message: `Simulovaný rekapitulační e-mail byl úspěšně odeslán na ${targetEmail}.`,
+        messageId: result.messageId,
+        recipient: targetEmail,
+        childrenCount,
+        totalPrice
+      });
+    } else {
+      return res.status(500).json({
+        success: false,
+        error: 'Odeslání simulovaného e-mailu selhalo. Ověřte konfiguraci SMTP v sekci Nastavení.'
+      });
+    }
+  } catch (error: any) {
+    console.error('Error sending simulated email:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -3853,6 +4021,7 @@ app.get('/api/settings', async (req, res) => {
       smtpHost: current.smtpHost || process.env.SMTP_HOST || 'smtp.gmail.com',
       smtpPort: current.smtpPort || process.env.SMTP_PORT || '465',
       smtpSecure: current.smtpSecure || process.env.SMTP_SECURE || 'true',
+      paymentConfirmationPeriod: current.paymentConfirmationPeriod || getDefaultConfirmationPeriod(),
       isSmtpConfigured: smtpConfig.isConfigured,
       smtpSource: smtpConfig.source
     });
@@ -3867,7 +4036,8 @@ app.post('/api/settings', requireAdmin, async (req, res) => {
     const { 
       isMerchEnabled, isTanecniExpresEnabled, isCampsEnabled, isGalleryEnabled, isAboutEnabled, 
       campGeneralInfo, siteContent,
-      smtpUser, smtpPass, smtpHost, smtpPort, smtpSecure
+      smtpUser, smtpPass, smtpHost, smtpPort, smtpSecure,
+      paymentConfirmationPeriod
     } = req.body;
     const updates: any = {};
     if (isMerchEnabled !== undefined) updates.isMerchEnabled = isMerchEnabled ? 1 : 0;
@@ -3882,6 +4052,14 @@ app.post('/api/settings', requireAdmin, async (req, res) => {
     if (smtpHost !== undefined) updates.smtpHost = smtpHost.trim();
     if (smtpPort !== undefined) updates.smtpPort = String(smtpPort).trim();
     if (smtpSecure !== undefined) updates.smtpSecure = String(smtpSecure);
+    if (paymentConfirmationPeriod !== undefined && typeof paymentConfirmationPeriod === 'string') {
+      const trimmedPeriod = paymentConfirmationPeriod.trim();
+      if (trimmedPeriod) {
+        updates.paymentConfirmationPeriod = trimmedPeriod;
+        setDefaultConfirmationPeriod(trimmedPeriod);
+        updateSamplePreviewImage(trimmedPeriod).catch(() => {});
+      }
+    }
     
     if (Object.keys(updates).length > 0) {
       await pool.query('UPDATE settings SET ? WHERE id = 1', updates);
@@ -3898,6 +4076,7 @@ app.post('/api/settings', requireAdmin, async (req, res) => {
         isCampsEnabled: current.isCampsEnabled === undefined ? true : Boolean(current.isCampsEnabled),
         isGalleryEnabled: current.isGalleryEnabled === undefined ? true : Boolean(current.isGalleryEnabled),
         isAboutEnabled: current.isAboutEnabled === undefined ? true : Boolean(current.isAboutEnabled),
+        paymentConfirmationPeriod: current.paymentConfirmationPeriod || getDefaultConfirmationPeriod(),
         isSmtpConfigured: smtpConfig.isConfigured,
         smtpSource: smtpConfig.source
       }

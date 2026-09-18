@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import { SchoolRegistration, School } from '../types';
 import { 
@@ -43,6 +43,18 @@ const SchoolPortal: React.FC = () => {
   const [editingParent, setEditingParent] = useState(false);
   const [parentFormData, setParentFormData] = useState({ parentName: '', parentPhone: '' });
   const [selectedInsuranceReg, setSelectedInsuranceReg] = useState<SchoolRegistration | null>(null);
+  const [confirmationPeriod, setConfirmationPeriod] = useState<string>('říjen 2026 až únor 2026');
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(res => res.json())
+      .then(data => {
+        if (data.paymentConfirmationPeriod) {
+          setConfirmationPeriod(data.paymentConfirmationPeriod);
+        }
+      })
+      .catch(() => {});
+  }, []);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [unsubscribingRegId, setUnsubscribingRegId] = useState<string | null>(null);
 
@@ -1387,7 +1399,7 @@ const SchoolPortal: React.FC = () => {
             activityTitle: `Taneční kroužek: ${schools.find(s => s.id === selectedInsuranceReg.schoolId)?.name || 'Kroužek'}`,
             activityType: 'krouzek',
             location: `${schools.find(s => s.id === selectedInsuranceReg.schoolId)?.name}, ${schools.find(s => s.id === selectedInsuranceReg.schoolId)?.city}`,
-            periodOrDate: 'Školní rok 2025/2026 (Pololetí)',
+            periodOrDate: confirmationPeriod || 'říjen 2026 až únor 2026',
             price: schools.find(s => s.id === selectedInsuranceReg.schoolId)?.price || '1 800 Kč',
             variableSymbol: selectedInsuranceReg.variableSymbol,
             password: selectedInsuranceReg.password,

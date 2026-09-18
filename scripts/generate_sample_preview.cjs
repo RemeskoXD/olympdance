@@ -3,6 +3,7 @@ const sharp = require('sharp');
 const path = require('path');
 
 async function generateSamplePreview() {
+  const period = process.argv[2] || 'říjen 2026 až únor 2026';
   const stampBase64 = fs.readFileSync(path.join(__dirname, '../public/stamp-signature.png')).toString('base64');
   const logoFile = fs.existsSync(path.join(__dirname, '../public/loloo.png'))
     ? path.join(__dirname, '../public/loloo.png')
@@ -37,7 +38,7 @@ async function generateSamplePreview() {
 
     <text x="55" y="325" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827" font-weight="bold">Částka: Kč 1 700,- <tspan font-weight="normal">(slovy: jedentisícsedmset)</tspan></text>
     <text x="55" y="355" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">Účet příjemce: 1806875329/5500 Tanečnímu klubu Olymp Olomouc, z.s.</text>
-    <text x="55" y="385" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">za období : únor 2026 – květen 2026.</text>
+    <text x="55" y="385" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">za období :  ${period}.</text>
 
     <text x="55" y="440" font-family="'Liberation Sans', Arial, sans-serif" font-size="11" fill="#111827">V Olomouci dne 9. 9. 2026</text>
 

@@ -21,6 +21,18 @@ export interface SchoolPaymentPdfData {
   issueDate?: string | Date | null;
 }
 
+let defaultConfirmationPeriod = 'říjen 2026 až únor 2026';
+
+export function setDefaultConfirmationPeriod(period: string) {
+  if (period && typeof period === 'string' && period.trim()) {
+    defaultConfirmationPeriod = period.trim();
+  }
+}
+
+export function getDefaultConfirmationPeriod(): string {
+  return defaultConfirmationPeriod;
+}
+
 /**
  * Converts integer amount to Czech words representation (financial format)
  * e.g. 1550 -> "jeden tisíc pět set padesát korun českých"
@@ -276,12 +288,11 @@ export function generateSchoolPaymentPdf(data: SchoolPaymentPdfData): Promise<Bu
 
       // Period text
       let periodStr = data.period;
-      if (!periodStr) {
-        const pDate = data.paymentDate ? new Date(data.paymentDate) : new Date();
-        const year = !isNaN(pDate.getTime()) ? pDate.getFullYear() : new Date().getFullYear();
-        periodStr = `únor ${year} – květen ${year}`;
+      if (!periodStr || periodStr.includes('únor 2026 – květen 2026') || periodStr === 'říjen až únor') {
+        periodStr = defaultConfirmationPeriod;
       }
-      doc.text(`za období : ${periodStr}.`, textX, 384);
+      const cleanPeriod = String(periodStr).replace(/\.+$/, '').trim();
+      doc.text(`za období :  ${cleanPeriod}.`, textX, 384);
 
       // Issue date and location
       const issueDateStr = formatCzechDate(data.issueDate || data.paymentDate || new Date());
